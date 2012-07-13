@@ -304,13 +304,15 @@ struct l2cap_chan *l2cap_chan_create(struct sock *sk)
 	return chan;
 }
 
-void l2cap_chan_destroy(struct l2cap_chan *chan)
+static void l2cap_chan_destroy(struct l2cap_chan *chan)
 {
+	BT_DBG("chan %p", chan);
+
 	write_lock(&chan_list_lock);
 	list_del(&chan->global_l);
 	write_unlock(&chan_list_lock);
 
-	l2cap_chan_put(chan);
+	kfree(chan);
 }
 
 static void l2cap_chan_add(struct l2cap_conn *conn, struct l2cap_chan *chan)
