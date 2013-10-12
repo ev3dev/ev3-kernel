@@ -745,6 +745,11 @@ static const struct mux_config da850_pins[] = {
 	/* Bluetooth slow clock */						// LEGO BT
 	MUX_CFG(DA850, ECAP2_OUT,	 1,	0,	15,	4,	false)  // LEGO BT
 	MUX_CFG(DA850, ECAP2_OUT_ENABLE, 0,	12,	15,	8,	false)  // LEGO BT
+        /* LEGO EV3 LED PINS */
+        MUX_CFG(EV3,   DIODE_0,        14,       0,     15,     8,      false)  // GPIO6_7
+        MUX_CFG(EV3,   DIODE_1,        13,      12,     15,     8,      false)  // GPIO6_12
+        MUX_CFG(EV3,   DIODE_2,         6,      24,     15,     8,      false)  // GPIO2_1
+        MUX_CFG(EV3,   DIODE_3,        13,       8,     15,     8,      false)  // GPIO6_13
 #endif
 #endif
 };

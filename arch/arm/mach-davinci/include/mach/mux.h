@@ -1046,6 +1046,11 @@ enum davinci_da850_index {
 	/* Bluetooth slow clock */	// LEGO BT
 	DA850_ECAP2_OUT,		// LEGO BT
 	DA850_ECAP2_OUT_ENABLE,		// LEGO BT
+        /* LEGO EV3 LED PINS */
+        EV3_DIODE_0,
+        EV3_DIODE_1,
+        EV3_DIODE_2,
+        EV3_DIODE_3,
 #endif
 };
 

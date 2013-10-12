@@ -111,3 +111,4 @@ int __init_or_module davinci_cfg_reg_list(const short pins[])
 
 	return error;
 }
+EXPORT_SYMBOL(davinci_cfg_reg_list);
