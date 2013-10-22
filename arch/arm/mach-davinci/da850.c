@@ -750,6 +750,31 @@ static const struct mux_config da850_pins[] = {
         MUX_CFG(EV3,   DIODE_1,        13,      12,     15,     8,      false)  // GPIO6_12
         MUX_CFG(EV3,   DIODE_2,         6,      24,     15,     8,      false)  // GPIO2_1
         MUX_CFG(EV3,   DIODE_3,        13,       8,     15,     8,      false)  // GPIO6_13
+        /* LEGO EV3 MOTOR PINS */
+        MUX_CFG(EV3,   OUTPUTA_PWM,     5,       4,     15,     2,      false)  // GPIO_TO_PIN(2, 14 ) - EPWM1B
+        MUX_CFG(EV3,   OUTPUTA_DIR0,    7,       0,     15,     8,      false)  // GPIO_TO_PIN(3, 15 )
+        MUX_CFG(EV3,   OUTPUTA_DIR1,    8,       4,     15,     8,      false)  // GPIO_TO_PIN(3,  6 )
+        MUX_CFG(EV3,   OUTPUTA_INT,    11,      16,     15,     8,      false)  // GPIO_TO_PIN(5, 11 )
+        MUX_CFG(EV3,   OUTPUTA_DIRA,    1,      12,     15,     8,      false)  // GPIO_TO_PIN(0,  4 )
+
+        MUX_CFG(EV3,   OUTPUTB_PWM,     5,       0,     15,     2,      false)  // GPIO_TO_PIN(2, 15 ) - EPWM1A
+        MUX_CFG(EV3,   OUTPUTB_DIR0,    6,      24,     15,     8,      false)  // GPIO_TO_PIN(2,  1 )
+        MUX_CFG(EV3,   OUTPUTB_DIR1,    1,      16,     15,     8,      false)  // GPIO_TO_PIN(0,  3 )
+        MUX_CFG(EV3,   OUTPUTB_INT,    11,      28,     15,     8,      false)  // GPIO_TO_PIN(5,  8 )
+        MUX_CFG(EV3,   OUTPUTB_DIRA,    5,      24,     15,     8,      false)  // GPIO_TO_PIN(2,  9 )
+
+        MUX_CFG(EV3,   OUTPUTC_PWM,     2,      28,     15,     2,      false)  // GPIO_TO_PIN(8,  7 ) - APWM0
+        MUX_CFG(EV3,   OUTPUTC_DIR0,   13,      28,     15,     8,      false)  // GPIO_TO_PIN(6,  8 )
+        MUX_CFG(EV3,   OUTPUTC_DIR1,   11,      24,     15,     8,      false)  // GPIO_TO_PIN(5,  9 )
+        MUX_CFG(EV3,   OUTPUTC_INT,    11,       8,     15,     8,      false)  // GPIO_TO_PIN(5, 13 )
+        MUX_CFG(EV3,   OUTPUTC_DIRA,    7,       4,     15,     8,      false)  // GPIO_TO_PIN(3, 14 )
+
+#warning "Should the pin mode for this pin actually be 4 instead of 2?????"
+        MUX_CFG(EV3,   OUTPUTD_PWM,     1,      28,     15,     4,      false)  // GPIO_TO_PIN(0,  0 ) - APWM1
+        MUX_CFG(EV3,   OUTPUTD_DIR0,   12,      16,     15,     8,      false)  // GPIO_TO_PIN(5,  3 )
+        MUX_CFG(EV3,   OUTPUTD_DIR1,   11,      20,     15,     8,      false)  // GPIO_TO_PIN(5, 10 )
+        MUX_CFG(EV3,   OUTPUTD_INT,    13,      24,     15,     8,      false)  // GPIO_TO_PIN(6,  9 )
+        MUX_CFG(EV3,   OUTPUTD_DIRA,    5,      28,     15,     8,      false)  // GPIO_TO_PIN(2,  8 )
 #endif
 #endif
 };

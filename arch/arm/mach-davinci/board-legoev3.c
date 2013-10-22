@@ -41,6 +41,8 @@
 #include <mach/spi.h>
 #include <mach/usb.h>
 
+#include <video/st7586fb.h>
+
 #define DA850_EVM_PHY_ID		"davinci_mdio-0:00"
 #define DA850_LCD_PWR_PIN		GPIO_TO_PIN(2, 8)
 #define DA850_LCD_BL_PIN		GPIO_TO_PIN(2, 15)
@@ -79,40 +81,34 @@ static struct platform_device da850evm_backlight = {
 
 static struct mtd_partition da850evm_spiflash_part[] = {
 	[0] = {
-		.name = "UBL",
+		.name = "U-Boot",
 		.offset = 0,
-		.size = SZ_64K,
+		.size = SZ_256K,
 		.mask_flags = MTD_WRITEABLE,
 	},
 	[1] = {
-		.name = "U-Boot",
+		.name = "U-Boot Env",
 		.offset = MTDPART_OFS_APPEND,
-		.size = SZ_512K,
+		.size = SZ_64K,
 		.mask_flags = MTD_WRITEABLE,
 	},
 	[2] = {
-		.name = "U-Boot-Env",
-		.offset = MTDPART_OFS_APPEND,
-		.size = SZ_64K,
-		.mask_flags = MTD_WRITEABLE,
+		.name = "Kernel",
+		.offset = MTDPART_OFS_NXTBLK,
+		.size = SZ_2M,
+		.mask_flags = 0,
 	},
 	[3] = {
-		.name = "Kernel",
-		.offset = MTDPART_OFS_APPEND,
-		.size = SZ_2M + SZ_512K,
+		.name = "Filesystem",
+		.offset = MTDPART_OFS_NXTBLK,
+		.size = SZ_8M + SZ_2M + SZ_256K + SZ_128K,
 		.mask_flags = 0,
 	},
 	[4] = {
-		.name = "Filesystem",
-		.offset = MTDPART_OFS_APPEND,
-		.size = SZ_4M,
+		.name = "Storage",
+		.offset = MTDPART_OFS_NXTBLK,
+		.size = SZ_2M + SZ_1M + SZ_256K + SZ_64K,
 		.mask_flags = 0,
-	},
-	[5] = {
-		.name = "MAC-Address",
-		.offset = SZ_8M - SZ_64K,
-		.size = SZ_64K,
-		.mask_flags = MTD_WRITEABLE,
 	},
 };
 
@@ -120,7 +116,9 @@ static struct flash_platform_data da850evm_spiflash_data = {
 	.name		= "m25p80",
 	.parts		= da850evm_spiflash_part,
 	.nr_parts	= ARRAY_SIZE(da850evm_spiflash_part),
-	.type		= "m25p64",
+//	.type		= "m25p64",
+	.type           = "s25sl12801",
+
 };
 
 static struct davinci_spi_config da850evm_spiflash_cfg = {
@@ -129,16 +127,42 @@ static struct davinci_spi_config da850evm_spiflash_cfg = {
 	.t2cdelay	= 8,
 };
 
-static struct spi_board_info da850evm_spi_info[] = {
-	{
+static const struct st7586fb_platform_data lms2012_st7586fb_data = {
+	.rst_gpio	= GPIO_TO_PIN(5, 0),
+	.a0_gpio	= GPIO_TO_PIN(2, 11),
+	.cs_gpio	= GPIO_TO_PIN(2, 12),
+};
+
+static struct davinci_spi_config lms2012_st7586fb_cfg = {
+        .io_type	= SPI_IO_TYPE_DMA,
+        .c2tdelay	= 10,
+        .t2cdelay	= 10,
+ };
+
+static struct spi_board_info da850evm_spiflash_info[] = {
+	[0] = { // SPI0
 		.modalias		= "m25p80",
 		.platform_data		= &da850evm_spiflash_data,
 		.controller_data	= &da850evm_spiflash_cfg,
 		.mode			= SPI_MODE_0,
-		.max_speed_hz		= 30000000,
-		.bus_num		= 1,
+//      	.max_speed_hz		= 30000000,
+		.max_speed_hz		= 50000000,
+		.bus_num		= 0,
 		.chip_select		= 0,
 	},
+};
+
+static struct spi_board_info da850evm_spifb_info[] = {
+	[0] = { // SPI1
+//		.modalias = "st7586fb",
+		.modalias		= "lms2012_lcd",
+		.platform_data		= &lms2012_st7586fb_data,
+		.controller_data	= &lms2012_st7586fb_cfg,
+		.mode			= SPI_MODE_3 | SPI_NO_CS,
+		.max_speed_hz		= 10000000,
+ 		.bus_num		= 1,
+ 		.chip_select		= 0,
+    },
 };
 
 #ifdef CONFIG_MACH_DAVINCI_LEGOEV3
@@ -2240,15 +2264,15 @@ static __init void da850_legoev3_init(void)
 
 #ifdef CONFIG_MACH_DAVINCI_LEGOEV3
 #warning "Keep this code and eliminate this warning after copying this file to board-legoev3.c"
-	ret = da8xx_register_spi(0, da850evm_spi_info,
-				 ARRAY_SIZE(da850evm_spi_info));
+#else
+#endif
+	ret = da8xx_register_spi(0, da850evm_spiflash_info,
+				 ARRAY_SIZE(da850evm_spiflash_info));
 	if (ret)
 		pr_warning("da850_evm_init: spi 0 registration failed: %d\n",
 				ret);
-#endif
-
-	ret = da8xx_register_spi(1, da850evm_spi_info,
-				 ARRAY_SIZE(da850evm_spi_info));
+	ret = da8xx_register_spi(1, da850evm_spifb_info,
+				 ARRAY_SIZE(da850evm_spifb_info));
 	if (ret)
 		pr_warning("da850_evm_init: spi 1 registration failed: %d\n",
 				ret);

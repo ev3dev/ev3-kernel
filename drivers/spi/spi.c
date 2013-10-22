@@ -362,6 +362,8 @@ int spi_add_device(struct spi_device *spi)
 	 */
 	mutex_lock(&spi_add_lock);
 
+	dev_err(dev, "We're adding a device for: %s\n", dev_name(&spi->dev) );
+
 	d = bus_find_device_by_name(&spi_bus_type, NULL, dev_name(&spi->dev));
 	if (d != NULL) {
 		dev_err(dev, "chipselect %d already in use\n",

@@ -1051,6 +1051,30 @@ enum davinci_da850_index {
         EV3_DIODE_1,
         EV3_DIODE_2,
         EV3_DIODE_3,
+
+        EV3_OUTPUTA_PWM,
+        EV3_OUTPUTA_DIR0,
+        EV3_OUTPUTA_DIR1,
+        EV3_OUTPUTA_INT,
+        EV3_OUTPUTA_DIRA,
+
+        EV3_OUTPUTB_PWM,
+        EV3_OUTPUTB_DIR0,
+        EV3_OUTPUTB_DIR1,
+        EV3_OUTPUTB_INT,
+        EV3_OUTPUTB_DIRA,
+
+        EV3_OUTPUTC_PWM,
+        EV3_OUTPUTC_DIR0,
+        EV3_OUTPUTC_DIR1,
+        EV3_OUTPUTC_INT,
+        EV3_OUTPUTC_DIRA,
+
+        EV3_OUTPUTD_PWM,
+        EV3_OUTPUTD_DIR0,
+        EV3_OUTPUTD_DIR1,
+        EV3_OUTPUTD_INT,
+        EV3_OUTPUTD_DIRA,
 #endif
 };
 
