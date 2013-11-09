@@ -44,11 +44,12 @@
 #include <video/st7586fb.h>
 
 #define DA850_EVM_PHY_ID		"davinci_mdio-0:00"
+
 #define DA850_LCD_PWR_PIN		GPIO_TO_PIN(2, 8)
 #define DA850_LCD_BL_PIN		GPIO_TO_PIN(2, 15)
 
 #define DA850_MMCSD_CD_PIN		GPIO_TO_PIN(4, 2) //Lego
-#define DA850_MMCSD_WP_PIN		GPIO_TO_PIN(4, 1)
+// #define DA850_MMCSD_WP_PIN		GPIO_TO_PIN(4, 1)
 
 #define DA850_WLAN_EN			GPIO_TO_PIN(6, 9)
 #define DA850_WLAN_IRQ			GPIO_TO_PIN(6, 10)
@@ -970,11 +971,11 @@ static struct i2c_board_info __initdata da850_evm_i2c_devices[] = {
 /*
  * USB1 VBUS is controlled by GPIO2[4], over-current is reported on GPIO6[13].
  */
-#define ON_BD_USB_DRV	GPIO_TO_PIN(2, 4)
-#define ON_BD_USB_OVC	GPIO_TO_PIN(6, 13)
+#define ON_BD_USB_DRV	GPIO_TO_PIN(1, 4)
+#define ON_BD_USB_OVC	GPIO_TO_PIN(6, 3)
 
 static const short da850_evm_usb11_pins[] = {
-	DA850_GPIO2_4, DA850_GPIO6_13,
+	EV3_GPIO1_4, EV3_GPIO6_3,
 	-1
 };
 
@@ -1071,19 +1072,23 @@ static __init void da850_evm_usb_init(void)
 	da8xx_board_usb_init(da850_evm_usb11_pins, &da850_evm_usb11_pdata);
 }
 
-static const short da850_bt_slow_clock_pins[] __initconst = {
-	DA850_ECAP2_OUT, DA850_ECAP2_OUT_ENABLE,
-	-1
-};
+#warning "Are these definitions just the dumb way of doing this?"
+#define  DA850_ECAP2_OUT		        GPIO_TO_PIN(0,  7)      //LEGO BT
+#define  DA850_ECAP2_OUT_ENABLE		GPIO_TO_PIN(0, 12)      //LEGO BT
+
+// static const short da850_bt_slow_clock_pins[] __initconst = {
+// 	EV3_ECAP2_OUT, EV3_ECAP2_OUT_ENABLE,
+// 	-1
+// };
 
 #warning "Are these definitions just the dumb way of doing this?"
 #define  DA850_BT_SHUT_DOWN		GPIO_TO_PIN(4, 1)      //LEGO BT
 #define  DA850_BT_SHUT_DOWN_EP2		GPIO_TO_PIN(4, 9)      //LEGO BT
 
-static const short da850_bt_shut_down_pins[] __initconst = {
-	DA850_GPIO4_1, DA850_GPIO4_9,
-	-1
-};
+// static const short da850_bt_shut_down_pins[] __initconst = {
+// 	EV3_GPIO4_1, EV3_GPIO4_9,
+// 	-1
+// };
 
 static struct davinci_i2c_platform_data lego_i2c_0_pdata = {
 	.bus_freq	= 400	/* kHz */,
@@ -1991,7 +1996,27 @@ static struct edma_rsv_info *da850_edma_rsv[2] = {
 #ifdef CONFIG_MACH_DAVINCI_LEGOEV3
 #warning "Keep this code and eliminate this warning after copying this file to board-legoev3.c"
 static const short da850_lms2012_lcd_pins[] = {
-	DA850_GPIO2_11, DA850_GPIO2_12, DA850_GPIO5_0,
+	EV3_SPI1_MISO, EV3_SPI1_CS, EV3_GPIO5_0,
+	-1
+};
+
+#define EV3_DIODE_0   EV3_GPIO6_12
+#define EV3_DIODE_1   EV3_GPIO6_14
+#define EV3_DIODE_2   EV3_GPIO6_13
+#define EV3_DIODE_3   EV3_GPIO6_7
+#define EV3_BUTTON_0  EV3_GPIO7_15
+#define EV3_BUTTON_1  EV3_GPIO1_13
+#define EV3_BUTTON_2  EV3_GPIO7_14
+#define EV3_BUTTON_3  EV3_GPIO7_12
+#define EV3_BUTTON_4  EV3_GPIO6_6
+#define EV3_BUTTON_5  EV3_GPIO6_10
+
+static const short legoev3_ui_pins[] = {
+        EV3_DIODE_0, EV3_DIODE_1, EV3_DIODE_2, EV3_DIODE_3,
+
+        EV3_BUTTON_0, EV3_BUTTON_1, EV3_BUTTON_2,
+        EV3_BUTTON_3, EV3_BUTTON_4, EV3_BUTTON_5,
+
 	-1
 };
 #endif
@@ -2028,6 +2053,12 @@ static __init void da850_legoev3_init(void)
 	if (ret)
 		pr_warning("da850_evm_init: LMS2012 LCD mux setup failed:"
 						" %d\n", ret);
+
+	/* Support for EV3 UI LEDs and BUTTONs */
+	ret = davinci_cfg_reg_list(legoev3_ui_pins);
+	if (ret)
+		pr_warning("da850_evm_init: LMS2012 UI mux setup failed:"
+						" %d\n", ret);
 #endif
 
 #ifdef CONFIG_MACH_DAVINCI_LEGOEV3
@@ -2055,24 +2086,30 @@ static __init void da850_legoev3_init(void)
 		pr_warning("da850_evm_init: edma registration failed: %d\n",
 				ret);
 
-	ret = davinci_cfg_reg_list(da850_i2c0_pins);
+#ifdef CONFIG_MACH_DAVINCI_LEGOEV3
+#warning "Eventually, we'll re-enable these pins!"
+#else
+  	ret = davinci_cfg_reg_list(da850_i2c0_pins);
 	if (ret)
 		pr_warning("da850_evm_init: i2c0 mux setup failed: %d\n",
 				ret);
 
 	platform_device_register(&da850_gpio_i2c);
+#endif
 
 	ret = da8xx_register_watchdog();
 	if (ret)
 		pr_warning("da830_evm_init: watchdog registration failed: %d\n",
 				ret);
 
+#ifdef CONFIG_MACH_DAVINCI_LEGOEV3
+#warning "Let's find out which one of these UARTS we really need to update!"
+#else
 	/* Support for UART 1 */
 	ret = davinci_cfg_reg_list(da850_uart1_pins);
 	if (ret)
 		pr_warning("da850_evm_init: UART 1 mux setup failed:"
 						" %d\n", ret);
-#ifdef CONFIG_MACH_DAVINCI_LEGOEV3
 #warning "Keep this code and eliminate this warning after copying this file to board-legoev3.c"
 	/* Support for UART 2 */
 	ret = davinci_cfg_reg_list(da850_uart2_pins);
