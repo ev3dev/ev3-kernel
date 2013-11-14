@@ -102,7 +102,7 @@ static struct fb_var_screeninfo st7586fb_var __devinitdata = {
 	.yres		= HEIGHT,
 	.xres_virtual	= WIDTH,
 	.yres_virtual	= HEIGHT,
-	.bits_per_pixel	= 2,
+	.bits_per_pixel	= 1,
 	.nonstd		= 1,
 };
 
@@ -300,11 +300,132 @@ static int st7586fb_init_display(struct st7586fb_par *par)
 	return 0;
 }
 
+static void slow_rectblit(const struct fb_fillrect *rect, struct fb_info *info,
+				  void *dst1, u32 fgcolor, u32 start_index, bool xor)
+{
+	u32 shift, bpp = info->var.bits_per_pixel;
+	u8 *dst, val;
+	u32 pitch = info->fix.line_length;
+	u32 i, j, l;
+
+	fgcolor <<= FB_LEFT_POS(info, bpp);
+
+	for (i = rect->height; i--; ) {
+		shift = val = 0;
+		l = 8;
+		j = rect->width;
+		dst = dst1;
+
+		/* write leading bits */
+		if (start_index) {
+			// TODO: handle case for
+			//if (xor)
+			u8 start_mask = 7 << 5;
+			if (start_index == 2)
+				start_mask |= 7 << 2;
+			val = *dst & start_mask;
+			shift = start_index;
+		}
+
+		while (j--) {
+			l--;
+			switch (bpp) {
+			case 1:
+				switch (shift) {
+				case 0:
+					if (fgcolor)
+						val |= 7 << 5;
+					break;
+				case 1:
+					if (fgcolor)
+						val |= 7 << 2;
+					break;
+				case 2:
+					if (fgcolor)
+						val |= 3;
+					break;
+				}
+				break;
+			case 2:
+				switch (shift) {
+				case 0:
+					val |= fgcolor << 6;
+					if (fgcolor == 3)
+						val |= 1 << 5;
+					break;
+				case 1:
+					val |= fgcolor << 3;
+					if (fgcolor == 3)
+						val |= 1 << 2;
+					break;
+				case 2:
+					val |= fgcolor;
+					break;
+				}
+				break;
+			}
+			if (shift == 2) {
+				if (xor)
+					*dst++ ^= val;
+				else
+					*dst++ = val;
+				val = 0;
+			}
+			shift++;
+			shift %= 3;
+		}
+
+		/* write trailing bits */
+		if (shift) {
+			// TODO: handle case for
+			//if (xor)
+			u8 end_mask = 3;
+			if (shift == 1)
+				end_mask |= 7 << 2;
+			*dst &= end_mask;
+			*dst |= val;
+		}
+
+		dst1 += pitch;
+	}
+}
+
 void st7586fb_fillrect(struct fb_info *info, const struct fb_fillrect *rect)
 {
 	struct st7586fb_par *par = info->par;
+	unsigned long fg, start_index, bitstart;
+	u32 dx = rect->dx, dy = rect->dy;
+	void *dst1;
 
-	sys_fillrect(info, rect);
+	if (info->state != FBINFO_STATE_RUNNING)
+		return;
+
+	fg = rect->color;
+
+	// ST7586 packs 3 pixels per byte
+	bitstart = (dy * info->fix.line_length * 3) + dx;
+	start_index = bitstart % 3;
+
+	bitstart /= 3;
+	dst1 = (void __force *)info->screen_base + bitstart;
+
+	// TODO: These 2 lines can probably be deleted. fb_sync always false??
+	if (info->fbops->fb_sync)
+		info->fbops->fb_sync(info);
+
+	switch (rect->rop) {
+	case ROP_XOR:
+		slow_rectblit(rect, info, dst1, fg, start_index, true);
+		break;
+	case ROP_COPY:
+		slow_rectblit(rect, info, dst1, fg, start_index, false);
+		break;
+	default:
+		printk( KERN_ERR "cfb_fillrect(): unknown rop, "
+			"defaulting to ROP_COPY\n");
+		slow_rectblit(rect, info, dst1, fg, start_index, false);
+		break;
+	}
 
 	st7586fb_update_display(par);
 }
@@ -318,11 +439,172 @@ void st7586fb_copyarea(struct fb_info *info, const struct fb_copyarea *area)
 	st7586fb_update_display(par);
 }
 
+static void slow_imageblit(const struct fb_image *image, struct fb_info *info,
+				  void *dst1, u32 fgcolor, u32 bgcolor,
+				  u32 start_index)
+{
+	u32 shift, color = 0, bpp = info->var.bits_per_pixel;
+	u8 *dst, val;
+	u32 pitch = info->fix.line_length;
+	u32 spitch = (image->width+7)/8;
+	const u8 *src = image->data, *s;
+	u32 i, j, l;
+
+	fgcolor <<= FB_LEFT_POS(info, bpp);
+	bgcolor <<= FB_LEFT_POS(info, bpp);
+
+	for (i = image->height; i--; ) {
+		shift = val = 0;
+		l = 8;
+		j = image->width;
+		dst = dst1;
+		s = src;
+
+		/* write leading bits */
+		if (start_index) {
+			u8 start_mask = 7 << 5;
+			if (start_index == 2)
+				start_mask |= 7 << 2;
+			val = *dst & start_mask;
+			shift = start_index;
+		}
+
+		while (j--) {
+			l--;
+			color = (*s & (1 << l)) ? fgcolor : bgcolor;
+			switch (bpp) {
+			case 1:
+				switch (shift) {
+				case 0:
+					if (color)
+						val |= 7 << 5;
+					break;
+				case 1:
+					if (color)
+						val |= 7 << 2;
+					break;
+				case 2:
+					if (color)
+						val |= 3;
+					break;
+				}
+				break;
+			case 2:
+				switch (shift) {
+				case 0:
+					val |= color << 6;
+					if (color == 3)
+						val |= 1 << 5;
+					break;
+				case 1:
+					val |= color << 3;
+					if (color == 3)
+						val |= 1 << 2;
+					break;
+				case 2:
+					val |= color;
+					break;
+				}
+				break;
+			}
+			if (shift == 2) {
+				*dst++ = val;
+				val = 0;
+			}
+			shift++;
+			shift %= 3;
+			if (!l) { l = 8; s++; };
+		}
+
+		/* write trailing bits */
+		if (shift) {
+			u8 end_mask = 3;
+			if (shift == 1)
+				end_mask |= 7 << 2;
+			*dst &= end_mask;
+			*dst |= val;
+		}
+
+		dst1 += pitch;
+		src += spitch;
+	}
+}
+
+// TODO: Need to find a way to test this function.
+static void color_imageblit(const struct fb_image *image, struct fb_info *info,
+			    void *dst1, u32 start_index)
+{
+	u32 *dst;
+	u32 color = 0, val, shift;
+	int i, n, bpp = info->var.bits_per_pixel;
+	u32 null_bits = 32 - bpp;
+	const u8 *src = image->data;
+
+	for (i = image->height; i--; ) {
+		n = image->width;
+		dst = dst1;
+		shift = 0;
+		val = 0;
+
+		if (start_index) {
+			u32 start_mask = ~(FB_SHIFT_HIGH(info, ~(u32)0,
+							 start_index));
+			val = *dst & start_mask;
+			shift = start_index;
+		}
+		while (n--) {
+			color = *src;
+			color <<= FB_LEFT_POS(info, bpp);
+			val |= FB_SHIFT_HIGH(info, color, shift);
+			if (shift >= null_bits) {
+				*dst++ = val;
+
+				val = (shift == null_bits) ? 0 :
+					FB_SHIFT_LOW(info, color, 32 - shift);
+			}
+			shift += bpp + ((shift + 2) % 8 == 0) ? 0 : 1;
+			shift &= (32 - 1);
+			src++;
+		}
+		if (shift) {
+			u32 end_mask = FB_SHIFT_HIGH(info, ~(u32)0, shift);
+
+			*dst &= end_mask;
+			*dst |= val;
+		}
+		dst1 += info->fix.line_length;
+	}
+}
+
 void st7586fb_imageblit(struct fb_info *info, const struct fb_image *image)
 {
 	struct st7586fb_par *par = info->par;
+	u32 fgcolor, bgcolor, start_index, bitstart;
+	u32 dx = image->dx, dy = image->dy;
+	void *dst1;
 
-	sys_imageblit(info, image);
+	if (info->state != FBINFO_STATE_RUNNING)
+		return;
+
+	// ST7586 packs 3 pixels per byte
+	bitstart = (dy * info->fix.line_length * 3) + dx;
+	start_index = bitstart % 3;
+
+	bitstart /= 3;
+	dst1 = (void __force *)info->screen_base + bitstart;
+
+	// TODO: These 2 lines can probably be deleted. fb_sync always false??
+	if (info->fbops->fb_sync)
+		info->fbops->fb_sync(info);
+
+	if (image->depth == 1) {
+		fgcolor = image->fg_color;
+		bgcolor = image->bg_color;
+
+		slow_imageblit(image, info, dst1, fgcolor, bgcolor,
+		               start_index);
+	} else
+		color_imageblit(image, info, dst1, start_index);
 
 	st7586fb_update_display(par);
 }
