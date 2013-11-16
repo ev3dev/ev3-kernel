@@ -728,14 +728,12 @@ static int __devinit st7586fb_probe (struct spi_device *spi)
 	info->fix.smem_start = virt_to_phys(vmem);
 	info->fix.smem_len = vmem_size;
 	info->var = st7586fb_var;
-	/* The ST7586 packed pixel format does not translate well here */
-	/* FIXME - change to mono reporting */
-	info->var.red.offset = 11;
-	info->var.red.length = 5;
-	info->var.green.offset = 5;
-	info->var.green.length = 6;
+	info->var.red.offset = 0;
+	info->var.red.length = 1;
+	info->var.green.offset = 0;
+	info->var.green.length = 1;
 	info->var.blue.offset = 0;
-	info->var.blue.length = 5;
+	info->var.blue.length = 1;
 	info->var.transp.offset = 0;
 	info->var.transp.length = 0;
 	info->flags = FBINFO_FLAG_DEFAULT | FBINFO_VIRTFB;
