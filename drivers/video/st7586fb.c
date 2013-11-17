@@ -84,16 +84,14 @@ static struct st7586_function st7586_cfg_script[] = {
 	{ ST7586_END, ST7586_END},
 };
 
-static bool driver_inited = false;
-
 static struct fb_fix_screeninfo st7586fb_fix __devinitdata = {
 	.id		= "ST7586",
 	.type		= FB_TYPE_PACKED_PIXELS,
-	.visual		= FB_VISUAL_PSEUDOCOLOR,
+	.visual		= FB_VISUAL_MONO10,
 	.xpanstep	= 0,
 	.ypanstep	= 0,
 	.ywrapstep	= 0,
-	.line_length	= (WIDTH+2)/3,
+	.line_length	= (WIDTH + 2) / 3,
 	.accel		= FB_ACCEL_NONE,
 };
 
@@ -103,7 +101,6 @@ static struct fb_var_screeninfo st7586fb_var __devinitdata = {
 	.xres_virtual	= WIDTH,
 	.yres_virtual	= HEIGHT,
 	.bits_per_pixel	= 1,
-	.nonstd		= 1,
 };
 
 static int st7586_write(struct st7586fb_par *par, u8 data)
@@ -240,27 +237,81 @@ static void st7586_reset(struct st7586fb_par *par)
 
 static void st7586fb_update_display(struct st7586fb_par *par)
 {
-    int ret = 0, i=0;
+	const int bytes_per_row_in = par->info->fix.line_length;
+	const int bytes_per_row_out = (WIDTH + 2) / 3;
+	const int out_size = bytes_per_row_out * HEIGHT;
+	int ret = 0, i = 0;
+	int row, in_offset, out_offset;
 	u8 *vmem = par->info->screen_base;
+	u8 *vmem2;
 
-	// Check if any data has been put into screen buffer. 
-	// In case data written - Select display as inited 
-	if (!driver_inited) {
-	  while ( (!vmem[i]) && (i <(WIDTH+2)/3*HEIGHT)) i++;
-	  if (i != ((WIDTH+2)/3*HEIGHT)) driver_inited = true;
+	vmem2 = kmalloc(out_size, GFP_KERNEL);
+	if (vmem2 == NULL) {
+		pr_err("%s: spi_write failed to update display buffer - kmalloc failed\n",
+			par->info->fix.id);
+		return;
 	}
 
-	if (driver_inited) {
-	  st7586_set_addr_win(par, 0, 0, WIDTH, HEIGHT);
-	  st7586_write_cmd(par, ST7586_RAMWR);
-
-	  /* Blast framebuffer to ST7586 internal display RAM */
-	  ret = st7586_write_data_buf(par, vmem, (WIDTH+2)/3*HEIGHT);
-	  
-	  if (ret < 0)
-	    pr_err("%s: spi_write failed to update display buffer\n",
-		   par->info->fix.id);
+	for (row = 0; row < HEIGHT; row++) {
+		in_offset = row * bytes_per_row_in;
+		out_offset = row * bytes_per_row_out;
+		for (i = 0; i < bytes_per_row_in; i++) {
+			vmem2[out_offset] = vmem[i + in_offset] & 0x01 ? 7 << 5 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x02 ? 7 << 2 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x04 ? 3 : 0;
+			out_offset++;
+			vmem2[out_offset] = vmem[i + in_offset] & 0x08 ? 7 << 5 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x10 ? 7 << 2 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x20 ? 3 : 0;
+			out_offset++;
+			vmem2[out_offset] = vmem[i + in_offset] & 0x40 ? 7 << 5 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x80 ? 7 << 2 : 0;
+			if (++i >= bytes_per_row_in)
+				break;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x01 ? 3 : 0;
+			out_offset++;
+			vmem2[out_offset] = vmem[i + in_offset] & 0x02 ? 7 << 5 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x04 ? 7 << 2 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x08 ? 3 : 0;
+			out_offset++;
+			vmem2[out_offset] = vmem[i + in_offset] & 0x10 ? 7 << 5 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x20 ? 7 << 2 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x40 ? 3 : 0;
+			out_offset++;
+			vmem2[out_offset] = vmem[i + in_offset] & 0x80 ? 7 << 5 : 0;
+			if (++i >= bytes_per_row_in)
+				break;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x01 ? 7 << 2 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x02 ? 3 : 0;
+			out_offset++;
+			vmem2[out_offset] = vmem[i + in_offset] & 0x04 ? 7 << 5 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x08 ? 7 << 2 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x10 ? 3 : 0;
+			out_offset++;
+			vmem2[out_offset] = vmem[i + in_offset] & 0x20 ? 7 << 5 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x40 ? 7 << 2 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x80 ? 3 : 0;
+			out_offset++;
+		}
 	}
+
+	st7586_set_addr_win(par, 0, 0, WIDTH, HEIGHT);
+	st7586_write_cmd(par, ST7586_RAMWR);
+
+	/* Blast framebuffer to ST7586 internal display RAM */
+	ret = st7586_write_data_buf(par, vmem2, out_size);
+
+	kfree(vmem2);
+
+	if (ret < 0)
+	pr_err("%s: spi_write failed to update display buffer\n",
+		par->info->fix.id);
+}
+
+static void st7586fb_deferred_work(struct work_struct *w)
+{
+	struct st7586fb_par *par = container_of(w, struct st7586fb_par, dwork.work);
+	st7586fb_update_display(par);
 }
 
 static void st7586fb_deferred_io(struct fb_info *info,
@@ -300,134 +351,13 @@ static int st7586fb_init_display(struct st7586fb_par *par)
 	return 0;
 }
 
-static void slow_rectblit(const struct fb_fillrect *rect, struct fb_info *info,
-				  void *dst1, u32 fgcolor, u32 start_index, bool xor)
-{
-	u32 shift, bpp = info->var.bits_per_pixel;
-	u8 *dst, val;
-	u32 pitch = info->fix.line_length;
-	u32 i, j, l;
-
-	fgcolor <<= FB_LEFT_POS(info, bpp);
-
-	for (i = rect->height; i--; ) {
-		shift = val = 0;
-		l = 8;
-		j = rect->width;
-		dst = dst1;
-
-		/* write leading bits */
-		if (start_index) {
-			// TODO: handle case for
-			//if (xor)
-			u8 start_mask = 7 << 5;
-			if (start_index == 2)
-				start_mask |= 7 << 2;
-			val = *dst & start_mask;
-			shift = start_index;
-		}
-
-		while (j--) {
-			l--;
-			switch (bpp) {
-			case 1:
-				switch (shift) {
-				case 0:
-					if (fgcolor)
-						val |= 7 << 5;
-					break;
-				case 1:
-					if (fgcolor)
-						val |= 7 << 2;
-					break;
-				case 2:
-					if (fgcolor)
-						val |= 3;
-					break;
-				}
-				break;
-			case 2:
-				switch (shift) {
-				case 0:
-					val |= fgcolor << 6;
-					if (fgcolor == 3)
-						val |= 1 << 5;
-					break;
-				case 1:
-					val |= fgcolor << 3;
-					if (fgcolor == 3)
-						val |= 1 << 2;
-					break;
-				case 2:
-					val |= fgcolor;
-					break;
-				}
-				break;
-			}
-			if (shift == 2) {
-				if (xor)
-					*dst++ ^= val;
-				else
-					*dst++ = val;
-				val = 0;
-			}
-			shift++;
-			shift %= 3;
-		}
-
-		/* write trailing bits */
-		if (shift) {
-			// TODO: handle case for
-			//if (xor)
-			u8 end_mask = 3;
-			if (shift == 1)
-				end_mask |= 7 << 2;
-			*dst &= end_mask;
-			*dst |= val;
-		}
-
-		dst1 += pitch;
-	}
-}
-
 void st7586fb_fillrect(struct fb_info *info, const struct fb_fillrect *rect)
 {
 	struct st7586fb_par *par = info->par;
-	unsigned long fg, start_index, bitstart;
-	u32 dx = rect->dx, dy = rect->dy;
-	void *dst1;
 
-	if (info->state != FBINFO_STATE_RUNNING)
-		return;
+	sys_fillrect(info, rect);
 
-	fg = rect->color;
-
-	// ST7586 packs 3 pixels per byte
-	bitstart = (dy * info->fix.line_length * 3) + dx;
-	start_index = bitstart % 3;
-
-	bitstart /= 3;
-	dst1 = (void __force *)info->screen_base + bitstart;
-
-	// TODO: These 2 lines can probably be deleted. fb_sync always false??
-	if (info->fbops->fb_sync)
-		info->fbops->fb_sync(info);
-
-	switch (rect->rop) {
-	case ROP_XOR:
-		slow_rectblit(rect, info, dst1, fg, start_index, true);
-		break;
-	case ROP_COPY:
-		slow_rectblit(rect, info, dst1, fg, start_index, false);
-		break;
-	default:
-		printk( KERN_ERR "cfb_fillrect(): unknown rop, "
-			"defaulting to ROP_COPY\n");
-		slow_rectblit(rect, info, dst1, fg, start_index, false);
-		break;
-	}
-
-	st7586fb_update_display(par);
+	schedule_delayed_work(&par->dwork, FB_ST7586_UPDATE_DELAY);
 }
 
 void st7586fb_copyarea(struct fb_info *info, const struct fb_copyarea *area)
@@ -436,177 +366,16 @@ void st7586fb_copyarea(struct fb_info *info, const struct fb_copyarea *area)
 
 	sys_copyarea(info, area);
 
-	st7586fb_update_display(par);
-}
-
-static void slow_imageblit(const struct fb_image *image, struct fb_info *info,
-				  void *dst1, u32 fgcolor, u32 bgcolor,
-				  u32 start_index)
-{
-	u32 shift, color = 0, bpp = info->var.bits_per_pixel;
-	u8 *dst, val;
-	u32 pitch = info->fix.line_length;
-	u32 spitch = (image->width+7)/8;
-	const u8 *src = image->data, *s;
-	u32 i, j, l;
-
-	fgcolor <<= FB_LEFT_POS(info, bpp);
-	bgcolor <<= FB_LEFT_POS(info, bpp);
-
-	for (i = image->height; i--; ) {
-		shift = val = 0;
-		l = 8;
-		j = image->width;
-		dst = dst1;
-		s = src;
-
-		/* write leading bits */
-		if (start_index) {
-			u8 start_mask = 7 << 5;
-			if (start_index == 2)
-				start_mask |= 7 << 2;
-			val = *dst & start_mask;
-			shift = start_index;
-		}
-
-		while (j--) {
-			l--;
-			color = (*s & (1 << l)) ? fgcolor : bgcolor;
-			switch (bpp) {
-			case 1:
-				switch (shift) {
-				case 0:
-					if (color)
-						val |= 7 << 5;
-					break;
-				case 1:
-					if (color)
-						val |= 7 << 2;
-					break;
-				case 2:
-					if (color)
-						val |= 3;
-					break;
-				}
-				break;
-			case 2:
-				switch (shift) {
-				case 0:
-					val |= color << 6;
-					if (color == 3)
-						val |= 1 << 5;
-					break;
-				case 1:
-					val |= color << 3;
-					if (color == 3)
-						val |= 1 << 2;
-					break;
-				case 2:
-					val |= color;
-					break;
-				}
-				break;
-			}
-			if (shift == 2) {
-				*dst++ = val;
-				val = 0;
-			}
-			shift++;
-			shift %= 3;
-			if (!l) { l = 8; s++; };
-		}
-
-		/* write trailing bits */
-		if (shift) {
-			u8 end_mask = 3;
-			if (shift == 1)
-				end_mask |= 7 << 2;
-			*dst &= end_mask;
-			*dst |= val;
-		}
-
-		dst1 += pitch;
-		src += spitch;
-	}
-}
-
-// TODO: Need to find a way to test this function.
-static void color_imageblit(const struct fb_image *image, struct fb_info *info,
-			    void *dst1, u32 start_index)
-{
-	u32 *dst;
-	u32 color = 0, val, shift;
-	int i, n, bpp = info->var.bits_per_pixel;
-	u32 null_bits = 32 - bpp;
-	const u8 *src = image->data;
-
-	for (i = image->height; i--; ) {
-		n = image->width;
-		dst = dst1;
-		shift = 0;
-		val = 0;
-
-		if (start_index) {
-			u32 start_mask = ~(FB_SHIFT_HIGH(info, ~(u32)0,
-							 start_index));
-			val = *dst & start_mask;
-			shift = start_index;
-		}
-		while (n--) {
-			color = *src;
-			color <<= FB_LEFT_POS(info, bpp);
-			val |= FB_SHIFT_HIGH(info, color, shift);
-			if (shift >= null_bits) {
-				*dst++ = val;
-
-				val = (shift == null_bits) ? 0 :
-					FB_SHIFT_LOW(info, color, 32 - shift);
-			}
-			shift += bpp + ((shift + 2) % 8 == 0) ? 0 : 1;
-			shift &= (32 - 1);
-			src++;
-		}
-		if (shift) {
-			u32 end_mask = FB_SHIFT_HIGH(info, ~(u32)0, shift);
-
-			*dst &= end_mask;
-			*dst |= val;
-		}
-		dst1 += info->fix.line_length;
-	}
+	schedule_delayed_work(&par->dwork, FB_ST7586_UPDATE_DELAY);
 }
 
 void st7586fb_imageblit(struct fb_info *info, const struct fb_image *image)
 {
 	struct st7586fb_par *par = info->par;
-	u32 fgcolor, bgcolor, start_index, bitstart;
-	u32 dx = image->dx, dy = image->dy;
-	void *dst1;
 
-	if (info->state != FBINFO_STATE_RUNNING)
-		return;
+	sys_imageblit(info, image);
 
-	// ST7586 packs 3 pixels per byte
-	bitstart = (dy * info->fix.line_length * 3) + dx;
-	start_index = bitstart % 3;
-
-	bitstart /= 3;
-	dst1 = (void __force *)info->screen_base + bitstart;
-
-	// TODO: These 2 lines can probably be deleted. fb_sync always false??
-	if (info->fbops->fb_sync)
-		info->fbops->fb_sync(info);
-
-	if (image->depth == 1) {
-		fgcolor = image->fg_color;
-		bgcolor = image->bg_color;
-
-		slow_imageblit(image, info, dst1, fgcolor, bgcolor,
-		               start_index);
-	} else
-		color_imageblit(image, info, dst1, start_index);
-
-	st7586fb_update_display(par);
+	schedule_delayed_work(&par->dwork, FB_ST7586_UPDATE_DELAY);
 }
 
 int st7586fb_ioctl(struct fb_info *info, unsigned int cmd, unsigned long arg)
@@ -614,20 +383,15 @@ int st7586fb_ioctl(struct fb_info *info, unsigned int cmd, unsigned long arg)
 	int retval = -ENOMEM;
 	struct st7586fb_par *par = info->par;
 
-	printk(KERN_ERR "fb%d: Initing display\n", info->node);
-
 	switch (cmd) 
-	  {
-	  case FB_ST7586_INIT_DISPLAY: 
-	    retval = st7586fb_init_display(par);
-	    if (retval < 0) driver_inited = true;
-	    break;
-	  case FB_ST7586_START_DISPLAY: 
-	    retval = 0;	  
-	    driver_inited = true;
-	  default: 
-	    break;
-	  }
+	{
+	case FB_ST7586_INIT_DISPLAY:
+		printk(KERN_ERR "fb%d: Initalizing display\n", info->node);
+		retval = st7586fb_init_display(par);
+		break;
+	default:
+		break;
+	}
 	
 	return retval;
 }
@@ -669,7 +433,7 @@ static ssize_t st7586fb_write(struct fb_info *info, const char __user *buf,
 	if  (!err)
 		*ppos += count;
 
-	st7586fb_update_display(par);
+	schedule_delayed_work(&par->dwork, FB_ST7586_UPDATE_DELAY);
 
 	return (err) ? err : count;
 }
@@ -685,7 +449,7 @@ static struct fb_ops st7586fb_ops = {
 };
 
 static struct fb_deferred_io st7586fb_defio = {
-	.delay		= HZ / 20,
+	.delay		= FB_ST7586_UPDATE_DELAY,
 	.deferred_io	= st7586fb_deferred_io,
 };
 
@@ -693,7 +457,7 @@ static int __devinit st7586fb_probe (struct spi_device *spi)
 {
 	int chip = spi_get_device_id(spi)->driver_data;
 	struct st7586fb_platform_data *pdata = spi->dev.platform_data;
-	int vmem_size = (WIDTH+2)/3*HEIGHT;
+	int vmem_size = (WIDTH + 2) / 3 * HEIGHT;
 	u8 *vmem;
 	struct fb_info *info;
 	struct st7586fb_par *par;
@@ -747,6 +511,7 @@ static int __devinit st7586fb_probe (struct spi_device *spi)
 	par->a0 = pdata->a0_gpio;
 	par->cs = pdata->cs_gpio;
 	par->buf = kmalloc(1, GFP_KERNEL);
+	INIT_DELAYED_WORK(&par->dwork, st7586fb_deferred_work);
 
 	retval = register_framebuffer(info);
 	if (retval < 0)
@@ -763,8 +528,8 @@ static int __devinit st7586fb_probe (struct spi_device *spi)
 		goto init_fail;
 
 	printk(KERN_INFO
-		"fb%d: %s frame buffer device, using %d KiB of video memory\n",
-		info->node, info->fix.id, vmem_size/1024);
+		"fb%d: %s frame buffer device, using %d.%d KiB of video memory\n",
+		info->node, info->fix.id, vmem_size / 1024, vmem_size % 1024 * 10 / 1024);
 
 	return 0;
 
@@ -791,6 +556,7 @@ static int __devexit st7586fb_remove(struct spi_device *spi)
 		struct st7586fb_par *par = info->par;
 
 		unregister_framebuffer(info);
+		cancel_delayed_work_sync(&par->dwork);
 		kfree(info->screen_base);
 		kfree(par->buf);
 		gpio_free(par->rst);
