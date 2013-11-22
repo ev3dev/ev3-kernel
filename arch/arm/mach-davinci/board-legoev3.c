@@ -969,7 +969,7 @@ static struct i2c_board_info __initdata da850_evm_i2c_devices[] = {
 };
 
 /*
- * USB1 VBUS is controlled by GPIO2[4], over-current is reported on GPIO6[13].
+ * USB1 VBUS is controlled by GPIO1[4], over-current is reported on GPIO6[13].
  */
 #define ON_BD_USB_DRV	GPIO_TO_PIN(1, 4)
 #define ON_BD_USB_OVC	GPIO_TO_PIN(6, 3)
