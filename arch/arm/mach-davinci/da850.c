@@ -853,8 +853,8 @@ static const struct mux_config da850_pins[] = {
         MUX_CFG(EV3,   GPIO2_9,         5,      24,     15,     8,      true) // PWM Port B   - DIR  B
                                                                               // Analog Port 2 - DIRB
         MUX_CFG(EV3,   GPIO2_10,        5,      20,     15,     8,      true) // Unused - GPIO_TO_PIN(2, 10)
-        MUX_CFG(EV3,   GPIO2_11,        5,      16,     15,     8,      true) // Unused - GPIO_TO_PIN(2, 11)
-        MUX_CFG(EV3,   GPIO2_12,        5,      12,     15,     8,      true) // Unused - GPIO_TO_PIN(2, 12)
+//      MUX_CFG(EV3,   GPIO2_11,        5,      16,     15,     8,      true) // Unused - GPIO_TO_PIN(2, 11)
+//      MUX_CFG(EV3,   GPIO2_12,        5,      12,     15,     8,      true) // Unused - GPIO_TO_PIN(2, 12)
         MUX_CFG(EV3,   GPIO2_13,        5,       8,     15,     8,      true) // Unused - GPIO_TO_PIN(2, 13)
         MUX_CFG(EV3,   GPIO3_0,         8,      28,     15,     8,      true) // Unused - GPIO_TO_PIN(3,  0)
         MUX_CFG(EV3,   GPIO3_1,         8,      24,     15,     8,      true) // Unused - GPIO_TO_PIN(3,  1)
@@ -961,9 +961,9 @@ static const struct mux_config da850_pins[] = {
         MUX_CFG(EV3,   SPI0_SCL,        3,       0,     15,     1,      true) // ADC SPI      - ADCCLK
         MUX_CFG(EV3,   SPI0_CS,         3,      24,     15,     1,      true) // ADC SPI      - ADCCS
         MUX_CFG(EV3,   SPI1_MOSI,       5,      20,     15,     1,      true) // 
-        MUX_CFG(EV3,   SPI1_MISO,       5,      16,     15,     1,      true) // LCD SPI - ???
+        MUX_CFG(EV3,   SPI1_MISO,       5,      16,     15,     8,      true) // LCD SPI - Yes, was also GPIO2_11
         MUX_CFG(EV3,   SPI1_SCL,        5,       8,     15,     1,      true) // 
-        MUX_CFG(EV3,   SPI1_CS,         5,      12,     15,     8,      true) // LCD SPI - ???
+        MUX_CFG(EV3,   SPI1_CS,         5,      12,     15,     8,      true) // LCD SPI - Yes, was also GPIO2_12
         MUX_CFG(EV3,   EPWM1A,          5,       0,     15,     2,      true) // PWM Port B - PWM Motor B
         MUX_CFG(EV3,   EPWM1B,          5,       4,     15,     2,      true) // PWM Port A - PWM Motor A
         MUX_CFG(EV3,   APWM0,           2,      28,     15,     2,      true) // PWM Port C - PWM Motor C
