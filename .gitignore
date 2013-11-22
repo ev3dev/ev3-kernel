@@ -65,6 +65,13 @@ include/linux/version.h
 include/generated
 arch/*/include/generated
 
+include/generated/asm-offsets.h
+include/generated/autoconf.h
+include/generated/bounds.h
+include/generated/compile.h
+include/generated/mach-types.h
+include/generated/utsrelease.h
+
 # stgit generated dirs
 patches-*
 
