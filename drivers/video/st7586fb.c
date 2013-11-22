@@ -84,16 +84,14 @@ static struct st7586_function st7586_cfg_script[] = {
 	{ ST7586_END, ST7586_END},
 };
 
-static bool driver_inited = false;
-
 static struct fb_fix_screeninfo st7586fb_fix __devinitdata = {
 	.id		= "ST7586",
 	.type		= FB_TYPE_PACKED_PIXELS,
-	.visual		= FB_VISUAL_PSEUDOCOLOR,
+	.visual		= FB_VISUAL_MONO10,
 	.xpanstep	= 0,
 	.ypanstep	= 0,
 	.ywrapstep	= 0,
-	.line_length	= (WIDTH+2)/3,
+	.line_length	= (WIDTH + 2) / 3,
 	.accel		= FB_ACCEL_NONE,
 };
 
@@ -102,8 +100,7 @@ static struct fb_var_screeninfo st7586fb_var __devinitdata = {
 	.yres		= HEIGHT,
 	.xres_virtual	= WIDTH,
 	.yres_virtual	= HEIGHT,
-	.bits_per_pixel	= 2,
-	.nonstd		= 1,
+	.bits_per_pixel	= 1,
 };
 
 static int st7586_write(struct st7586fb_par *par, u8 data)
@@ -240,27 +237,81 @@ static void st7586_reset(struct st7586fb_par *par)
 
 static void st7586fb_update_display(struct st7586fb_par *par)
 {
-    int ret = 0, i=0;
+	const int bytes_per_row_in = par->info->fix.line_length;
+	const int bytes_per_row_out = (WIDTH + 2) / 3;
+	const int out_size = bytes_per_row_out * HEIGHT;
+	int ret = 0, i = 0;
+	int row, in_offset, out_offset;
 	u8 *vmem = par->info->screen_base;
+	u8 *vmem2;
 
-	// Check if any data has been put into screen buffer. 
-	// In case data written - Select display as inited 
-	if (!driver_inited) {
-	  while ( (!vmem[i]) && (i <(WIDTH+2)/3*HEIGHT)) i++;
-	  if (i != ((WIDTH+2)/3*HEIGHT)) driver_inited = true;
+	vmem2 = kmalloc(out_size, GFP_KERNEL);
+	if (vmem2 == NULL) {
+		pr_err("%s: spi_write failed to update display buffer - kmalloc failed\n",
+			par->info->fix.id);
+		return;
 	}
 
-	if (driver_inited) {
-	  st7586_set_addr_win(par, 0, 0, WIDTH, HEIGHT);
-	  st7586_write_cmd(par, ST7586_RAMWR);
-
-	  /* Blast framebuffer to ST7586 internal display RAM */
-	  ret = st7586_write_data_buf(par, vmem, (WIDTH+2)/3*HEIGHT);
-	  
-	  if (ret < 0)
-	    pr_err("%s: spi_write failed to update display buffer\n",
-		   par->info->fix.id);
+	for (row = 0; row < HEIGHT; row++) {
+		in_offset = row * bytes_per_row_in;
+		out_offset = row * bytes_per_row_out;
+		for (i = 0; i < bytes_per_row_in; i++) {
+			vmem2[out_offset] = vmem[i + in_offset] & 0x01 ? 7 << 5 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x02 ? 7 << 2 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x04 ? 3 : 0;
+			out_offset++;
+			vmem2[out_offset] = vmem[i + in_offset] & 0x08 ? 7 << 5 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x10 ? 7 << 2 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x20 ? 3 : 0;
+			out_offset++;
+			vmem2[out_offset] = vmem[i + in_offset] & 0x40 ? 7 << 5 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x80 ? 7 << 2 : 0;
+			if (++i >= bytes_per_row_in)
+				break;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x01 ? 3 : 0;
+			out_offset++;
+			vmem2[out_offset] = vmem[i + in_offset] & 0x02 ? 7 << 5 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x04 ? 7 << 2 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x08 ? 3 : 0;
+			out_offset++;
+			vmem2[out_offset] = vmem[i + in_offset] & 0x10 ? 7 << 5 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x20 ? 7 << 2 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x40 ? 3 : 0;
+			out_offset++;
+			vmem2[out_offset] = vmem[i + in_offset] & 0x80 ? 7 << 5 : 0;
+			if (++i >= bytes_per_row_in)
+				break;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x01 ? 7 << 2 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x02 ? 3 : 0;
+			out_offset++;
+			vmem2[out_offset] = vmem[i + in_offset] & 0x04 ? 7 << 5 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x08 ? 7 << 2 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x10 ? 3 : 0;
+			out_offset++;
+			vmem2[out_offset] = vmem[i + in_offset] & 0x20 ? 7 << 5 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x40 ? 7 << 2 : 0;
+			vmem2[out_offset] |= vmem[i + in_offset] & 0x80 ? 3 : 0;
+			out_offset++;
+		}
 	}
+
+	st7586_set_addr_win(par, 0, 0, WIDTH, HEIGHT);
+	st7586_write_cmd(par, ST7586_RAMWR);
+
+	/* Blast framebuffer to ST7586 internal display RAM */
+	ret = st7586_write_data_buf(par, vmem2, out_size);
+
+	kfree(vmem2);
+
+	if (ret < 0)
+	pr_err("%s: spi_write failed to update display buffer\n",
+		par->info->fix.id);
+}
+
+static void st7586fb_deferred_work(struct work_struct *w)
+{
+	struct st7586fb_par *par = container_of(w, struct st7586fb_par, dwork.work);
+	st7586fb_update_display(par);
 }
 
 static void st7586fb_deferred_io(struct fb_info *info,
@@ -306,7 +357,7 @@ void st7586fb_fillrect(struct fb_info *info, const struct fb_fillrect *rect)
 
 	sys_fillrect(info, rect);
 
-	st7586fb_update_display(par);
+	schedule_delayed_work(&par->dwork, FB_ST7586_UPDATE_DELAY);
 }
 
 void st7586fb_copyarea(struct fb_info *info, const struct fb_copyarea *area)
@@ -315,7 +366,7 @@ void st7586fb_copyarea(struct fb_info *info, const struct fb_copyarea *area)
 
 	sys_copyarea(info, area);
 
-	st7586fb_update_display(par);
+	schedule_delayed_work(&par->dwork, FB_ST7586_UPDATE_DELAY);
 }
 
 void st7586fb_imageblit(struct fb_info *info, const struct fb_image *image)
@@ -324,7 +375,7 @@ void st7586fb_imageblit(struct fb_info *info, const struct fb_image *image)
 
 	sys_imageblit(info, image);
 
-	st7586fb_update_display(par);
+	schedule_delayed_work(&par->dwork, FB_ST7586_UPDATE_DELAY);
 }
 
 int st7586fb_ioctl(struct fb_info *info, unsigned int cmd, unsigned long arg)
@@ -332,20 +383,15 @@ int st7586fb_ioctl(struct fb_info *info, unsigned int cmd, unsigned long arg)
 	int retval = -ENOMEM;
 	struct st7586fb_par *par = info->par;
 
-	printk(KERN_ERR "fb%d: Initing display\n", info->node);
-
 	switch (cmd) 
-	  {
-	  case FB_ST7586_INIT_DISPLAY: 
-	    retval = st7586fb_init_display(par);
-	    if (retval < 0) driver_inited = true;
-	    break;
-	  case FB_ST7586_START_DISPLAY: 
-	    retval = 0;	  
-	    driver_inited = true;
-	  default: 
-	    break;
-	  }
+	{
+	case FB_ST7586_INIT_DISPLAY:
+		printk(KERN_ERR "fb%d: Initalizing display\n", info->node);
+		retval = st7586fb_init_display(par);
+		break;
+	default:
+		break;
+	}
 	
 	return retval;
 }
@@ -387,7 +433,7 @@ static ssize_t st7586fb_write(struct fb_info *info, const char __user *buf,
 	if  (!err)
 		*ppos += count;
 
-	st7586fb_update_display(par);
+	schedule_delayed_work(&par->dwork, FB_ST7586_UPDATE_DELAY);
 
 	return (err) ? err : count;
 }
@@ -403,7 +449,7 @@ static struct fb_ops st7586fb_ops = {
 };
 
 static struct fb_deferred_io st7586fb_defio = {
-	.delay		= HZ / 20,
+	.delay		= FB_ST7586_UPDATE_DELAY,
 	.deferred_io	= st7586fb_deferred_io,
 };
 
@@ -411,7 +457,7 @@ static int __devinit st7586fb_probe (struct spi_device *spi)
 {
 	int chip = spi_get_device_id(spi)->driver_data;
 	struct st7586fb_platform_data *pdata = spi->dev.platform_data;
-	int vmem_size = (WIDTH+2)/3*HEIGHT;
+	int vmem_size = (WIDTH + 2) / 3 * HEIGHT;
 	u8 *vmem;
 	struct fb_info *info;
 	struct st7586fb_par *par;
@@ -446,14 +492,12 @@ static int __devinit st7586fb_probe (struct spi_device *spi)
 	info->fix.smem_start = virt_to_phys(vmem);
 	info->fix.smem_len = vmem_size;
 	info->var = st7586fb_var;
-	/* The ST7586 packed pixel format does not translate well here */
-	/* FIXME - change to mono reporting */
-	info->var.red.offset = 11;
-	info->var.red.length = 5;
-	info->var.green.offset = 5;
-	info->var.green.length = 6;
+	info->var.red.offset = 0;
+	info->var.red.length = 1;
+	info->var.green.offset = 0;
+	info->var.green.length = 1;
 	info->var.blue.offset = 0;
-	info->var.blue.length = 5;
+	info->var.blue.length = 1;
 	info->var.transp.offset = 0;
 	info->var.transp.length = 0;
 	info->flags = FBINFO_FLAG_DEFAULT | FBINFO_VIRTFB;
@@ -467,6 +511,7 @@ static int __devinit st7586fb_probe (struct spi_device *spi)
 	par->a0 = pdata->a0_gpio;
 	par->cs = pdata->cs_gpio;
 	par->buf = kmalloc(1, GFP_KERNEL);
+	INIT_DELAYED_WORK(&par->dwork, st7586fb_deferred_work);
 
 	retval = register_framebuffer(info);
 	if (retval < 0)
@@ -483,8 +528,8 @@ static int __devinit st7586fb_probe (struct spi_device *spi)
 		goto init_fail;
 
 	printk(KERN_INFO
-		"fb%d: %s frame buffer device, using %d KiB of video memory\n",
-		info->node, info->fix.id, vmem_size/1024);
+		"fb%d: %s frame buffer device, using %d.%d KiB of video memory\n",
+		info->node, info->fix.id, vmem_size / 1024, vmem_size % 1024 * 10 / 1024);
 
 	return 0;
 
@@ -511,6 +556,7 @@ static int __devexit st7586fb_remove(struct spi_device *spi)
 		struct st7586fb_par *par = info->par;
 
 		unregister_framebuffer(info);
+		cancel_delayed_work_sync(&par->dwork);
 		kfree(info->screen_base);
 		kfree(par->buf);
 		gpio_free(par->rst);

@@ -1996,7 +1996,7 @@ static struct edma_rsv_info *da850_edma_rsv[2] = {
 #ifdef CONFIG_MACH_DAVINCI_LEGOEV3
 #warning "Keep this code and eliminate this warning after copying this file to board-legoev3.c"
 static const short da850_lms2012_lcd_pins[] = {
-	EV3_SPI1_MISO, EV3_SPI1_CS, EV3_GPIO5_0,
+	EV3_GPIO2_11, EV3_GPIO2_12, EV3_GPIO5_0,
 	-1
 };
 
