@@ -61,6 +61,13 @@
 #define DA850_BT_EN			GPIO_TO_PIN(0, 15)
 
 #ifdef CONFIG_MACH_DAVINCI_LEGOEV3
+
+#warning "Consolidate these one-time LED setup macros"
+#define EV3_LED_0_PIN                GPIO_TO_PIN(6, 12)
+#define EV3_LED_1_PIN                GPIO_TO_PIN(6, 14)
+#define EV3_LED_2_PIN                GPIO_TO_PIN(6, 13)
+#define EV3_LED_3_PIN                GPIO_TO_PIN(6, 7)
+
 #else
 #warning "Delete this code and eliminate this warning after copying this file to board-legoev3.c"
 #define DAVINCI_BACKLIGHT_MAX_BRIGHTNESS	250
@@ -2000,10 +2007,11 @@ static const short da850_lms2012_lcd_pins[] = {
 	-1
 };
 
-#define EV3_DIODE_0   EV3_GPIO6_12
-#define EV3_DIODE_1   EV3_GPIO6_14
-#define EV3_DIODE_2   EV3_GPIO6_13
-#define EV3_DIODE_3   EV3_GPIO6_7
+#define EV3_LED_0   EV3_GPIO6_12
+#define EV3_LED_1   EV3_GPIO6_14
+#define EV3_LED_2   EV3_GPIO6_13
+#define EV3_LED_3   EV3_GPIO6_7
+
 #define EV3_BUTTON_0  EV3_GPIO7_15
 #define EV3_BUTTON_1  EV3_GPIO1_13
 #define EV3_BUTTON_2  EV3_GPIO7_14
@@ -2012,14 +2020,58 @@ static const short da850_lms2012_lcd_pins[] = {
 #define EV3_BUTTON_5  EV3_GPIO6_10
 
 static const short legoev3_ui_pins[] = {
-        EV3_DIODE_0, EV3_DIODE_1, EV3_DIODE_2, EV3_DIODE_3,
-
+#if !(defined(CONFIG_LEDS_GPIO) || defined(CONFIG_LEDS_GPIO_MODULE))
+  #warning "The LEDs are owned by the ui driver, not the kernel - heartbeat LED will not work"
+        EV3_LED_0, EV3_LED_1, EV3_LED_2, EV3_LED_3,
+#endif
         EV3_BUTTON_0, EV3_BUTTON_1, EV3_BUTTON_2,
         EV3_BUTTON_3, EV3_BUTTON_4, EV3_BUTTON_5,
 
 	-1
 };
 #endif
+
+#if defined(CONFIG_LEDS_GPIO) || defined(CONFIG_LEDS_GPIO_MODULE)
+#include <linux/leds.h>
+
+static struct gpio_led ev3_gpio_leds[] = {
+  {
+    .name = "ev3:red:right",
+    .default_trigger = "mmc0",
+    .gpio = EV3_LED_0_PIN,
+  },
+  {
+    .name = "ev3:green:right",
+    .default_trigger = "mmc0",
+    .gpio = EV3_LED_1_PIN,
+  },
+  {
+    .name = "ev3:red:left",
+    .default_trigger = "heartbeat",
+    .gpio = EV3_LED_2_PIN,
+  },
+  {
+    .name = "ev3:green:left",
+    .default_trigger = "heartbeat",
+    .gpio = EV3_LED_3_PIN,
+  },
+};
+
+static struct gpio_led_platform_data ev3_gpio_led_data = {
+  .num_leds  = ARRAY_SIZE(ev3_gpio_leds),
+  .leds    = ev3_gpio_leds
+};
+
+static struct platform_device ev3_device_gpio_leds = {
+  .name    = "leds-gpio",
+  .id    = -1,
+  .dev    = {
+    .platform_data  = &ev3_gpio_led_data,
+  },
+};
+
+#endif
+
 
 static __init int da850_set_emif_clk_rate(void)
 {
@@ -2085,6 +2137,13 @@ static __init void da850_legoev3_init(void)
 	if (ret)
 		pr_warning("da850_evm_init: edma registration failed: %d\n",
 				ret);
+
+#if defined(CONFIG_LEDS_GPIO) || defined(CONFIG_LEDS_GPIO_MODULE)
+  ret = platform_device_register(&ev3_device_gpio_leds);
+  if (ret)
+    pr_warning("da850_evm_init: LED registration failed: %d\n",
+                                 ret);
+#endif
 
 #ifdef CONFIG_MACH_DAVINCI_LEGOEV3
 #warning "Eventually, we'll re-enable these pins!"
