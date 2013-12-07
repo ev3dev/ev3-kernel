@@ -63,11 +63,17 @@
 #ifdef CONFIG_MACH_DAVINCI_LEGOEV3
 
 #warning "Consolidate these one-time LED setup macros"
-#define EV3_LED_0_PIN                GPIO_TO_PIN(6, 12)
-#define EV3_LED_1_PIN                GPIO_TO_PIN(6, 14)
-#define EV3_LED_2_PIN                GPIO_TO_PIN(6, 13)
-#define EV3_LED_3_PIN                GPIO_TO_PIN(6, 7)
+#define EV3_LED_0_PIN                   GPIO_TO_PIN(6, 12)
+#define EV3_LED_1_PIN                   GPIO_TO_PIN(6, 14)
+#define EV3_LED_2_PIN                   GPIO_TO_PIN(6, 13)
+#define EV3_LED_3_PIN                   GPIO_TO_PIN(6, 7)
 
+#define EV3_BUTTON_0_PIN                GPIO_TO_PIN(7, 15)
+#define EV3_BUTTON_1_PIN                GPIO_TO_PIN(1, 13)
+#define EV3_BUTTON_2_PIN                GPIO_TO_PIN(7, 14)
+#define EV3_BUTTON_3_PIN                GPIO_TO_PIN(7, 12)
+#define EV3_BUTTON_4_PIN                GPIO_TO_PIN(6, 6 )
+#define EV3_BUTTON_5_PIN                GPIO_TO_PIN(6, 10)
 #else
 #warning "Delete this code and eliminate this warning after copying this file to board-legoev3.c"
 #define DAVINCI_BACKLIGHT_MAX_BRIGHTNESS	250
@@ -2021,12 +2027,15 @@ static const short da850_lms2012_lcd_pins[] = {
 
 static const short legoev3_ui_pins[] = {
 #if !(defined(CONFIG_LEDS_GPIO) || defined(CONFIG_LEDS_GPIO_MODULE))
-  #warning "The LEDs are owned by the ui driver, not the kernel - heartbeat LED will not work"
+  #warning "The LEDs are owned by the ui driver, not the kernel - LED triggers will not work"
         EV3_LED_0, EV3_LED_1, EV3_LED_2, EV3_LED_3,
 #endif
+
+#if !(defined(CONFIG_KEYBOARD_GPIO) || defined(CONFIG_KEYBOARD_GPIO_MODULE))
+  #warning "The buttons are owned by the ui driver, not the kernel - button events will not work"
         EV3_BUTTON_0, EV3_BUTTON_1, EV3_BUTTON_2,
         EV3_BUTTON_3, EV3_BUTTON_4, EV3_BUTTON_5,
-
+#endif
 	-1
 };
 #endif
@@ -2069,9 +2078,42 @@ static struct platform_device ev3_device_gpio_leds = {
     .platform_data  = &ev3_gpio_led_data,
   },
 };
-
 #endif
 
+#if defined(CONFIG_KEYBOARD_GPIO) || defined(CONFIG_KEYBOARD_GPIO_MODULE)
+#include <linux/gpio_keys.h>
+#include<linux/input.h>
+
+static struct gpio_keys_button ev3_gpio_keys_table[] = {
+  {KEY_UP,    EV3_BUTTON_0_PIN, 1, "ev3:UP",    EV_KEY, 0, 50, 1},
+  {KEY_ENTER, EV3_BUTTON_1_PIN, 1, "ev3:ENTER", EV_KEY, 0, 50, 1},
+  {KEY_DOWN,  EV3_BUTTON_2_PIN, 1, "ev3:DOWN",  EV_KEY, 0, 50, 1},
+  {KEY_RIGHT, EV3_BUTTON_3_PIN, 1, "ev3:RIGHT", EV_KEY, 0, 50, 1},
+  {KEY_LEFT,  EV3_BUTTON_4_PIN, 1, "ev3:LEFT",  EV_KEY, 0, 50, 1},
+  {KEY_ESC,   EV3_BUTTON_5_PIN, 1, "ev3:ESC",   EV_KEY, 0, 50, 1},
+};
+
+static struct gpio_keys_platform_data ev3_gpio_keys_data = {
+  .buttons = ev3_gpio_keys_table,
+  .nbuttons = ARRAY_SIZE(ev3_gpio_keys_table),
+};
+
+static struct platform_device ev3_device_gpiokeys = {
+  .name = "gpio-keys",
+  .dev = {
+    .platform_data = &ev3_gpio_keys_data,
+  },
+};
+
+static const int legoev3_button_gpio[] = {
+  EV3_BUTTON_0_PIN,
+  EV3_BUTTON_1_PIN,
+  EV3_BUTTON_2_PIN,
+  EV3_BUTTON_3_PIN,
+  EV3_BUTTON_4_PIN,
+  EV3_BUTTON_5_PIN
+};
+#endif
 
 static __init int da850_set_emif_clk_rate(void)
 {
@@ -2143,6 +2185,23 @@ static __init void da850_legoev3_init(void)
   if (ret)
     pr_warning("da850_evm_init: LED registration failed: %d\n",
                                  ret);
+#endif
+
+#if defined(CONFIG_KEYBOARD_GPIO) || defined(CONFIG_KEYBOARD_GPIO_MODULE)
+  /* This is CRITICAL code to making the LEFT button work - it disables
+   * the internal pullup on pin group 25 which is where the GPIO6_6 lives.
+   */
+  ret = __raw_readl(DA8XX_SYSCFG1_VIRT(DA8XX_PUPD_SEL_REG));
+  ret &= 0xFDFFFFFF;
+  __raw_writel(ret, DA8XX_SYSCFG1_VIRT(DA8XX_PUPD_SEL_REG));
+
+  gpio_request_array(legoev3_button_gpio, ARRAY_SIZE(legoev3_button_gpio));
+  gpio_free_array(legoev3_button_gpio, ARRAY_SIZE(legoev3_button_gpio));
+
+  ret = platform_device_register(&ev3_device_gpiokeys);
+  if (ret)
+    pr_warning("da850_evm_init: button registration failed: %d\n",
+        ret);
 #endif
 
 #ifdef CONFIG_MACH_DAVINCI_LEGOEV3
