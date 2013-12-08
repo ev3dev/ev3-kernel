@@ -286,7 +286,7 @@ int pwm_set_frequency(struct pwm_device *p, unsigned long freq)
 		return -EINVAL;
 
 	c.config_mask = BIT(PWM_CONFIG_PERIOD_TICKS);
-	c.period_ticks = pwm_ns_to_ticks(p, (NSEC_PER_SEC / freq));
+	c.period_ticks = p->tick_hz / freq;
 	spin_lock(&p->pwm_lock);
 	p->period_ns = NSEC_PER_SEC / freq;
 	spin_unlock(&p->pwm_lock);

@@ -32,7 +32,7 @@
 #define TBCTL				0x0
 #define TBSTS				0x2
 #define TBPHS				0x6
-#define TBCTR				0x8
+#define TBCNT				0x8
 #define TBPRD				0xA
 
 #define TBCTL_CLKDIV_MASK		(BIT(12) | BIT(11) | BIT(10))
@@ -48,7 +48,7 @@
 #define TBCTL_FRC_SYC_POS		0x6
 #define TBCTL_LOAD_MD_POS		0x3
 
-#define TBCTL_FREERUN_FREE		0x2
+#define TBCTL_FREERUN_FREE		0x3
 #define TBCTL_CTRMOD_CTRUP		0x0
 
 /******************* Counter-Compare Sub Module ***********************/
@@ -161,6 +161,11 @@
 #define HRCNFG_LDMD_POS			0x3
 #define HRCNFG_CTLMD_POS		0x2
 
+/* Common */
+
+#define DISABLE 0
+#define ENABLE  1
+
 struct ehrpwm_suspend_params {
 	struct pwm_device *pch;
 	unsigned long req_delay_cycles;
@@ -201,13 +206,14 @@ int ehrpwm_tb_set_prescalar_val(struct pwm_device *p, unsigned char clkdiv,
 {
 	struct ehrpwm_pwm *ehrpwm = to_ehrpwm_pwm(p);
 
-	if (clkdiv > 0x7 || hspclkdiv > 0x7)
+	if (clkdiv > TB_DIV128 || hspclkdiv > TB_HS_DIV14)
 		return -EINVAL;
 
 	ehrpwm_reg_config(ehrpwm, TBCTL, clkdiv << TBCTL_CLKDIV_POS,
 		       TBCTL_CLKDIV_MASK);
 	ehrpwm_reg_config(ehrpwm, TBCTL, hspclkdiv << TBCTL_HSPCLKDIV_POS,
 		       TBCTL_HSPCLKDIV_MASK);
+	debug("TBCTL val is %0x\n", ehrpwm_read(ehrpwm, TBCTL));
 
 	return 0;
 }
@@ -218,12 +224,13 @@ int ehrpwm_tb_config_sync(struct pwm_device *p, unsigned char phsen,
 {
 	struct ehrpwm_pwm *ehrpwm = to_ehrpwm_pwm(p);
 
-	if (phsen > 1 || syncosel > 0x3)
+	if (phsen > TB_ENABLE || syncosel > TB_SYNC_DISABLE)
 		return -EINVAL;
 
 	ehrpwm_reg_config(ehrpwm, TBCTL, phsen << TBCTL_PHSEN_POS, BIT(2));
 	ehrpwm_reg_config(ehrpwm, TBCTL, syncosel << TBCTL_SYNCOSEL_POS,
 		       TBCTL_SYNCOSEL_MASK);
+	debug("TBCTL val is %0x\n", ehrpwm_read(ehrpwm, TBCTL));
 
 	return 0;
 }
@@ -234,11 +241,12 @@ int ehrpwm_tb_set_counter_mode(struct pwm_device *p, unsigned char ctrmode,
 {
 	struct ehrpwm_pwm *ehrpwm = to_ehrpwm_pwm(p);
 
-	if (ctrmode > 0x3 || phsdir > 1)
+	if (ctrmode > TB_FREEZE || phsdir > TB_UP)
 		return -EINVAL;
 
 	ehrpwm_reg_config(ehrpwm, TBCTL, phsdir << TBCTL_PHSDIR_POS, BIT(13));
 	ehrpwm_reg_config(ehrpwm, TBCTL, ctrmode, TBCTL_CTRMODE_MASK);
+	debug("TBCTL val is %0x\n", ehrpwm_read(ehrpwm, TBCTL));
 
 	return 0;
 }
@@ -249,6 +257,7 @@ int ehrpwm_tb_force_sync(struct pwm_device *p)
 	struct ehrpwm_pwm *ehrpwm = to_ehrpwm_pwm(p);
 
 	ehrpwm_reg_config(ehrpwm, TBCTL, ENABLE << TBCTL_FRC_SYC_POS, BIT(6));
+	debug("TBCTL val is %0x\n", ehrpwm_read(ehrpwm, TBCTL));
 
 	return 0;
 }
@@ -258,10 +267,11 @@ int ehrpwm_tb_set_periodload(struct pwm_device *p, unsigned char loadmode)
 {
 	struct ehrpwm_pwm *ehrpwm = to_ehrpwm_pwm(p);
 
-	if (loadmode > 0x1)
+	if (loadmode > TB_IMMEDIATE)
 		return -EINVAL;
 
 	ehrpwm_reg_config(ehrpwm, TBCTL, loadmode << TBCTL_LOAD_MD_POS, BIT(3));
+	debug("TBCTL val is %0x\n", ehrpwm_read(ehrpwm, TBCTL));
 
 	return 0;
 }
@@ -277,11 +287,21 @@ int ehrpwm_tb_read_status(struct pwm_device *p, unsigned short *val)
 }
 EXPORT_SYMBOL(ehrpwm_tb_read_status);
 
+int ehrpwm_tb_set_counter(struct pwm_device *p, unsigned short val)
+{
+	struct ehrpwm_pwm *ehrpwm = to_ehrpwm_pwm(p);
+
+	ehrpwm_write(ehrpwm, TBCNT, val);
+
+	return 0;
+}
+EXPORT_SYMBOL(ehrpwm_tb_set_counter);
+
 int ehrpwm_tb_read_counter(struct pwm_device *p, unsigned short *val)
 {
 	struct ehrpwm_pwm *ehrpwm = to_ehrpwm_pwm(p);
 
-	*val = ehrpwm_read(ehrpwm, TBCTR);
+	*val = ehrpwm_read(ehrpwm, TBCNT);
 
 	return 0;
 }
@@ -313,8 +333,8 @@ int ehrpwm_cmp_set_cmp_ctl(struct pwm_device *p, unsigned char shdwamode,
 {
 	struct ehrpwm_pwm *ehrpwm = to_ehrpwm_pwm(p);
 
-	if (shdwamode > 0x1 || shdwbmode > 0x1 || loadamode > 0x3 ||
-		loadbmode > 0x3)
+	if (shdwamode > CC_IMMEDIATE || shdwbmode > CC_IMMEDIATE ||
+		loadamode > CC_LD_DISABLE || loadbmode > CC_LD_DISABLE)
 		return -EINVAL;
 
 	ehrpwm_reg_config(ehrpwm, CMPCTL, shdwamode << CMPCTL_SHDAMODE_POS,
@@ -324,6 +344,7 @@ int ehrpwm_cmp_set_cmp_ctl(struct pwm_device *p, unsigned char shdwamode,
 	ehrpwm_reg_config(ehrpwm, CMPCTL, loadamode, CMPCTL_LDAMODE_MASK);
 	ehrpwm_reg_config(ehrpwm, CMPCTL, loadbmode << CMPCTL_LDBMODE_POS,
 		       CMPCTL_LDBMODE_MASK);
+	debug("CMPCTL val is %0x\n", ehrpwm_read(ehrpwm, CMPCTL));
 
 	return 0;
 }
@@ -357,12 +378,13 @@ int ehrpwm_aq_set_act_ctrl(struct pwm_device *p, struct aq_config_params *cfg)
 	if (!cfg)
 		return -EINVAL;
 
-	if (cfg->ch > 1 || cfg->ctreqzro > 3 || cfg->ctreqprd > 3 ||
-		cfg->ctreqcmpaup > 3 || cfg->ctreqcmpadown > 3 ||
-		cfg->ctreqcmpbup > 3 || cfg->ctreqcmpbdown > 3)
+	if (cfg->ch > AQ_CHB || cfg->ctreqzro > AQ_TOGGLE ||
+		cfg->ctreqprd > AQ_TOGGLE || cfg->ctreqcmpaup > AQ_TOGGLE ||
+		cfg->ctreqcmpadown > AQ_TOGGLE ||
+		cfg->ctreqcmpbup > AQ_TOGGLE || cfg->ctreqcmpbdown > AQ_TOGGLE)
 		return -EINVAL;
 
-	if (cfg->ch == 0)
+	if (cfg->ch == AQ_CHA)
 		reg = AQCTLA;
 	else
 		reg = AQCTLB;
@@ -378,7 +400,11 @@ int ehrpwm_aq_set_act_ctrl(struct pwm_device *p, struct aq_config_params *cfg)
 		       ACTCTL_CTREQCMPBUP_POS, ACTCTL_CBU_MASK);
 	ehrpwm_reg_config(ehrpwm, reg, cfg->ctreqcmpbdown <<
 		       ACTCTL_CTREQCMPBDN_POS, ACTCTL_CBD_MASK);
-
+	if (cfg->ch == AQ_CHA) {
+		debug("AQCTLA val is %0x\n", ehrpwm_read(ehrpwm, AQCTLA));
+	} else {
+		debug("AQCTLB val is %0x\n", ehrpwm_read(ehrpwm, AQCTLB));
+	}
 	return 0;
 }
 EXPORT_SYMBOL(ehrpwm_aq_set_act_ctrl);
@@ -388,10 +414,10 @@ int ehrpwm_aq_set_one_shot_act(struct pwm_device  *p, unsigned char ch,
 {
 	struct ehrpwm_pwm *ehrpwm = to_ehrpwm_pwm(p);
 
-	if (ch > 1 || act > 3)
+	if (ch > AQ_CHB || act > AQ_TOGGLE)
 		return -EINVAL;
 
-	if (ch == 0)
+	if (ch == AQ_CHA)
 		ehrpwm_reg_config(ehrpwm, AQSFRC, act, AQSFRC_ACTA_MASK);
 	else
 		ehrpwm_reg_config(ehrpwm, AQSFRC, act << AQSFRC_ACTB_POS,
@@ -405,10 +431,10 @@ int ehrpwm_aq_ot_frc(struct pwm_device *p, unsigned char ch)
 {
 	struct ehrpwm_pwm *ehrpwm = to_ehrpwm_pwm(p);
 
-	if (ch > 1)
+	if (ch > AQ_CHB)
 		return -EINVAL;
 
-	if (ch == 0)
+	if (ch == AQ_CHA)
 		ehrpwm_reg_config(ehrpwm, AQSFRC, ENABLE << AQSFRC_OTFRCA_POS,
 			       BIT(2));
 	else
@@ -438,10 +464,10 @@ int ehrpwm_aq_continuous_frc(struct pwm_device *p, unsigned char ch,
 {
 	struct ehrpwm_pwm *ehrpwm = to_ehrpwm_pwm(p);
 
-	if (ch > 1)
+	if (ch > AQ_CHB)
 		return -EINVAL;
 
-	if (ch == 0)
+	if (ch == AQ_CHA)
 		ehrpwm_reg_config(ehrpwm, AQCSFRC, act, AQCSFRC_OUTA_MASK);
 	else
 		ehrpwm_reg_config(ehrpwm, AQCSFRC, act << AQCSFRC_OUTB_POS,
@@ -498,7 +524,7 @@ int ehrpwm_db_get_delay(struct pwm_device *p, unsigned char edge,
 	} else if (cfgmask == CONFIG_NS) {
 		delay_ticks = delay_ticks * ehrpwm->prescale_val;
 		delay_ns = pwm_ticks_to_ns(p, delay_ticks);
-		debug("\n delay ns value is %lu", delay_ns);
+		debug("delay ns value is %lu\n", delay_ns);
 		*delay_val = delay_ns;
 	} else {
 		return -EINVAL;
@@ -540,7 +566,7 @@ int ehrpwm_db_set_delay(struct pwm_device *p, unsigned char edge,
 			" %lu ns", __func__, delay_ticks);
 			delay_ticks = 0x3ff;
 		}
-		debug("\n delay ticks is %lu", delay_ticks);
+		debug("delay ticks is %lu\n", delay_ticks);
 		ehrpwm_write(ehrpwm, offset, delay_ticks);
 	} else {
 		return -EINVAL;
@@ -556,7 +582,8 @@ int ehrpwm_db_set_mode(struct pwm_device *p, unsigned char inmode,
 {
 	struct ehrpwm_pwm *ehrpwm = to_ehrpwm_pwm(p);
 
-	if (inmode > 0x3 || polsel > 0x3 || outmode > 0x3)
+	if (inmode > DB_FULL_ENABLE || polsel > DB_ACTIVE_LOW ||
+		outmode > DB_FULL_ENABLE)
 		return -EINVAL;
 
 	ehrpwm_reg_config(ehrpwm, DBCTL, inmode << DBCTL_INMODE_POS,
@@ -575,7 +602,7 @@ int ehrpwm_pc_configure(struct pwm_device *p, unsigned char chpduty,
 {
 	struct ehrpwm_pwm *ehrpwm = to_ehrpwm_pwm(p);
 
-	if (chpduty > 0x7 || chpfreq > 0x7 || oshtwidth > 0xf)
+	if (chpduty > PC_7_8TH || chpfreq > PC_DIV8 || oshtwidth > 0xf)
 		return -EINVAL;
 
 	ehrpwm_reg_config(ehrpwm, PCCTL, chpduty << PCCTL_CHPDUTY_POS,
@@ -593,7 +620,7 @@ int ehrpwm_pc_en_dis(struct pwm_device *p, unsigned char chpen)
 {
 	struct ehrpwm_pwm *ehrpwm = to_ehrpwm_pwm(p);
 
-	if (chpen > 1)
+	if (chpen > PC_DISABLE)
 		return -EINVAL;
 
 	ehrpwm_reg_config(ehrpwm, PCCTL, chpen, BIT(0));
@@ -612,7 +639,7 @@ int ehrpwm_tz_sel_event(struct pwm_device *p, unsigned char input,
 	unsigned short mask;
 	unsigned short pos;
 
-	if (evt > 4 || input > 7)
+	if (evt > TZ_DIS_EVT || input > 7)
 		return -EINVAL;
 
 	switch (evt) {
@@ -647,7 +674,7 @@ int ehrpwm_tz_sel_event(struct pwm_device *p, unsigned char input,
 		dev_dbg(p->dev, "%s: Invalid command", __func__);
 		return -EINVAL;
 	}
-	debug("\n TZ_sel val is %0x", ehrpwm_read(ehrpwm, TZSEL));
+	debug("TZ_sel val is %0x\n", ehrpwm_read(ehrpwm, TZSEL));
 
 	return 0;
 }
@@ -667,7 +694,7 @@ int ehrpwm_tz_set_action(struct pwm_device *p, unsigned char ch,
 		ehrpwm_reg_config(ehrpwm, TZCTL, act << TZCTL_ACTB_POS,
 			       TZCTL_ACTB_MASK);
 
-	debug("\n TZCTL reg val is %0x", ehrpwm_read(ehrpwm, TZCTL));
+	debug("TZCTL reg val is %0x\n", ehrpwm_read(ehrpwm, TZCTL));
 
 	return 0;
 }
@@ -687,7 +714,7 @@ int ehrpwm_tz_set_int_en_dis(struct pwm_device *p, enum tz_event event,
 	else
 		return -EINVAL;
 
-	debug("\n TZEINT reg val is %0x", ehrpwm_read(ehrpwm, TZEINT));
+	debug("TZEINT reg val is %0x\n", ehrpwm_read(ehrpwm, TZEINT));
 
 	return 0;
 }
@@ -746,7 +773,7 @@ int ehrpwm_et_set_sel_evt(struct pwm_device *p, unsigned char evt,
 {
 	struct ehrpwm_pwm *ehrpwm = to_ehrpwm_pwm(p);
 
-	if (evt > 0x7 || prd > 0x3)
+	if (evt > EC_CTRD_CMPB || prd > ET_3RD)
 		return -EINVAL;
 
 	ehrpwm_reg_config(ehrpwm, ETSEL, evt, ETSEL_INTSEL_MASK);
@@ -835,12 +862,14 @@ int ehrpwm_hr_config(struct pwm_device *p, unsigned char loadmode,
 {
 	struct ehrpwm_pwm *ehrpwm = to_ehrpwm_pwm(p);
 
-	if (loadmode > 1 || ctlmode > 1 || edgemode > 3)
+	if (loadmode > HR_CTR_ZERO || ctlmode > HR_PHASE ||
+	    edgemode > HR_MEP_BOTH)
 		return -EINVAL;
 
 	ehrpwm_reg_config(ehrpwm, HRCNFG, loadmode << HRCNFG_LDMD_POS, BIT(3));
 	ehrpwm_reg_config(ehrpwm, HRCNFG, ctlmode << HRCNFG_CTLMD_POS, BIT(2));
 	ehrpwm_reg_config(ehrpwm, HRCNFG, edgemode, HRCNFG_EDGEMD_MASK);
+	debug("HRCNFG reg val is %0x\n", ehrpwm_read(ehrpwm, HRCNFG));
 
 	return 0;
 }
@@ -887,7 +916,8 @@ static int ehrpwm_pwm_start(struct pwm_device *p)
 	val = (val & ~TBCTL_CTRMODE_MASK) | (TBCTL_CTRMOD_CTRUP |
 		 TBCTL_FREERUN_FREE << 14);
 	ehrpwm_write(ehrpwm, TBCTL, val);
-	ehrpwm_tz_set_action(p, chan, 0x3);
+	debug("TBCTL val is %0x\n", ehrpwm_read(ehrpwm, TBCTL));
+	ehrpwm_tz_set_action(p, chan, TZ_TZ_DISABLE);
 	read_val1 = ehrpwm_read(ehrpwm, TZFLG);
 	read_val2 = ehrpwm_read(ehrpwm, TZCTL);
 	/*
@@ -918,7 +948,7 @@ static int ehrpwm_pwm_stop(struct pwm_device *p)
 
 	chan = p - &ehrpwm->pwm[0];
 	/* Set the Trip Zone Action to low */
-	ehrpwm_tz_set_action(p, chan, 0x2);
+	ehrpwm_tz_set_action(p, chan, TZ_FORCE_LOW);
 	read_val = ehrpwm_read(ehrpwm, TZFLG);
 	/*
 	 * If the channel is already in stop state, Trip Zone software force is
@@ -956,12 +986,15 @@ static int ehrpwm_pwm_set_pol(struct pwm_device *p)
 		ctreqcmp = 8;
 	}
 
-
 	val = ((p->active_high ? ACTCTL_CTREQCMP_HIGH : ACTCTL_CTREQCMP_LOW)
 		 << ctreqcmp) | (p->active_high ? ACTCTL_CTREQZRO_LOW :
 			ACTCTL_CTREQZRO_HIGH);
 	ehrpwm_write(ehrpwm, act_ctrl_reg, val);
-
+/*	if (!chan)
+		debug("AQCTLA val is %0x\n", ehrpwm_read(ehrpwm, AQCTLA));
+	else
+		debug("AQCTLB val is %0x\n", ehrpwm_read(ehrpwm, AQCTLB));
+*/
 	return 0;
 }
 
@@ -1007,7 +1040,7 @@ static int ehrpwm_pwm_set_prd(struct pwm_device *p)
 	temp = &ehrpwm->pwm[!chan];
 	temp->period_ticks = p->period_ticks;
 	temp->period_ns = p->period_ns;
-	debug("\n period_ticks is %lu", p->period_ticks);
+	debug("period_ticks is %lu\n", p->period_ticks);
 
 	if (p->period_ticks > 65535) {
 		ret = get_divider_val(p->period_ticks / 65535 + 1, &ps_div_val,
@@ -1021,6 +1054,7 @@ static int ehrpwm_pwm_set_prd(struct pwm_device *p)
 	val = ehrpwm_read(ehrpwm, TBCTL);
 	val = (val & ~TBCTL_CLKDIV_MASK & ~TBCTL_HSPCLKDIV_MASK) | tb_div_val;
 	ehrpwm_write(ehrpwm, TBCTL, val);
+	debug("TBCTL val is %0x\n", ehrpwm_read(ehrpwm, TBCTL));
 	period_ticks = p->period_ticks / ps_div_val;
 
 	if (period_ticks <= 1) {
@@ -1033,9 +1067,9 @@ static int ehrpwm_pwm_set_prd(struct pwm_device *p)
 	 * the programmed value.
 	 */
 	ehrpwm_write(ehrpwm, TBPRD, (unsigned short)(period_ticks - 1));
-	debug("\n period_ticks is %d", period_ticks);
+	debug("period_ticks is %d\n", period_ticks);
 	ehrpwm->prescale_val = ps_div_val;
-	debug("\n Prescaler value is %d", ehrpwm->prescale_val);
+	debug("Prescaler value is %d\n", ehrpwm->prescale_val);
 
 	return 0;
 }
@@ -1063,7 +1097,8 @@ static int ehrpwm_hr_duty_config(struct pwm_device *p)
 	cmphr_val = (cmphr_val * no_of_mepsteps) / 1000;
 	cmphr_val = (cmphr_val << 8) + 0x180;
 	ehrpwm_write(ehrpwm, CMPAHR, cmphr_val);
-	ehrpwm_write(ehrpwm, HRCNFG, 0x2);
+	ehrpwm_write(ehrpwm, HRCNFG, HR_MEP_FALLING);
+	debug("HRCNFG reg val is %0x\n", ehrpwm_read(ehrpwm, HRCNFG));
 
 	return 0;
 }
@@ -1083,12 +1118,12 @@ static int ehrpwm_pwm_set_dty(struct pwm_device *p)
 	}
 
 	duty_ticks = p->duty_ticks / ehrpwm->prescale_val;
-	debug("\n Prescaler value is %d", ehrpwm->prescale_val);
-	debug("\n duty ticks is %d", duty_ticks);
+	debug("Prescaler value is %d\n", ehrpwm->prescale_val);
+	debug("duty ticks is %d\n", duty_ticks);
 	/* High resolution module */
 	if (chan && ehrpwm->prescale_val <= 1) {
 		ret = ehrpwm_hr_duty_config(p);
-		ehrpwm_write(ehrpwm, HRCNFG, 0x2);
+		ehrpwm_write(ehrpwm, HRCNFG, HR_MEP_FALLING);
 	}
 
 	ehrpwm_pwm_set_pol(p);
@@ -1256,7 +1291,7 @@ static int ehrpwm_pwm_request(struct pwm_device *p)
 	chan = p - &ehrpwm->pwm[0];
 
 	p->tick_hz = clk_get_rate(ehrpwm->clk);
-	debug("\n The clk freq is %lu", p->tick_hz);
+	debug("The clk freq is %lu\n", p->tick_hz);
 	clk_enable(ehrpwm->clk);
 	ehrpwm_pwm_stop(p);
 

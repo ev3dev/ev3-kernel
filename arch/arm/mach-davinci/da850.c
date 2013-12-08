@@ -383,6 +383,7 @@ static struct clk ehrpwm_clk = {
 	.parent		= &pll0_sysclk2,
 	.lpsc		= DA8XX_LPSC1_PWM,
 	.gpsc		= 1,
+	.domain		= 1,
 	.flags          = DA850_CLK_ASYNC3,
 };
 
@@ -1140,11 +1141,11 @@ const short da850_mcbsp1_pins[] __initdata = {
 };
 */
 
-// const short da850_ehrpwm0_pins[] __initdata = {
-// 	DA850_EHRPWM0_A, DA850_EHRPWM0_B, DA850_EHRPWM0_TZ,
-// 	-1
-// };
-// 
+const short da850_ehrpwm0_pins[] __initdata = {
+	DA850_EHRPWM0_A, DA850_EHRPWM0_B, DA850_EHRPWM0_TZ,
+	-1
+};
+
 // const short da850_ehrpwm1_pins[] __initdata = {
 // 	DA850_EHRPWM1_A, DA850_EHRPWM1_TZ,
 // 	-1

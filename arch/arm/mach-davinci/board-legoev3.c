@@ -74,6 +74,9 @@
 #define EV3_BUTTON_3_PIN                GPIO_TO_PIN(7, 12)
 #define EV3_BUTTON_4_PIN                GPIO_TO_PIN(6, 6 )
 #define EV3_BUTTON_5_PIN                GPIO_TO_PIN(6, 10)
+
+#define EV3_SND_ENA_PIN                 GPIO_TO_PIN(6, 15)
+
 #else
 #warning "Delete this code and eliminate this warning after copying this file to board-legoev3.c"
 #define DAVINCI_BACKLIGHT_MAX_BRIGHTNESS	250
@@ -2038,6 +2041,29 @@ static const short legoev3_ui_pins[] = {
 #endif
 	-1
 };
+static const short legoev3_sound_pins[] = {
+	EV3_GPIO6_15,
+	-1
+};
+
+#endif
+
+#if defined(CONFIG_SND_LEGOEV3) || defined(CONFIG_SND_LEGOEV3_MODULE)
+#include <sound/legoev3.h>
+
+static struct snd_legoev3_platform_data ev3_snd_data = {
+	.pwm_dev_name   = "ehrpwm.0:1",
+	.amp_gpio       = EV3_SND_ENA_PIN,
+};
+
+static struct platform_device snd_legoev3 =
+{
+	.name           = "snd-legoev3",
+	.id             = -1,
+	.dev            = {
+		.platform_data = &ev3_snd_data,
+	},
+};
 #endif
 
 #if defined(CONFIG_LEDS_GPIO) || defined(CONFIG_LEDS_GPIO_MODULE)
@@ -2202,6 +2228,32 @@ static __init void da850_legoev3_init(void)
   if (ret)
     pr_warning("da850_evm_init: button registration failed: %d\n",
         ret);
+#endif
+
+#if defined(CONFIG_DAVINCI_EHRPWM) || defined(CONFIG_DAVINCI_EHRPWM_MODULE)
+	/* eHRPWM0B is used to drive the EV3 speaker */
+	ret = davinci_cfg_reg_list(da850_ehrpwm0_pins);
+	if (ret)
+		pr_warning("da850_evm_init: "
+		           "ehrpwm0 mux setup failed: %d\n", ret);
+	da850_register_ehrpwm(0x02);
+#endif
+
+#if defined(CONFIG_SND_LEGOEV3) || defined(CONFIG_SND_LEGOEV3_MODULE)
+	ret = platform_device_register(&snd_legoev3);
+	if (ret)
+		pr_warning("da850_evm_init: "
+		           "sound device registration failed: %d\n", ret);
+
+	/* initalize gpio pin for sound enable/disable */
+	ret = davinci_cfg_reg_list(legoev3_sound_pins);
+	if (ret)
+		pr_warning("da850_evm_init: sound mux setup failed:"
+			" %d\n", ret);
+	ret = gpio_request_one(EV3_SND_ENA_PIN, GPIOF_OUT_INIT_LOW, "snd_ena");
+	if (ret)
+		pr_warning("da850_evm_init:"
+		           " sound gpio setup failed: %d\n", ret);
 #endif
 
 #ifdef CONFIG_MACH_DAVINCI_LEGOEV3
