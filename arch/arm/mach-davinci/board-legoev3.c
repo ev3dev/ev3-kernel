@@ -77,6 +77,8 @@
 
 #define EV3_SND_ENA_PIN                 GPIO_TO_PIN(6, 15)
 
+#define EV3_POWER_PIN                   GPIO_TO_PIN(6, 11)
+
 #else
 #warning "Delete this code and eliminate this warning after copying this file to board-legoev3.c"
 #define DAVINCI_BACKLIGHT_MAX_BRIGHTNESS	250
@@ -2158,6 +2160,15 @@ struct uio_pruss_pdata da8xx_pruss_uio_pdata = {
 
 #define DA850EVM_SATA_REFCLKPN_RATE	(100 * 1000 * 1000)
 
+static void legoev3_power_off(void)
+{
+	if (!gpio_request(EV3_POWER_PIN, "EV3 power enable"))
+		gpio_direction_output(EV3_POWER_PIN, 0);
+	else
+		pr_err("da850_evm_init: can not open GPIO %d for power off\n",
+			EV3_POWER_PIN);
+}
+
 static __init void da850_legoev3_init(void)
 {
 	int ret;
@@ -2165,6 +2176,8 @@ static __init void da850_legoev3_init(void)
 	struct davinci_soc_info *soc_info = &davinci_soc_info;
 
 	u8 rmii_en = soc_info->emac_pdata->rmii_en;
+
+	pm_power_off = legoev3_power_off;
 
 #ifdef CONFIG_MACH_DAVINCI_LEGOEV3
 #warning "Keep this code and eliminate this warning after copying this file to board-legoev3.c"
