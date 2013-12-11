@@ -1,6 +1,7 @@
 /*
  * Support for TI ADS79xx family of A/D convertors
  *
+ * Copyright (C) 2013 David Lechner <david@lechnology.com>
  * Copyright (C) 2013 Texas Instruments Incorporated - http://www.ti.com/
  *	Nishanth Menon
  *
@@ -25,7 +26,6 @@
 #include <linux/err.h>
 #include <linux/mutex.h>
 #include <linux/delay.h>
-#include <linux/of_device.h>
 
 struct ads79x_ch {
 	struct attribute_group attr_grp;
@@ -57,12 +57,12 @@ static ssize_t show_voltage(struct device *dev,
 	u32 vref_uv;
 	u32 converted_voltage, lsb_voltage;
 	struct ads79xx_hwmon_data *pdata = spi_get_drvdata(spi);
-	struct ads79xx_data *ad_of_data;
+	struct ads79xx_data *ad_data;
 
-	ad_of_data = pdata->ads79xx_info;
+	ad_data = pdata->ads79xx_info;
 	v5_range = pdata->v5_ip_range;
 	vref_uv = pdata->vref_uv;
-	val_mask = (1 << ad_of_data->resolution) - 1;
+	val_mask = (1 << ad_data->resolution) - 1;
 	if (v5_range) {
 		/* Range 2 convertion - 5V i/p range */
 		lsb_voltage = 2 * vref_uv / 4096;
@@ -73,10 +73,10 @@ static ssize_t show_voltage(struct device *dev,
 
 	channel = attr->index;
 
-	if (channel > ad_of_data->ch_data->num_channels) {
+	if (channel > ad_data->ch_data->num_channels) {
 		dev_crit(&spi->dev, "%s: chid%d > num channels %d\n",
 			 __func__, channel,
-			 ad_of_data->ch_data->num_channels);
+			 ad_data->ch_data->num_channels);
 		return ret;
 	}
 	mutex_lock(&pdata->lock);
@@ -273,7 +273,6 @@ static struct attribute *ads79xx_16ch_attributes[] = {
 	NULL
 };
 
-
 static struct ads79x_ch ad79x_4ch_data = {
 	.attr_grp = { .attrs = ads79xx_4ch_attributes },
 	.num_channels = 4,
@@ -291,96 +290,84 @@ static struct ads79x_ch ad79x_16ch_data = {
 	.num_channels = 16,
 };
 
-static struct ads79xx_data ads7950_data = {
-	.ch_data = &ad79x_4ch_data,
-	.resolution = 12,
+static struct ads79xx_data ads79xx_data[] = {
+	[0] = {
+		.ch_data = &ad79x_4ch_data,
+		.resolution = 12,
+	},
+	[1] = {
+		.ch_data = &ad79x_8ch_data,
+		.resolution = 12,
+	},
+	[2]	= {
+		.ch_data = &ad79x_12ch_data,
+		.resolution = 12,
+	},
+	[3]	= {
+		.ch_data = &ad79x_16ch_data,
+		.resolution = 12,
+	},
+	[4]	= {
+		.ch_data = &ad79x_4ch_data,
+		.resolution = 10,
+	},
+	[5]	= {
+		.ch_data = &ad79x_8ch_data,
+		.resolution = 10,
+	},
+	[6]	= {
+		.ch_data = &ad79x_12ch_data,
+		.resolution = 10,
+	},
+	[7]	= {
+		.ch_data = &ad79x_16ch_data,
+		.resolution = 10,
+	},
+	[8]	= {
+		.ch_data = &ad79x_4ch_data,
+		.resolution = 8,
+	},
+	[9]	= {
+		.ch_data = &ad79x_8ch_data,
+		.resolution = 8,
+	},
+	[10]	= {
+		.ch_data = &ad79x_12ch_data,
+		.resolution = 8,
+	},
+	[11]	= {
+		.ch_data = &ad79x_16ch_data,
+		.resolution = 8,
+	},
 };
 
-static struct ads79xx_data ads7951_data = {
-	.ch_data = &ad79x_8ch_data,
-	.resolution = 12,
+static const struct spi_device_id ads79xx_ids[] = {
+	{ .name = "ads7950", .driver_data = 0 },
+	{ .name = "ads7951", .driver_data = 1 },
+	{ .name = "ads7952", .driver_data = 2 },
+	{ .name = "ads7953", .driver_data = 3 },
+	{ .name = "ads7954", .driver_data = 4 },
+	{ .name = "ads7955", .driver_data = 5 },
+	{ .name = "ads7956", .driver_data = 6 },
+	{ .name = "ads7957", .driver_data = 7 },
+	{ .name = "ads7958", .driver_data = 8 },
+	{ .name = "ads7959", .driver_data = 9 },
+	{ .name = "ads7960", .driver_data = 10 },
+	{ .name = "ads7961", .driver_data = 11 },
+	{ },
 };
-
-static struct ads79xx_data ads7952_data = {
-	.ch_data = &ad79x_12ch_data,
-	.resolution = 12,
-};
-
-static struct ads79xx_data ads7953_data = {
-	.ch_data = &ad79x_16ch_data,
-	.resolution = 12,
-};
-
-static struct ads79xx_data ads7954_data = {
-	.ch_data = &ad79x_4ch_data,
-	.resolution = 10,
-};
-
-static struct ads79xx_data ads7955_data = {
-	.ch_data = &ad79x_8ch_data,
-	.resolution = 10,
-};
-
-static struct ads79xx_data ads7956_data = {
-	.ch_data = &ad79x_12ch_data,
-	.resolution = 10,
-};
-
-static struct ads79xx_data ads7957_data = {
-	.ch_data = &ad79x_16ch_data,
-	.resolution = 10,
-};
-
-static struct ads79xx_data ads7958_data = {
-	.ch_data = &ad79x_4ch_data,
-	.resolution = 8,
-};
-
-static struct ads79xx_data ads7959_data = {
-	.ch_data = &ad79x_8ch_data,
-	.resolution = 8,
-};
-
-static struct ads79xx_data ads7960_data = {
-	.ch_data = &ad79x_12ch_data,
-	.resolution = 8,
-};
-
-static struct ads79xx_data ads7961_data = {
-	.ch_data = &ad79x_16ch_data,
-	.resolution = 8,
-};
-
-static const struct of_device_id ad79xx_hwmon_of_match[] = {
-	{ .compatible = "spi,ads7950", .data = &ads7950_data},
-	{ .compatible = "spi,ads7951", .data = &ads7951_data},
-	{ .compatible = "spi,ads7952", .data = &ads7952_data},
-	{ .compatible = "spi,ads7953", .data = &ads7953_data},
-	{ .compatible = "spi,ads7954", .data = &ads7954_data},
-	{ .compatible = "spi,ads7955", .data = &ads7955_data},
-	{ .compatible = "spi,ads7956", .data = &ads7956_data},
-	{ .compatible = "spi,ads7957", .data = &ads7957_data},
-	{ .compatible = "spi,ads7958", .data = &ads7958_data},
-	{ .compatible = "spi,ads7959", .data = &ads7959_data},
-	{ .compatible = "spi,ads7960", .data = &ads7960_data},
-	{ .compatible = "spi,ads7961", .data = &ads7961_data},
-	{},
-};
-MODULE_DEVICE_TABLE(of, ad79xx_hwmon_of_match);
-
+MODULE_DEVICE_TABLE(spi, ads79xx_ids);
 
 static int ads79xx_probe(struct spi_device *spi)
 {
+	int chip_id = spi_get_device_id(spi)->driver_data;
 	int err;
 	struct ads79xx_hwmon_data *pdata;
-	const struct of_device_id *match;
-	struct ads79xx_data *ad_of_data;
+	struct ads79xx_data *ad_data;
 
-	match = of_match_device(ad79xx_hwmon_of_match, &spi->dev);
-	if (!match)
-		return -ENODEV;
-
-	ad_of_data = (struct ads79xx_data *)match->data;
+	if (chip_id >= ARRAY_SIZE(ads79xx_data))
+		return -EINVAL;
+	ad_data = &ads79xx_data[chip_id];
 
 	/* Configure the SPI bus */
 	spi->mode = SPI_MODE_0;
@@ -393,11 +380,11 @@ static int ads79xx_probe(struct spi_device *spi)
 		return -ENOMEM;
 
 	err = sysfs_create_group(&spi->dev.kobj,
-				 &ad_of_data->ch_data->attr_grp);
+				 &ad_data->ch_data->attr_grp);
 	if (err < 0)
 		return err;
 
-	pdata->ads79xx_info = ad_of_data;
+	pdata->ads79xx_info = ad_data;
 	mutex_init(&pdata->lock);
 	pdata->vref_uv = 2500000;
 
@@ -412,18 +399,18 @@ static int ads79xx_probe(struct spi_device *spi)
 	return 0;
 
 error_remove:
-	sysfs_remove_group(&spi->dev.kobj, &ad_of_data->ch_data->attr_grp);
+	sysfs_remove_group(&spi->dev.kobj, &ad_data->ch_data->attr_grp);
 	return err;
 }
 
 static int ads79xx_remove(struct spi_device *spi)
 {
 	struct ads79xx_hwmon_data *pdata = spi_get_drvdata(spi);
-	struct ads79xx_data *ad_of_data;
+	struct ads79xx_data *ad_data;
 
-	ad_of_data = pdata->ads79xx_info;
+	ad_data = pdata->ads79xx_info;
 	hwmon_device_unregister(pdata->hwmon_dev);
-	sysfs_remove_group(&spi->dev.kobj, &ad_of_data->ch_data->attr_grp);
+	sysfs_remove_group(&spi->dev.kobj, &ad_data->ch_data->attr_grp);
 
 	return 0;
 }
@@ -432,9 +419,8 @@ static struct spi_driver ads79xx_driver = {
 	.driver = {
 		.name = DRVNAME,
 		.owner = THIS_MODULE,
-		.of_match_table = ad79xx_hwmon_of_match,
 	},
-
+	.id_table = ads79xx_ids,
 	.probe = ads79xx_probe,
 	.remove = ads79xx_remove,
 };
