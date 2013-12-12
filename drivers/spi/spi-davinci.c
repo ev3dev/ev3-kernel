@@ -480,7 +480,7 @@ static int davinci_spi_check_error(struct davinci_spi *dspi, int int_status)
 static int davinci_spi_process_events(struct davinci_spi *dspi)
 {
 	u32 buf, status, errors = 0, spidat1;
-printk("davinci_spi_process_events\n");
+
 	buf = ioread32(dspi->base + SPIBUF);
 
 	if (dspi->rcount > 0 && !(buf & SPIBUF_RXEMPTY_MASK)) {
@@ -502,13 +502,7 @@ printk("davinci_spi_process_events\n");
 		spidat1 |= 0xFFFF & dspi->get_tx(dspi);
 		iowrite32(spidat1, dspi->base + SPIDAT1);
 	}
-printk("SPIGCR1:  0x%08x\n", ioread32(dspi->base + SPIGCR1));
-printk("SPIPC0:   0x%08x\n", ioread32(dspi->base + SPIPC0));
-printk("SPIDAT1:  0x%08x\n", ioread32(dspi->base + SPIDAT1));
-printk("SPIFMT0:  0x%08x\n", ioread32(dspi->base + SPIFMT0));
-printk("SPIDELAY: 0x%08x\n", ioread32(dspi->base + SPIDELAY));
-printk("SPIINT0:  0x%08x\n", ioread32(dspi->base + SPIINT));
-printk("SPIDEF:   0x%08x\n", ioread32(dspi->base + SPIDEF));
+
 out:
 	return errors;
 }
