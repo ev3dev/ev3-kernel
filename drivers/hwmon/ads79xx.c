@@ -45,7 +45,7 @@ struct ads79xx_hwmon_data {
 	struct ads79xx_data *ads79xx_info;
 };
 
-static ssize_t show_voltage(struct device *dev,
+static ssize_t show_input(struct device *dev,
 		struct device_attribute *da, char *buf)
 {
 	struct spi_device *spi = to_spi_device(dev);
@@ -184,32 +184,32 @@ static ssize_t ads79xx_set_vref(struct device *dev,
 	return count;
 }
 
-static SENSOR_DEVICE_ATTR(ch0_voltage, S_IRUGO, show_voltage, NULL, 0);
-static SENSOR_DEVICE_ATTR(ch1_voltage, S_IRUGO, show_voltage, NULL, 1);
-static SENSOR_DEVICE_ATTR(ch2_voltage, S_IRUGO, show_voltage, NULL, 2);
-static SENSOR_DEVICE_ATTR(ch3_voltage, S_IRUGO, show_voltage, NULL, 3);
-static SENSOR_DEVICE_ATTR(ch4_voltage, S_IRUGO, show_voltage, NULL, 4);
-static SENSOR_DEVICE_ATTR(ch5_voltage, S_IRUGO, show_voltage, NULL, 5);
-static SENSOR_DEVICE_ATTR(ch6_voltage, S_IRUGO, show_voltage, NULL, 6);
-static SENSOR_DEVICE_ATTR(ch7_voltage, S_IRUGO, show_voltage, NULL, 7);
-static SENSOR_DEVICE_ATTR(ch8_voltage, S_IRUGO, show_voltage, NULL, 8);
-static SENSOR_DEVICE_ATTR(ch9_voltage, S_IRUGO, show_voltage, NULL, 9);
-static SENSOR_DEVICE_ATTR(ch10_voltage, S_IRUGO, show_voltage, NULL, 10);
-static SENSOR_DEVICE_ATTR(ch11_voltage, S_IRUGO, show_voltage, NULL, 11);
-static SENSOR_DEVICE_ATTR(ch12_voltage, S_IRUGO, show_voltage, NULL, 12);
-static SENSOR_DEVICE_ATTR(ch13_voltage, S_IRUGO, show_voltage, NULL, 13);
-static SENSOR_DEVICE_ATTR(ch14_voltage, S_IRUGO, show_voltage, NULL, 14);
-static SENSOR_DEVICE_ATTR(ch15_voltage, S_IRUGO, show_voltage, NULL, 15);
+static SENSOR_DEVICE_ATTR(in0_input, S_IRUGO, show_input, NULL, 0);
+static SENSOR_DEVICE_ATTR(in1_input, S_IRUGO, show_input, NULL, 1);
+static SENSOR_DEVICE_ATTR(in2_input, S_IRUGO, show_input, NULL, 2);
+static SENSOR_DEVICE_ATTR(in3_input, S_IRUGO, show_input, NULL, 3);
+static SENSOR_DEVICE_ATTR(in4_input, S_IRUGO, show_input, NULL, 4);
+static SENSOR_DEVICE_ATTR(in5_input, S_IRUGO, show_input, NULL, 5);
+static SENSOR_DEVICE_ATTR(in6_input, S_IRUGO, show_input, NULL, 6);
+static SENSOR_DEVICE_ATTR(in7_input, S_IRUGO, show_input, NULL, 7);
+static SENSOR_DEVICE_ATTR(in8_input, S_IRUGO, show_input, NULL, 8);
+static SENSOR_DEVICE_ATTR(in9_input, S_IRUGO, show_input, NULL, 9);
+static SENSOR_DEVICE_ATTR(in10_input, S_IRUGO, show_input, NULL, 10);
+static SENSOR_DEVICE_ATTR(in11_input, S_IRUGO, show_input, NULL, 11);
+static SENSOR_DEVICE_ATTR(in12_input, S_IRUGO, show_input, NULL, 12);
+static SENSOR_DEVICE_ATTR(in13_input, S_IRUGO, show_input, NULL, 13);
+static SENSOR_DEVICE_ATTR(in14_input, S_IRUGO, show_input, NULL, 14);
+static SENSOR_DEVICE_ATTR(in15_input, S_IRUGO, show_input, NULL, 15);
 
 static DEVICE_ATTR(vref, S_IRUGO | S_IWUSR, ads79xx_show_vref, ads79xx_set_vref);
 static DEVICE_ATTR(v5_input_range, S_IRUGO | S_IWUSR, ads79xx_show_v5, ads79xx_set_v5);
 static DEVICE_ATTR(name, S_IRUGO, ads79xx_show_name, NULL);
 
 static struct attribute *ads79xx_4ch_attributes[] = {
-	&sensor_dev_attr_ch0_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch1_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch2_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch3_voltage.dev_attr.attr,
+	&sensor_dev_attr_in0_input.dev_attr.attr,
+	&sensor_dev_attr_in1_input.dev_attr.attr,
+	&sensor_dev_attr_in2_input.dev_attr.attr,
+	&sensor_dev_attr_in3_input.dev_attr.attr,
 	&dev_attr_vref.attr,
 	&dev_attr_v5_input_range.attr,
 	&dev_attr_name.attr,
@@ -217,14 +217,14 @@ static struct attribute *ads79xx_4ch_attributes[] = {
 };
 
 static struct attribute *ads79xx_8ch_attributes[] = {
-	&sensor_dev_attr_ch0_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch1_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch2_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch3_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch4_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch5_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch6_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch7_voltage.dev_attr.attr,
+	&sensor_dev_attr_in0_input.dev_attr.attr,
+	&sensor_dev_attr_in1_input.dev_attr.attr,
+	&sensor_dev_attr_in2_input.dev_attr.attr,
+	&sensor_dev_attr_in3_input.dev_attr.attr,
+	&sensor_dev_attr_in4_input.dev_attr.attr,
+	&sensor_dev_attr_in5_input.dev_attr.attr,
+	&sensor_dev_attr_in6_input.dev_attr.attr,
+	&sensor_dev_attr_in7_input.dev_attr.attr,
 	&dev_attr_vref.attr,
 	&dev_attr_v5_input_range.attr,
 	&dev_attr_name.attr,
@@ -232,18 +232,18 @@ static struct attribute *ads79xx_8ch_attributes[] = {
 };
 
 static struct attribute *ads79xx_12ch_attributes[] = {
-	&sensor_dev_attr_ch0_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch1_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch2_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch3_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch4_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch5_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch6_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch7_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch8_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch9_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch10_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch11_voltage.dev_attr.attr,
+	&sensor_dev_attr_in0_input.dev_attr.attr,
+	&sensor_dev_attr_in1_input.dev_attr.attr,
+	&sensor_dev_attr_in2_input.dev_attr.attr,
+	&sensor_dev_attr_in3_input.dev_attr.attr,
+	&sensor_dev_attr_in4_input.dev_attr.attr,
+	&sensor_dev_attr_in5_input.dev_attr.attr,
+	&sensor_dev_attr_in6_input.dev_attr.attr,
+	&sensor_dev_attr_in7_input.dev_attr.attr,
+	&sensor_dev_attr_in8_input.dev_attr.attr,
+	&sensor_dev_attr_in9_input.dev_attr.attr,
+	&sensor_dev_attr_in10_input.dev_attr.attr,
+	&sensor_dev_attr_in11_input.dev_attr.attr,
 	&dev_attr_vref.attr,
 	&dev_attr_v5_input_range.attr,
 	&dev_attr_name.attr,
@@ -251,22 +251,22 @@ static struct attribute *ads79xx_12ch_attributes[] = {
 };
 
 static struct attribute *ads79xx_16ch_attributes[] = {
-	&sensor_dev_attr_ch0_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch1_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch2_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch3_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch4_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch5_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch6_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch7_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch8_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch9_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch10_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch11_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch12_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch13_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch14_voltage.dev_attr.attr,
-	&sensor_dev_attr_ch15_voltage.dev_attr.attr,
+	&sensor_dev_attr_in0_input.dev_attr.attr,
+	&sensor_dev_attr_in1_input.dev_attr.attr,
+	&sensor_dev_attr_in2_input.dev_attr.attr,
+	&sensor_dev_attr_in3_input.dev_attr.attr,
+	&sensor_dev_attr_in4_input.dev_attr.attr,
+	&sensor_dev_attr_in5_input.dev_attr.attr,
+	&sensor_dev_attr_in6_input.dev_attr.attr,
+	&sensor_dev_attr_in7_input.dev_attr.attr,
+	&sensor_dev_attr_in8_input.dev_attr.attr,
+	&sensor_dev_attr_in9_input.dev_attr.attr,
+	&sensor_dev_attr_in10_input.dev_attr.attr,
+	&sensor_dev_attr_in11_input.dev_attr.attr,
+	&sensor_dev_attr_in12_input.dev_attr.attr,
+	&sensor_dev_attr_in13_input.dev_attr.attr,
+	&sensor_dev_attr_in14_input.dev_attr.attr,
+	&sensor_dev_attr_in15_input.dev_attr.attr,
 	&dev_attr_vref.attr,
 	&dev_attr_v5_input_range.attr,
 	&dev_attr_name.attr,
