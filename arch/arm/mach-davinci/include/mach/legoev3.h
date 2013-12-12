@@ -12,6 +12,7 @@
 #ifndef __ASM_ARCH_DAVINCI_LEGOEV3_H
 #define __ASM_ARCH_DAVINCI_LEGOEV3_H
 
+#include <mach/mux.h>
 
 extern void __iomem *da8xx_psc1_base; 		// LEGO BT slow clock
 extern void __iomem *da8xx_ecap2_base; 		// LEGO BT slow clock
@@ -52,6 +53,55 @@ extern void __iomem *da8xx_ecap2_base; 		// LEGO BT slow clock
 #define PINMUX17		0x44
 #define PINMUX18		0x48
 #define PINMUX19		0x4c
+
+#define PIN(ev3_name, da850_name)			\
+enum legoev3_##ev3_name {				\
+	EV3_##ev3_name		= DA850_##da850_name,	\
+};
+
+#define GPIO_PIN(ev3_name, group, pin)				\
+enum legoev3_##ev3_name {					\
+	EV3_##ev3_name		= DA850_GPIO##group##_##pin,	\
+	EV3_##ev3_name##_PIN	= GPIO_TO_PIN(group, pin),	\
+};
+
+/* LCD pins */
+PIN(LCD_DATA_IN, SPI1_SOMI)
+GPIO_PIN(LCD_RESET, 5, 0)
+GPIO_PIN(LCD_A0, 2, 11)
+GPIO_PIN(LCD_CS, 2, 12)
+
+/* LED pins */
+GPIO_PIN(LED_0, 6, 12)
+GPIO_PIN(LED_1, 6, 14)
+GPIO_PIN(LED_2, 6, 13)
+GPIO_PIN(LED_3, 6, 7)
+
+/* Button pins */
+GPIO_PIN(BUTTON_0, 7, 15)
+GPIO_PIN(BUTTON_1, 1, 13)
+GPIO_PIN(BUTTON_2, 7, 14)
+GPIO_PIN(BUTTON_3, 7, 12)
+GPIO_PIN(BUTTON_4, 6, 6)
+GPIO_PIN(BUTTON_5, 6, 10)
+
+/* sound pins */
+PIN(SND_PWM, EHRPWM0_B)
+GPIO_PIN(SND_ENA, 6, 15)
+
+/* power pins */
+GPIO_PIN(POWER, 6, 11)
+
+/* analog/digital converter pins */
+PIN(ADC_DATA_IN, SPI0_SOMI)
+PIN(ADC_DATA_OUT, SPI0_SOMI)
+PIN(ADC_CS, SPI0_SCS_3)
+PIN(ADC_CLK, SPI0_CLK)
+GPIO_PIN(ADC_ENA, 0, 6)
+
+/* USB1 VBUS pins */
+GPIO_PIN(USB1_DRV, 1, 4)
+GPIO_PIN(USB1_OVC, 6, 3)
 
 int da8xx_register_pru_can(void);
 int da8xx_register_pru_suart(void);

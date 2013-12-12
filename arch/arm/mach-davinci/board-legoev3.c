@@ -2,6 +2,7 @@
  * LEGO MINDSTORMS EV3 DA850/OMAP-L138
  *
  * Copyright (C) 2013 Ralph Hempel
+ * Copyright (C) 2012 David Lechner <david@lechnology.com>
  *
  * Derived from: arch/arm/mach-davinci/board-da850-evm.c
  * Original Copyrights follow:
@@ -13,6 +14,7 @@
  * is licensed "as is" without any warranty of any kind, whether express
  * or implied.
  */
+
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/clk.h>
@@ -43,161 +45,155 @@
 
 #include <video/st7586fb.h>
 
-#define DA850_EVM_PHY_ID		"davinci_mdio-0:00"
+/* LCD configuration:
+ *
+ * The LCD is connected via SPI1 and uses the st7586fb frame buffer driver.
+ */
 
-#define DA850_LCD_PWR_PIN		GPIO_TO_PIN(2, 8)
-#define DA850_LCD_BL_PIN		GPIO_TO_PIN(2, 15)
-
-#define DA850_MMCSD_CD_PIN		GPIO_TO_PIN(4, 2) //Lego
-// #define DA850_MMCSD_WP_PIN		GPIO_TO_PIN(4, 1)
-
-#define DA850_WLAN_EN			GPIO_TO_PIN(6, 9)
-#define DA850_WLAN_IRQ			GPIO_TO_PIN(6, 10)
-
-#define DA850_MII_MDIO_CLKEN_PIN	GPIO_TO_PIN(2, 6)
-
-#define DA850_SD_ENABLE_PIN		GPIO_TO_PIN(0, 11)
-
-#define DA850_BT_EN			GPIO_TO_PIN(0, 15)
-
-#ifdef CONFIG_MACH_DAVINCI_LEGOEV3
-
-#warning "Consolidate these one-time LED setup macros"
-#define EV3_LED_0_PIN                   GPIO_TO_PIN(6, 12)
-#define EV3_LED_1_PIN                   GPIO_TO_PIN(6, 14)
-#define EV3_LED_2_PIN                   GPIO_TO_PIN(6, 13)
-#define EV3_LED_3_PIN                   GPIO_TO_PIN(6, 7)
-
-#define EV3_BUTTON_0_PIN                GPIO_TO_PIN(7, 15)
-#define EV3_BUTTON_1_PIN                GPIO_TO_PIN(1, 13)
-#define EV3_BUTTON_2_PIN                GPIO_TO_PIN(7, 14)
-#define EV3_BUTTON_3_PIN                GPIO_TO_PIN(7, 12)
-#define EV3_BUTTON_4_PIN                GPIO_TO_PIN(6, 6 )
-#define EV3_BUTTON_5_PIN                GPIO_TO_PIN(6, 10)
-
-#define EV3_SND_ENA_PIN                 GPIO_TO_PIN(6, 15)
-
-#define EV3_POWER_PIN                   GPIO_TO_PIN(6, 11)
-
-#else
-#warning "Delete this code and eliminate this warning after copying this file to board-legoev3.c"
-#define DAVINCI_BACKLIGHT_MAX_BRIGHTNESS	250
-#define DAVINVI_BACKLIGHT_DEFAULT_BRIGHTNESS	250
-#define DAVINCI_PWM_PERIOD_NANO_SECONDS		10000000
-
-
-static struct platform_pwm_backlight_data da850evm_backlight_data = {
-	.max_brightness	= DAVINCI_BACKLIGHT_MAX_BRIGHTNESS,
-	.dft_brightness	= DAVINVI_BACKLIGHT_DEFAULT_BRIGHTNESS,
-	.pwm_period_ns	= DAVINCI_PWM_PERIOD_NANO_SECONDS,
+static const short legoev3_lcd_pins[] = {
+	EV3_LCD_DATA_IN, EV3_LCD_RESET, EV3_LCD_A0, EV3_LCD_CS
+	-1
 };
 
-static struct platform_device da850evm_backlight = {
-	.name		= "pwm-backlight",
-	.id		= -1,
-};
-#endif
-
-static struct mtd_partition da850evm_spiflash_part[] = {
-	[0] = {
-		.name = "U-Boot",
-		.offset = 0,
-		.size = SZ_256K,
-		.mask_flags = MTD_WRITEABLE,
-	},
-	[1] = {
-		.name = "U-Boot Env",
-		.offset = MTDPART_OFS_APPEND,
-		.size = SZ_64K,
-		.mask_flags = MTD_WRITEABLE,
-	},
-	[2] = {
-		.name = "Kernel",
-		.offset = MTDPART_OFS_NXTBLK,
-		.size = SZ_2M,
-		.mask_flags = 0,
-	},
-	[3] = {
-		.name = "Filesystem",
-		.offset = MTDPART_OFS_NXTBLK,
-		.size = SZ_8M + SZ_2M + SZ_256K + SZ_128K,
-		.mask_flags = 0,
-	},
-	[4] = {
-		.name = "Storage",
-		.offset = MTDPART_OFS_NXTBLK,
-		.size = SZ_2M + SZ_1M + SZ_256K + SZ_64K,
-		.mask_flags = 0,
-	},
+static const struct st7586fb_platform_data legoev3_st7586fb_data = {
+	.rst_gpio	= EV3_LCD_RESET_PIN,
+	.a0_gpio	= EV3_LCD_A0_PIN,
+	.cs_gpio	= EV3_LCD_CS_PIN,
 };
 
-static struct flash_platform_data da850evm_spiflash_data = {
-	.name		= "m25p80",
-	.parts		= da850evm_spiflash_part,
-	.nr_parts	= ARRAY_SIZE(da850evm_spiflash_part),
-//	.type		= "m25p64",
-	.type           = "s25sl12801",
-
-};
-
-static struct davinci_spi_config da850evm_spiflash_cfg = {
+static struct davinci_spi_config legoev3_st7586fb_cfg = {
 	.io_type	= SPI_IO_TYPE_DMA,
-	.c2tdelay	= 8,
-	.t2cdelay	= 8,
-};
-
-static const struct st7586fb_platform_data lms2012_st7586fb_data = {
-	.rst_gpio	= GPIO_TO_PIN(5, 0),
-	.a0_gpio	= GPIO_TO_PIN(2, 11),
-	.cs_gpio	= GPIO_TO_PIN(2, 12),
-};
-
-static struct davinci_spi_config lms2012_st7586fb_cfg = {
-        .io_type	= SPI_IO_TYPE_DMA,
-        .c2tdelay	= 10,
-        .t2cdelay	= 10,
+	.c2tdelay	= 10,
+	.t2cdelay	= 10,
  };
 
-static struct spi_board_info da850evm_spiflash_info[] = {
-	[0] = { // SPI0
-		.modalias		= "m25p80",
-		.platform_data		= &da850evm_spiflash_data,
-		.controller_data	= &da850evm_spiflash_cfg,
-		.mode			= SPI_MODE_0,
-//      	.max_speed_hz		= 30000000,
-		.max_speed_hz		= 50000000,
-		.bus_num		= 0,
+static struct spi_board_info legoev3_spi1_board_info[] = {
+	[0] = {
+		.modalias		= "st7586fb-legoev3",
+		.platform_data		= &legoev3_st7586fb_data,
+		.controller_data	= &legoev3_st7586fb_cfg,
+		.mode			= SPI_MODE_3 | SPI_NO_CS,
+		.max_speed_hz		= 10000000,
+		.bus_num		= 1,
 		.chip_select		= 0,
 	},
 };
 
-static struct spi_board_info da850evm_spifb_info[] = {
-	[0] = { // SPI1
-//		.modalias = "st7586fb",
-		.modalias		= "lms2012_lcd",
-		.platform_data		= &lms2012_st7586fb_data,
-		.controller_data	= &lms2012_st7586fb_cfg,
-		.mode			= SPI_MODE_3 | SPI_NO_CS,
-		.max_speed_hz		= 10000000,
- 		.bus_num		= 1,
- 		.chip_select		= 0,
+static const short legoev3_led_pins[] = {
+	EV3_LED_0, EV3_LED_1, EV3_LED_2, EV3_LED_3,
+	-1
+};
+
+/* LED configuration:
+ *
+ * The LEDs are connected via GPIOs and use the leds-gpio driver.
+ * The default triggers are set so that during boot, the left LED will flash
+ * amber to indicate CPU activity and the right LED will flash amber to
+ * indicate disk (SD card) activity.
+ */
+
+#if defined(CONFIG_LEDS_GPIO) || defined(CONFIG_LEDS_GPIO_MODULE)
+#include <linux/leds.h>
+
+static struct gpio_led ev3_gpio_leds[] = {
+	{
+		.name = "ev3:red:right",
+		.default_trigger = "mmc0",
+		.gpio = EV3_LED_0_PIN,
+	},
+	{
+		.name = "ev3:green:right",
+		.default_trigger = "mmc0",
+		.gpio = EV3_LED_1_PIN,
+	},
+	{
+		.name = "ev3:red:left",
+		.default_trigger = "heartbeat",
+		.gpio = EV3_LED_2_PIN,
+	},
+	{
+		.name = "ev3:green:left",
+		.default_trigger = "heartbeat",
+		.gpio = EV3_LED_3_PIN,
 	},
 };
+
+static struct gpio_led_platform_data ev3_gpio_led_data = {
+	.num_leds	= ARRAY_SIZE(ev3_gpio_leds),
+	.leds		= ev3_gpio_leds
+};
+
+static struct platform_device ev3_device_gpio_leds = {
+	.name	= "leds-gpio",
+	.id	= -1,
+	.dev	= {
+		.platform_data  = &ev3_gpio_led_data,
+	},
+};
+#endif
+
+/* EV3 button configuration:
+ *
+ * The buttons are connected via GPIOs and use the gpio-keys driver.
+ * The buttons are mapped to the UP, DOWN, LEFT, RIGHT, ENTER and ESC keys.
+ */
+
+static const short legoev3_button_pins[] = {
+	EV3_BUTTON_0, EV3_BUTTON_1, EV3_BUTTON_2,
+	EV3_BUTTON_3, EV3_BUTTON_4, EV3_BUTTON_5,
+	-1
+};
+
+#if defined(CONFIG_KEYBOARD_GPIO) || defined(CONFIG_KEYBOARD_GPIO_MODULE)
+#include <linux/gpio_keys.h>
+#include<linux/input.h>
+
+static struct gpio_keys_button ev3_gpio_keys_table[] = {
+	{KEY_UP,    EV3_BUTTON_0_PIN, 1, "ev3:UP",    EV_KEY, 0, 50, 1},
+	{KEY_ENTER, EV3_BUTTON_1_PIN, 1, "ev3:ENTER", EV_KEY, 0, 50, 1},
+	{KEY_DOWN,  EV3_BUTTON_2_PIN, 1, "ev3:DOWN",  EV_KEY, 0, 50, 1},
+	{KEY_RIGHT, EV3_BUTTON_3_PIN, 1, "ev3:RIGHT", EV_KEY, 0, 50, 1},
+	{KEY_LEFT,  EV3_BUTTON_4_PIN, 1, "ev3:LEFT",  EV_KEY, 0, 50, 1},
+	{KEY_ESC,   EV3_BUTTON_5_PIN, 1, "ev3:ESC",   EV_KEY, 0, 50, 1},
+};
+
+static struct gpio_keys_platform_data ev3_gpio_keys_data = {
+	.buttons = ev3_gpio_keys_table,
+	.nbuttons = ARRAY_SIZE(ev3_gpio_keys_table),
+};
+
+static struct platform_device ev3_device_gpiokeys = {
+	.name = "gpio-keys",
+	.dev = {
+		.platform_data = &ev3_gpio_keys_data,
+	},
+};
+
+static const int legoev3_button_gpio[] = {
+	EV3_BUTTON_0_PIN,
+	EV3_BUTTON_1_PIN,
+	EV3_BUTTON_2_PIN,
+	EV3_BUTTON_3_PIN,
+	EV3_BUTTON_4_PIN,
+	EV3_BUTTON_5_PIN
+};
+#endif
+
+/* what is pm? */
 
 static struct davinci_pm_config da850_pm_pdata = {
 	.sleepcount = 128,
 };
 
 static struct platform_device da850_pm_device = {
-	.name           = "pm-davinci",
-	.dev = {
+	.name	= "pm-davinci",
+	.dev	= {
 		.platform_data	= &da850_pm_pdata,
 	},
-	.id             = -1,
+	.id	= -1,
 };
 
-#if defined(CONFIG_MMC_DAVINCI) || \
-    defined(CONFIG_MMC_DAVINCI_MODULE)
+#if defined(CONFIG_MMC_DAVINCI) || defined(CONFIG_MMC_DAVINCI_MODULE)
 #define HAS_MMC 1
 #else
 #define HAS_MMC 0
@@ -219,68 +215,37 @@ static struct i2c_board_info __initdata da850_evm_i2c_devices[] = {
 	{
 		I2C_BOARD_INFO("PIC_ReadDataFrom", 0x57),
 	},
-
 };
 
-/*
- * USB1 VBUS is controlled by GPIO1[4], over-current is reported on GPIO6[13].
+/* EV3 USB configuration:
  */
-#define ON_BD_USB_DRV	GPIO_TO_PIN(1, 4)
-#define ON_BD_USB_OVC	GPIO_TO_PIN(6, 3)
 
-static const short da850_evm_usb11_pins[] = {
-	EV3_GPIO1_4, EV3_GPIO6_3,
+static const short legoev3_usb1_pins[] = {
+	EV3_USB1_DRV, EV3_USB1_OVC,
 	-1
 };
 
-static irqreturn_t da850_evm_usb_ocic_irq(int, void *);
+static irqreturn_t legoev3_usb_ocic_irq(int, void *);
 
-static struct da8xx_ohci_root_hub da850_evm_usb11_pdata = {
-	.type			= GPIO_BASED,
+static struct da8xx_ohci_root_hub legoev3_usb1_pdata = {
+	.type	= GPIO_BASED,
 	.method	= {
 		.gpio_method = {
-			.power_control_pin	= ON_BD_USB_DRV,
-			.over_current_indicator = ON_BD_USB_OVC,
+			.power_control_pin	= EV3_USB1_DRV_PIN,
+			.over_current_indicator = EV3_USB1_OVC_PIN,
 		},
 	},
-	.board_ocic_handler	= da850_evm_usb_ocic_irq,
+	.board_ocic_handler	= legoev3_usb_ocic_irq,
 };
 
-static irqreturn_t da850_evm_usb_ocic_irq(int irq, void *handler)
+static irqreturn_t legoev3_usb_ocic_irq(int irq, void *handler)
 {
 	if (handler != NULL)
-		((da8xx_ocic_handler_t)handler)(&da850_evm_usb11_pdata, 1);
+		((da8xx_ocic_handler_t)handler)(&legoev3_usb1_pdata, 1);
 	return IRQ_HANDLED;
 }
-#ifdef CONFIG_MACH_DAVINCI_LEGOEV3
-#warning "Fixup the da850_evm_bt_slow_clock_init "
-/* Bluetooth Slow clock init using ecap 2 */
-static __init void da850_evm_bt_slow_clock_init(void)						// LEGO BT
-{												// LEGO BT		
-  int PSC1;											// LEGO BT
-												// LEGO BT
-// FIXME: These registers need proper mapping to HW
-//  PSC1 = __raw_readl(DA8XX_PSC1_VIRT(0x294 * 4));  // Old PSC1 is 32bit -> explains "* 4"	// LEGO BT
-//  PSC1 |= 3;											// LEGO BT
-//  __raw_writel(PSC1, DA8XX_PSC1_VIRT(0x294 * 4));						// LEGO BT
-//												// LEGO BT
-//  PSC1 = __raw_readl(DA8XX_PSC1_VIRT(0x48 * 4));						// LEGO BT
-//  PSC1 |= 3;											// LEGO BT
-//  __raw_writel(PSC1, DA8XX_PSC1_VIRT(0x48 * 4));						// LEGO BT
-//
-//  PSC1 = __raw_readl(DA8XX_SYSCFG1_VIRT(0x3 * 4));						// LEGO BT
-//  PSC1 &= ~0x00000004;										// LEGO BT
-//  __raw_writel(PSC1, DA8XX_SYSCFG1_VIRT(0x3 * 4));						// LEGO BT
-//
-//  __raw_writel(0,      DA8XX_ECAP2_VIRT(0 * 2));     // Old ECAP is 16bit -> explains "* 2"     // LEGO BT
-//  __raw_writel(0,      DA8XX_ECAP2_VIRT(2 * 2));     //						// LEGO BT
-//  __raw_writew(0x0690, DA8XX_ECAP2_VIRT(0x15 * 2));  // Setup					// LEGO BT
-//  __raw_writel(2014,   DA8XX_ECAP2_VIRT(0x06 * 2));  // Duty					// LEGO BT
-//  __raw_writel(4028,   DA8XX_ECAP2_VIRT(0x04 * 2));  // Freq					// LEGO BT
-}
-#endif
 
-static __init void da850_evm_usb_init(void)
+static __init void legoev3_usb_init(void)
 {
 	u32 cfgchip2;
 	int ret;
@@ -323,11 +288,39 @@ static __init void da850_evm_usb_init(void)
 			   __func__, ret);
 
 	/* initilaize usb module */
-	da8xx_board_usb_init(da850_evm_usb11_pins, &da850_evm_usb11_pdata);
+	da8xx_board_usb_init(legoev3_usb1_pins, &legoev3_usb1_pdata);
 }
 
+#ifdef CONFIG_MACH_DAVINCI_LEGOEV3
+#warning "Fixup the da850_evm_bt_slow_clock_init "
+/* Bluetooth Slow clock init using ecap 2 */
+static __init void da850_evm_bt_slow_clock_init(void)						// LEGO BT
+{												// LEGO BT		
+//  int PSC1;											// LEGO BT
+												// LEGO BT
+// FIXME: These registers need proper mapping to HW
+//  PSC1 = __raw_readl(DA8XX_PSC1_VIRT(0x294 * 4));  // Old PSC1 is 32bit -> explains "* 4"	// LEGO BT
+//  PSC1 |= 3;											// LEGO BT
+//  __raw_writel(PSC1, DA8XX_PSC1_VIRT(0x294 * 4));						// LEGO BT
+//												// LEGO BT
+//  PSC1 = __raw_readl(DA8XX_PSC1_VIRT(0x48 * 4));						// LEGO BT
+//  PSC1 |= 3;											// LEGO BT
+//  __raw_writel(PSC1, DA8XX_PSC1_VIRT(0x48 * 4));						// LEGO BT
+//
+//  PSC1 = __raw_readl(DA8XX_SYSCFG1_VIRT(0x3 * 4));						// LEGO BT
+//  PSC1 &= ~0x00000004;										// LEGO BT
+//  __raw_writel(PSC1, DA8XX_SYSCFG1_VIRT(0x3 * 4));						// LEGO BT
+//
+//  __raw_writel(0,      DA8XX_ECAP2_VIRT(0 * 2));     // Old ECAP is 16bit -> explains "* 2"     // LEGO BT
+//  __raw_writel(0,      DA8XX_ECAP2_VIRT(2 * 2));     //						// LEGO BT
+//  __raw_writew(0x0690, DA8XX_ECAP2_VIRT(0x15 * 2));  // Setup					// LEGO BT
+//  __raw_writel(2014,   DA8XX_ECAP2_VIRT(0x06 * 2));  // Duty					// LEGO BT
+//  __raw_writel(4028,   DA8XX_ECAP2_VIRT(0x04 * 2));  // Freq					// LEGO BT
+}
+#endif
+
 #warning "Are these definitions just the dumb way of doing this?"
-#define  DA850_ECAP2_OUT		        GPIO_TO_PIN(0,  7)      //LEGO BT
+#define  DA850_ECAP2_OUT		        GPIO_TO_PIN(0, 7)      //LEGO BT
 #define  DA850_ECAP2_OUT_ENABLE		GPIO_TO_PIN(0, 12)      //LEGO BT
 
 // static const short da850_bt_slow_clock_pins[] __initconst = {
@@ -380,71 +373,8 @@ static const short da850_evm_mmcsd0_pins[] __initconst = {
 	-1
 };
 
-static const struct vpif_input da850_ch2_inputs[] = {
-		{
-		.input = {
-			.index = 0,
-			.name = "Camera",
-			.type = V4L2_INPUT_TYPE_CAMERA,
-			.std = V4L2_STD_BAYER_ALL
-		},
-		.subdev_name = "mt9t031",
-	},
-};
-
-/*
- * The following EDMA channels/slots are not being used by drivers (for
- * example: Timer, GPIO, UART events etc) on da850/omap-l138 EVM, hence
- * they are being reserved for codecs on the DSP side.
- */
-static const s16 da850_dma0_rsv_chans[][2] = {
-	/* (offset, number) */
-	{ 8,  6},
-	{24,  4},
-	{30,  2},
-	{-1, -1}
-};
-
-static const s16 da850_dma0_rsv_slots[][2] = {
-	/* (offset, number) */
-	{ 8,  6},
-	{24,  4},
-	{30, 50},
-	{-1, -1}
-};
-
-static const s16 da850_dma1_rsv_chans[][2] = {
-	/* (offset, number) */
-	{ 0, 28},
-	{30,  2},
-	{-1, -1}
-};
-
-static const s16 da850_dma1_rsv_slots[][2] = {
-	/* (offset, number) */
-	{ 0, 28},
-	{30, 90},
-	{-1, -1}
-};
-
-static struct edma_rsv_info da850_edma_cc0_rsv = {
-	.rsv_chans	= da850_dma0_rsv_chans,
-	.rsv_slots	= da850_dma0_rsv_slots,
-};
-
-static struct edma_rsv_info da850_edma_cc1_rsv = {
-	.rsv_chans	= da850_dma1_rsv_chans,
-	.rsv_slots	= da850_dma1_rsv_slots,
-};
-
-static struct edma_rsv_info *da850_edma_rsv[2] = {
-	&da850_edma_cc0_rsv,
-	&da850_edma_cc1_rsv,
-};
-#endif
-
 #ifdef CONFIG_CPU_FREQ
-static __init int da850_evm_init_cpufreq(void)
+static __init int legoev3_init_cpufreq(void)
 {
 	switch (system_rev & 0xF) {
 	case 3:
@@ -461,7 +391,7 @@ static __init int da850_evm_init_cpufreq(void)
 	return da850_register_cpufreq("pll0_sysclk3");
 }
 #else
-static __init int da850_evm_init_cpufreq(void) { return 0; }
+static __init int legoev3_init_cpufreq(void) { return 0; }
 #endif
 
 #ifdef CONFIG_MACH_DAVINCI_LEGOEV3
@@ -587,26 +517,24 @@ static struct platform_device da850_gpio_i2c = {
 	},
 };
 
-#ifdef CONFIG_MACH_DAVINCI_LEGOEV3
-#warning "Keep this code and eliminate this warning after copying this file to board-legoev3.c"
 #warning "Fix up the pru_suart code here so it works"
 static int __init da850_evm_config_pru_suart(void)
 {
-    int ret;
+	int ret;
 
-     pr_info("da850_evm_config_pru_suart configuration\n");
-    if (!machine_is_davinci_da850_evm())
-        return 0;
+	pr_info("da850_evm_config_pru_suart configuration\n");
+	if (!machine_is_davinci_da850_evm())
+		return 0;
 
 // FIXME: Add pru suart setup
 //    ret = da8xx_pinmux_setup(da850_pru_suart_pins);
 //    if (ret)
-//        pr_warning("da850_evm_init: da850_pru_suart_pins mux setup failed: %d\n",
+//        pr_warning("legoev3_init: da850_pru_suart_pins mux setup failed: %d\n",
 //                ret);
 //
 //    ret = da8xx_register_pru_suart();
 //    if (ret)
-//        pr_warning("da850_evm_init: pru suart registration failed: %d\n", ret);
+//        pr_warning("legoev3_init: pru suart registration failed: %d\n", ret);
       return ret;
 }
 device_initcall(da850_evm_config_pru_suart);
@@ -618,180 +546,118 @@ device_initcall(da850_evm_config_pru_suart);
  * they are being reserved for codecs on the DSP side.
  */
 static const s16 da850_dma0_rsv_chans[][2] = {
-        /* (offset, number) */
-        { 8,  6},
-        {24,  4},
-        {30,  2},
-        {-1, -1}
+	/* (offset, number) */
+	{ 8,  6},
+	{24,  4},
+	{30,  2},
+	{-1, -1}
 };
 
 static const s16 da850_dma0_rsv_slots[][2] = {
-        /* (offset, number) */
-        { 8,  6},
-        {24,  4},
-        {30, 50},
-        {-1, -1}
+	/* (offset, number) */
+	{ 8,  6},
+	{24,  4},
+	{30, 50},
+	{-1, -1}
 };
 
 static const s16 da850_dma1_rsv_chans[][2] = {
-        /* (offset, number) */
-        { 0, 28},
-        {30,  2},
-        {-1, -1}
+	/* (offset, number) */
+	{ 0, 28},
+	{30,  2},
+	{-1, -1}
 };
 
 static const s16 da850_dma1_rsv_slots[][2] = {
-        /* (offset, number) */
-        { 0, 28},
-        {30, 90},
-        {-1, -1}
+	/* (offset, number) */
+	{ 0, 28},
+	{30, 90},
+	{-1, -1}
 };
 
 static struct edma_rsv_info da850_edma_cc0_rsv = {
-        .rsv_chans      = da850_dma0_rsv_chans,
-        .rsv_slots      = da850_dma0_rsv_slots,
+	.rsv_chans      = da850_dma0_rsv_chans,
+	.rsv_slots      = da850_dma0_rsv_slots,
 };
 
 static struct edma_rsv_info da850_edma_cc1_rsv = {
-        .rsv_chans      = da850_dma1_rsv_chans,
-        .rsv_slots      = da850_dma1_rsv_slots,
+	.rsv_chans      = da850_dma1_rsv_chans,
+	.rsv_slots      = da850_dma1_rsv_slots,
 };
 
 static struct edma_rsv_info *da850_edma_rsv[2] = {
-        &da850_edma_cc0_rsv,
-        &da850_edma_cc1_rsv,
+	&da850_edma_cc0_rsv,
+	&da850_edma_cc1_rsv,
 };
-#endif
 
-#ifdef CONFIG_MACH_DAVINCI_LEGOEV3
-#warning "Keep this code and eliminate this warning after copying this file to board-legoev3.c"
-static const short da850_lms2012_lcd_pins[] = {
-	EV3_SPI1_MISO, EV3_SPI1_CS, EV3_GPIO5_0,
+/* EV3 analog/digital converter configuration:
+ * The A/D converter is a TI ADS7957. It monitors analog inputs from
+ * each of the 4 input ports, motor voltage and current for each of the
+ * 4 ouput ports and the battery voltage. The A/D chip is connected to
+ * the processor via SPI0. We are using the linux hwmon class to read 
+ * the raw voltages in userspace.
+ */
+
+static const short legoev3_adc_pins[] = {
+	EV3_ADC_DATA_IN, EV3_ADC_DATA_OUT, EV3_ADC_CS, EV3_ADC_CLK, EV3_ADC_ENA,
 	-1
 };
 
-#define EV3_LED_0   EV3_GPIO6_12
-#define EV3_LED_1   EV3_GPIO6_14
-#define EV3_LED_2   EV3_GPIO6_13
-#define EV3_LED_3   EV3_GPIO6_7
-
-#define EV3_BUTTON_0  EV3_GPIO7_15
-#define EV3_BUTTON_1  EV3_GPIO1_13
-#define EV3_BUTTON_2  EV3_GPIO7_14
-#define EV3_BUTTON_3  EV3_GPIO7_12
-#define EV3_BUTTON_4  EV3_GPIO6_6
-#define EV3_BUTTON_5  EV3_GPIO6_10
-
-static const short legoev3_ui_pins[] = {
-#if !(defined(CONFIG_LEDS_GPIO) || defined(CONFIG_LEDS_GPIO_MODULE))
-  #warning "The LEDs are owned by the ui driver, not the kernel - LED triggers will not work"
-        EV3_LED_0, EV3_LED_1, EV3_LED_2, EV3_LED_3,
-#endif
-
-#if !(defined(CONFIG_KEYBOARD_GPIO) || defined(CONFIG_KEYBOARD_GPIO_MODULE))
-  #warning "The buttons are owned by the ui driver, not the kernel - button events will not work"
-        EV3_BUTTON_0, EV3_BUTTON_1, EV3_BUTTON_2,
-        EV3_BUTTON_3, EV3_BUTTON_4, EV3_BUTTON_5,
-#endif
-	-1
+static struct davinci_spi_config legoev3_spi_analog_cfg = {
+	.io_type	= SPI_IO_TYPE_POLL,
+	.c2tdelay	= 10,
+	.t2cdelay	= 10,
+	.t2edelay	= 10,
+	.c2edelay	= 10,
 };
+
+static struct spi_board_info legoev3_spi0_board_info[] = {
+	[0] = {
+		.mode			= SPI_MODE_0 | SPI_NO_CS,
+	},
+	[1] = {
+		.mode			= SPI_MODE_0 | SPI_NO_CS,
+	},
+	[2] = {
+		.mode			= SPI_MODE_0 | SPI_NO_CS,
+	},
+	[3] = {
+		.modalias		= "ads7957",
+		.controller_data	= &legoev3_spi_analog_cfg,
+		.mode			= SPI_MODE_0,
+		.max_speed_hz		= 2000000,
+		.bus_num		= 0,
+		.chip_select		= 3,
+	},
+};
+
+/* EV3 sound configuration:
+ * The speaker is driven by eHRPWM0B and the amplifier is switched on/off
+ * using the EV3_SND_ENA_PIN. The snd-legoev3 driver can be used to play sounds
+ * and also provides a standard sound event input for system beep/bell.
+ */
+
 static const short legoev3_sound_pins[] = {
-	EV3_GPIO6_15,
+	EV3_SND_PWM, EV3_SND_ENA,
 	-1
 };
 
-#endif
 
 #if defined(CONFIG_SND_LEGOEV3) || defined(CONFIG_SND_LEGOEV3_MODULE)
 #include <sound/legoev3.h>
 
 static struct snd_legoev3_platform_data ev3_snd_data = {
-	.pwm_dev_name   = "ehrpwm.0:1",
-	.amp_gpio       = EV3_SND_ENA_PIN,
+	.pwm_dev_name	= "ehrpwm.0:1",
+	.amp_gpio	= EV3_SND_ENA_PIN,
 };
 
 static struct platform_device snd_legoev3 =
 {
-	.name           = "snd-legoev3",
-	.id             = -1,
-	.dev            = {
+	.name	= "snd-legoev3",
+	.id	= -1,
+	.dev	= {
 		.platform_data = &ev3_snd_data,
 	},
-};
-#endif
-
-#if defined(CONFIG_LEDS_GPIO) || defined(CONFIG_LEDS_GPIO_MODULE)
-#include <linux/leds.h>
-
-static struct gpio_led ev3_gpio_leds[] = {
-  {
-    .name = "ev3:red:right",
-    .default_trigger = "mmc0",
-    .gpio = EV3_LED_0_PIN,
-  },
-  {
-    .name = "ev3:green:right",
-    .default_trigger = "mmc0",
-    .gpio = EV3_LED_1_PIN,
-  },
-  {
-    .name = "ev3:red:left",
-    .default_trigger = "heartbeat",
-    .gpio = EV3_LED_2_PIN,
-  },
-  {
-    .name = "ev3:green:left",
-    .default_trigger = "heartbeat",
-    .gpio = EV3_LED_3_PIN,
-  },
-};
-
-static struct gpio_led_platform_data ev3_gpio_led_data = {
-  .num_leds  = ARRAY_SIZE(ev3_gpio_leds),
-  .leds    = ev3_gpio_leds
-};
-
-static struct platform_device ev3_device_gpio_leds = {
-  .name    = "leds-gpio",
-  .id    = -1,
-  .dev    = {
-    .platform_data  = &ev3_gpio_led_data,
-  },
-};
-#endif
-
-#if defined(CONFIG_KEYBOARD_GPIO) || defined(CONFIG_KEYBOARD_GPIO_MODULE)
-#include <linux/gpio_keys.h>
-#include<linux/input.h>
-
-static struct gpio_keys_button ev3_gpio_keys_table[] = {
-  {KEY_UP,    EV3_BUTTON_0_PIN, 1, "ev3:UP",    EV_KEY, 0, 50, 1},
-  {KEY_ENTER, EV3_BUTTON_1_PIN, 1, "ev3:ENTER", EV_KEY, 0, 50, 1},
-  {KEY_DOWN,  EV3_BUTTON_2_PIN, 1, "ev3:DOWN",  EV_KEY, 0, 50, 1},
-  {KEY_RIGHT, EV3_BUTTON_3_PIN, 1, "ev3:RIGHT", EV_KEY, 0, 50, 1},
-  {KEY_LEFT,  EV3_BUTTON_4_PIN, 1, "ev3:LEFT",  EV_KEY, 0, 50, 1},
-  {KEY_ESC,   EV3_BUTTON_5_PIN, 1, "ev3:ESC",   EV_KEY, 0, 50, 1},
-};
-
-static struct gpio_keys_platform_data ev3_gpio_keys_data = {
-  .buttons = ev3_gpio_keys_table,
-  .nbuttons = ARRAY_SIZE(ev3_gpio_keys_table),
-};
-
-static struct platform_device ev3_device_gpiokeys = {
-  .name = "gpio-keys",
-  .dev = {
-    .platform_data = &ev3_gpio_keys_data,
-  },
-};
-
-static const int legoev3_button_gpio[] = {
-  EV3_BUTTON_0_PIN,
-  EV3_BUTTON_1_PIN,
-  EV3_BUTTON_2_PIN,
-  EV3_BUTTON_3_PIN,
-  EV3_BUTTON_4_PIN,
-  EV3_BUTTON_5_PIN
 };
 #endif
 
@@ -817,11 +683,11 @@ static void legoev3_power_off(void)
 	if (!gpio_request(EV3_POWER_PIN, "EV3 power enable"))
 		gpio_direction_output(EV3_POWER_PIN, 0);
 	else
-		pr_err("da850_evm_init: can not open GPIO %d for power off\n",
+		pr_err("legoev3_init: can not open GPIO %d for power off\n",
 			EV3_POWER_PIN);
 }
 
-static __init void da850_legoev3_init(void)
+static __init void legoev3_init(void)
 {
 	int ret;
 	char mask = 0;
@@ -831,29 +697,51 @@ static __init void da850_legoev3_init(void)
 
 	pm_power_off = legoev3_power_off;
 
-#ifdef CONFIG_MACH_DAVINCI_LEGOEV3
-#warning "Keep this code and eliminate this warning after copying this file to board-legoev3.c"
 	/* Support for EV3 LCD */
-	ret = davinci_cfg_reg_list(da850_lms2012_lcd_pins);
+	ret = davinci_cfg_reg_list(legoev3_lcd_pins);
 	if (ret)
-		pr_warning("da850_evm_init: LMS2012 LCD mux setup failed:"
-						" %d\n", ret);
+		pr_warning("legoev3_init: LCD pin mux setup failed:"
+			" %d\n", ret);
+	ret = da8xx_register_spi(1, legoev3_spi1_board_info,
+				 ARRAY_SIZE(legoev3_spi1_board_info));
+	if (ret)
+		pr_warning("legoev3_init: spi 1 registration failed:"
+			" %d\n", ret);
 
-	/* Support for EV3 UI LEDs and BUTTONs */
-	ret = davinci_cfg_reg_list(legoev3_ui_pins);
+	/* Support for EV3 UI LEDs */
+	ret = davinci_cfg_reg_list(legoev3_led_pins);
 	if (ret)
-		pr_warning("da850_evm_init: LMS2012 UI mux setup failed:"
-						" %d\n", ret);
+		pr_warning("legoev3_init: LED mux setup failed:"
+			" %d\n", ret);
+
+#if defined(CONFIG_LEDS_GPIO) || defined(CONFIG_LEDS_GPIO_MODULE)
+	ret = platform_device_register(&ev3_device_gpio_leds);
+	if (ret)
+		pr_warning("legoev3_init: LED registration failed:"
+			" %d\n", ret);
 #endif
 
-#ifdef CONFIG_MACH_DAVINCI_LEGOEV3
-#warning "Delete this code and eliminate this warning after copying this file to board-legoev3.c"
-#else
-        // FIXME: Looks like LEGO does not use this PMIC
-	ret = pmic_tps65070_init();
+	/* Support for EV3 UI LEDs */
+	ret = davinci_cfg_reg_list(legoev3_button_pins);
 	if (ret)
-		pr_warning("da850_evm_init: TPS65070 PMIC init failed: %d\n",
-				ret);
+		pr_warning("legoev3_init: Button mux setup failed:"
+			" %d\n", ret);
+
+#if defined(CONFIG_KEYBOARD_GPIO) || defined(CONFIG_KEYBOARD_GPIO_MODULE)
+	/* This is CRITICAL code to making the LEFT button work - it disables
+	* the internal pullup on pin group 25 which is where the GPIO6_6 lives.
+	*/
+	ret = __raw_readl(DA8XX_SYSCFG1_VIRT(DA8XX_PUPD_SEL_REG));
+	ret &= 0xFDFFFFFF;
+	__raw_writel(ret, DA8XX_SYSCFG1_VIRT(DA8XX_PUPD_SEL_REG));
+
+	gpio_request_array(legoev3_button_gpio, ARRAY_SIZE(legoev3_button_gpio));
+	gpio_free_array(legoev3_button_gpio, ARRAY_SIZE(legoev3_button_gpio));
+
+	ret = platform_device_register(&ev3_device_gpiokeys);
+	if (ret)
+	pr_warning("legoev3_init: button registration failed:"
+		" %d\n", ret);
 #endif
 
 	/*
@@ -863,70 +751,20 @@ static __init void da850_legoev3_init(void)
 	 */
 	ret = da850_set_emif_clk_rate();
 	if (ret)
-		pr_warning("da850_evm_init: Failed to set rate of pll0_sysclk3/emif clock: %d\n",
+		pr_warning("legoev3_init: Failed to set rate of pll0_sysclk3/emif clock: %d\n",
 				ret);
 
 	ret = da850_register_edma(da850_edma_rsv);
 	if (ret)
-		pr_warning("da850_evm_init: edma registration failed: %d\n",
+		pr_warning("legoev3_init: edma registration failed: %d\n",
 				ret);
-
-#if defined(CONFIG_LEDS_GPIO) || defined(CONFIG_LEDS_GPIO_MODULE)
-  ret = platform_device_register(&ev3_device_gpio_leds);
-  if (ret)
-    pr_warning("da850_evm_init: LED registration failed: %d\n",
-                                 ret);
-#endif
-
-#if defined(CONFIG_KEYBOARD_GPIO) || defined(CONFIG_KEYBOARD_GPIO_MODULE)
-  /* This is CRITICAL code to making the LEFT button work - it disables
-   * the internal pullup on pin group 25 which is where the GPIO6_6 lives.
-   */
-  ret = __raw_readl(DA8XX_SYSCFG1_VIRT(DA8XX_PUPD_SEL_REG));
-  ret &= 0xFDFFFFFF;
-  __raw_writel(ret, DA8XX_SYSCFG1_VIRT(DA8XX_PUPD_SEL_REG));
-
-  gpio_request_array(legoev3_button_gpio, ARRAY_SIZE(legoev3_button_gpio));
-  gpio_free_array(legoev3_button_gpio, ARRAY_SIZE(legoev3_button_gpio));
-
-  ret = platform_device_register(&ev3_device_gpiokeys);
-  if (ret)
-    pr_warning("da850_evm_init: button registration failed: %d\n",
-        ret);
-#endif
-
-#if defined(CONFIG_DAVINCI_EHRPWM) || defined(CONFIG_DAVINCI_EHRPWM_MODULE)
-	/* eHRPWM0B is used to drive the EV3 speaker */
-	ret = davinci_cfg_reg_list(da850_ehrpwm0_pins);
-	if (ret)
-		pr_warning("da850_evm_init: "
-		           "ehrpwm0 mux setup failed: %d\n", ret);
-	da850_register_ehrpwm(0x02);
-#endif
-
-#if defined(CONFIG_SND_LEGOEV3) || defined(CONFIG_SND_LEGOEV3_MODULE)
-	ret = platform_device_register(&snd_legoev3);
-	if (ret)
-		pr_warning("da850_evm_init: "
-		           "sound device registration failed: %d\n", ret);
-
-	/* initalize gpio pin for sound enable/disable */
-	ret = davinci_cfg_reg_list(legoev3_sound_pins);
-	if (ret)
-		pr_warning("da850_evm_init: sound mux setup failed:"
-			" %d\n", ret);
-	ret = gpio_request_one(EV3_SND_ENA_PIN, GPIOF_OUT_INIT_LOW, "snd_ena");
-	if (ret)
-		pr_warning("da850_evm_init:"
-		           " sound gpio setup failed: %d\n", ret);
-#endif
 
 #ifdef CONFIG_MACH_DAVINCI_LEGOEV3
 #warning "Eventually, we'll re-enable these pins!"
 #else
-  	ret = davinci_cfg_reg_list(da850_i2c0_pins);
+	ret = davinci_cfg_reg_list(da850_i2c0_pins);
 	if (ret)
-		pr_warning("da850_evm_init: i2c0 mux setup failed: %d\n",
+		pr_warning("legoev3_init: i2c0 mux setup failed: %d\n",
 				ret);
 
 	platform_device_register(&da850_gpio_i2c);
@@ -943,15 +781,49 @@ static __init void da850_legoev3_init(void)
 	/* Support for UART 1 */
 	ret = davinci_cfg_reg_list(da850_uart1_pins);
 	if (ret)
-		pr_warning("da850_evm_init: UART 1 mux setup failed:"
+		pr_warning("legoev3_init: UART 1 mux setup failed:"
 						" %d\n", ret);
 #warning "Keep this code and eliminate this warning after copying this file to board-legoev3.c"
 	/* Support for UART 2 */
 	ret = davinci_cfg_reg_list(da850_uart2_pins);
 	if (ret)
-		pr_warning("da850_evm_init: UART 2 mux setup failed:"
+		pr_warning("legoev3_init: UART 2 mux setup failed:"
 						" %d\n", ret);
 #endif
+
+	/* Analog/Digital converter support */
+	ret = davinci_cfg_reg_list(legoev3_adc_pins);
+	if (ret)
+		pr_warning("legoev3_init: A/D converter mux setup failed:"
+			" %d\n", ret);
+	ret = gpio_request_one(EV3_ADC_ENA_PIN, GPIOF_OUT_INIT_HIGH, "adc_ena");
+	if (ret)
+		pr_warning("legoev3_init:"
+			" adc gpio setup failed: %d\n", ret);
+
+	/* Sound support */
+#if defined(CONFIG_DAVINCI_EHRPWM) || defined(CONFIG_DAVINCI_EHRPWM_MODULE)
+	/* eHRPWM0B is used to drive the EV3 speaker */
+	ret = davinci_cfg_reg_list(legoev3_sound_pins);
+	if (ret)
+		pr_warning("legoev3_init: "
+			"sound mux setup failed: %d\n", ret);
+
+	ret = gpio_request_one(EV3_SND_ENA_PIN, GPIOF_OUT_INIT_LOW, "snd_ena");
+	if (ret)
+		pr_warning("legoev3_init:"
+			" sound gpio setup failed: %d\n", ret);
+
+	da850_register_ehrpwm(0x02);
+#endif	
+
+#if defined(CONFIG_SND_LEGOEV3) || defined(CONFIG_SND_LEGOEV3_MODULE)
+	ret = platform_device_register(&snd_legoev3);
+	if (ret)
+		pr_warning("legoev3_init: "
+			"sound device registration failed: %d\n", ret);
+#endif
+
 
 #ifdef CONFIG_MACH_DAVINCI_LEGOEV3
 #warning "Sort out this bluetooth init code! Needed for EV3"
@@ -960,7 +832,7 @@ static __init void da850_legoev3_init(void)
 	
 	ret = gpio_request(DA850_BT_EN, "WL1271_BT_EN");
 	if (ret)
-		pr_warning("da850_evm_init: can not open BT GPIO %d\n",
+		pr_warning("legoev3_init: can not open BT GPIO %d\n",
 					DA850_BT_EN);
 	gpio_direction_output(DA850_BT_EN, 1);
 	udelay(1000);
@@ -970,12 +842,12 @@ static __init void da850_legoev3_init(void)
 	if (HAS_MMC) {
 		ret = davinci_cfg_reg_list(da850_evm_mmcsd0_pins);
 		if (ret)
-			pr_warning("da850_evm_init: mmcsd0 mux setup failed:"
+			pr_warning("legoev3_init: mmcsd0 mux setup failed:"
 					" %d\n", ret);
 
 		ret = da8xx_register_mmcsd0(&da850_mmc_config);
 		if (ret)
-			pr_warning("da850_evm_init: mmcsd0 registration failed:"
+			pr_warning("legoev3_init: mmcsd0 registration failed:"
 					" %d\n", ret);
 
 #ifdef CONFIG_MACH_DAVINCI_LEGOEV3
@@ -983,7 +855,7 @@ static __init void da850_legoev3_init(void)
 #else
 		ret = da850_wl12xx_init();
 		if (ret)
-			pr_warning("da850_evm_init: wl12xx initialization"
+			pr_warning("legoev3_init: wl12xx initialization"
 				   " failed: %d\n", ret);
 #endif
 	}
@@ -996,44 +868,34 @@ static __init void da850_legoev3_init(void)
 #warning "Is da8xx_register_rtc needed?"
 	ret = da8xx_register_rtc();
 	if (ret)
-		pr_warning("da850_evm_init: rtc setup failed: %d\n", ret);
+		pr_warning("legoev3_init: rtc setup failed: %d\n", ret);
 
-#warning "Is da850_evm_init_cpufreq needed?"
-	ret = da850_evm_init_cpufreq();
+#warning "Is legoev3_init_cpufreq needed?"
+	ret = legoev3_init_cpufreq();
 	if (ret)
-		pr_warning("da850_evm_init: cpufreq registration failed: %d\n",
+		pr_warning("legoev3_init: cpufreq registration failed: %d\n",
 				ret);
 
 #warning "Is da8xx_register_cpuidle needed?"
 	ret = da8xx_register_cpuidle();
 	if (ret)
-		pr_warning("da850_evm_init: cpuidle registration failed: %d\n",
+		pr_warning("legoev3_init: cpuidle registration failed: %d\n",
 				ret);
 
 #warning "Is da850_pm_device needed?"
 	ret = da850_register_pm(&da850_pm_device);
 	if (ret)
-		pr_warning("da850_evm_init: suspend registration failed: %d\n",
+		pr_warning("legoev3_init: suspend registration failed: %d\n",
 				ret);
 
-#ifdef CONFIG_MACH_DAVINCI_LEGOEV3
-#warning "Keep this code and eliminate this warning after copying this file to board-legoev3.c"
-#else
-#endif
-	ret = da8xx_register_spi(0, da850evm_spiflash_info,
-				 ARRAY_SIZE(da850evm_spiflash_info));
+	ret = da8xx_register_spi(0, legoev3_spi0_board_info,
+				 ARRAY_SIZE(legoev3_spi0_board_info));
 	if (ret)
-		pr_warning("da850_evm_init: spi 0 registration failed: %d\n",
+		pr_warning("legoev3_init: spi 0 registration failed: %d\n",
 				ret);
-	ret = da8xx_register_spi(1, da850evm_spifb_info,
-				 ARRAY_SIZE(da850evm_spifb_info));
-	if (ret)
-		pr_warning("da850_evm_init: spi 1 registration failed: %d\n",
-				ret);
-	da850_evm_usb_init();
 
-#ifdef CONFIG_MACH_DAVINCI_LEGOEV3
-#warning "Keep this code and eliminate this warning after copying this file to board-legoev3.c"
+	legoev3_usb_init();
+
 	if (gpio_request(DA850_BT_SHUT_DOWN, "bt_en")) {			// LEGO BT
 		printk(KERN_ERR "Failed to request gpio DA850_BT_SHUT_DOWN\n");	// LEGO BT
 		return;								// LEGO BT
@@ -1054,7 +916,7 @@ static __init void da850_legoev3_init(void)
 //	pr_info("Support for Bluetooth shut dw pin\n");	
 //	ret = davinci_cfg_reg_list(da850_bt_shut_down_pins);			// LEGO BT
 //	if (ret)								// LEGO BT
-//		pr_warning("da850_evm_init: BT shut down mux setup failed:"	// LEGO BT
+//		pr_warning("legoev3_init: BT shut down mux setup failed:"	// LEGO BT
 //						" %d\n", ret);			// LEGO BT
 
 	gpio_set_value(DA850_BT_SHUT_DOWN, 0);					// LEGO BT
@@ -1063,15 +925,14 @@ static __init void da850_legoev3_init(void)
 //       /* Support for Bluetooth slow clock */					// LEGO BT
 //	ret = davinci_cfg_reg_list(da850_bt_slow_clock_pins);			// LEGO BT
 //	if (ret)								// LEGO BT
-//		pr_warning("da850_evm_init: BT slow clock mux setup failed:"	// LEGO BT
+//		pr_warning("legoev3_init: BT slow clock mux setup failed:"	// LEGO BT
 //						" %d\n", ret);			// LEGO BT
 
-        da850_evm_bt_slow_clock_init();						// LEGO BT
-        gpio_direction_input(DA850_ECAP2_OUT_ENABLE);				// LEGO BT
+	da850_evm_bt_slow_clock_init();						// LEGO BT
+	gpio_direction_input(DA850_ECAP2_OUT_ENABLE);				// LEGO BT
 
 	gpio_set_value(DA850_BT_SHUT_DOWN, 1);					// LEGO BT
 	gpio_set_value(DA850_BT_SHUT_DOWN_EP2, 1);				// LEGO BT - EP2
-#endif
 }
 
 #ifdef CONFIG_SERIAL_8250_CONSOLE
@@ -1089,7 +950,7 @@ static __init void da850_evm_irq_init(void)
 	cp_intc_init();
 }
 
-static void __init da850_evm_map_io(void)
+static void __init legoev3_map_io(void)
 {
 	da850_init();
 }
@@ -1099,10 +960,10 @@ static void __init da850_evm_map_io(void)
 //MACHINE_START(DA850_LEGOEV3, "LEGO MINDSTORMS EV3 Programmable Brick")
 MACHINE_START(DAVINCI_DA850_EVM, "DaVinci DA850/OMAP-L138/AM18x EVM")
 	.atag_offset	= 0x100,
-	.map_io		= da850_evm_map_io,
+	.map_io		= legoev3_map_io,
 	.init_irq	= cp_intc_init,
 	.timer		= &davinci_timer,
-	.init_machine	= da850_legoev3_init,
+	.init_machine	= legoev3_init,
 	.dma_zone_size	= SZ_64M,
 	.restart	= da8xx_restart,
 MACHINE_END

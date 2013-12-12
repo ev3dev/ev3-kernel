@@ -19,7 +19,7 @@
 #define FB_ST7586_UPDATE_DELAY (HZ / 20)
 
 /* Supported display modules */
-#define ST7586_DISPLAY_LMS2012_LCD	0	/* LMS2012 LCD */
+#define ST7586_DISPLAY_LEGO_EV3	0 /* LEGO Mindstorms EV3 LCD */
 
 /* Init script function */
 struct st7586_function {
