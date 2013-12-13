@@ -87,7 +87,7 @@ enum legoev3_pin_defs {
 	GPIO_PIN(SND_ENA, 6, 15)
 
 	/* power pins */
-	GPIO_PIN(POWER, 6, 11)
+	GPIO_PIN(SYS_5V_POWER, 6, 11)
 
 	/* analog/digital converter pins */
 	PIN(ADC_DATA_IN, SPI0_SOMI)

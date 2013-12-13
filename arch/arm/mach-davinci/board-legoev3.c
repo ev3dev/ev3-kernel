@@ -690,11 +690,11 @@ struct uio_pruss_pdata da8xx_pruss_uio_pdata = {
 
 static void legoev3_power_off(void)
 {
-	if (!gpio_request(EV3_POWER_PIN, "EV3 power enable"))
-		gpio_direction_output(EV3_POWER_PIN, 0);
+	if (!gpio_request(EV3_SYS_5V_POWER_PIN, "EV3 system 5V power enable"))
+		gpio_direction_output(EV3_SYS_5V_POWER_PIN, 0);
 	else
 		pr_err("legoev3_init: can not open GPIO %d for power off\n",
-			EV3_POWER_PIN);
+			EV3_SYS_5V_POWER_PIN);
 }
 
 static __init void legoev3_init(void)
