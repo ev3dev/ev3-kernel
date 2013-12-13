@@ -20,6 +20,7 @@
 #include <linux/clk.h>
 #include <linux/console.h>
 #include <linux/gpio.h>
+#include <linux/platform_data/ads79xx.h>
 #include <linux/platform_device.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/nand.h>
@@ -603,6 +604,10 @@ static const short legoev3_adc_pins[] = {
 	-1
 };
 
+static struct ads79xx_platform_data legoev3_adc_platform_data = {
+	.range = { 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2 },
+};
+
 static struct davinci_spi_config legoev3_spi_analog_cfg = {
 	.io_type	= SPI_IO_TYPE_POLL,
 	.c2tdelay	= 10,
@@ -612,17 +617,22 @@ static struct davinci_spi_config legoev3_spi_analog_cfg = {
 };
 
 static struct spi_board_info legoev3_spi0_board_info[] = {
+	/* We have to have 4 devices or the spi driver will fail to load because
+	 * chip_select >= ARRAY_SIZE(legoev3_spi0_board_info). 0 - 2 are not
+	 * actually used.
+	 */
 	[0] = {
-		.mode			= SPI_MODE_0 | SPI_NO_CS,
+		.chip_select		= 0,
 	},
 	[1] = {
-		.mode			= SPI_MODE_0 | SPI_NO_CS,
+		.chip_select		= 1,
 	},
 	[2] = {
-		.mode			= SPI_MODE_0 | SPI_NO_CS,
+		.chip_select		= 2,
 	},
 	[3] = {
 		.modalias		= "ads7957",
+		.platform_data		= &legoev3_adc_platform_data,
 		.controller_data	= &legoev3_spi_analog_cfg,
 		.mode			= SPI_MODE_0,
 		.max_speed_hz		= 2000000,
@@ -794,10 +804,6 @@ static __init void legoev3_init(void)
 	if (ret)
 		pr_warning("legoev3_init: A/D converter mux setup failed:"
 			" %d\n", ret);
-	ret = gpio_request_one(EV3_ADC_ENA_PIN, GPIOF_OUT_INIT_HIGH, "adc_ena");
-	if (ret)
-		pr_warning("legoev3_init:"
-			" adc gpio setup failed: %d\n", ret);
 
 	/* Sound support */
 #if defined(CONFIG_DAVINCI_EHRPWM) || defined(CONFIG_DAVINCI_EHRPWM_MODULE)
