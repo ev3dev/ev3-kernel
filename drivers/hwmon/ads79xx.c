@@ -44,6 +44,7 @@ struct ads79xx_device {
 	bool range[ADS79XX_MAX_CHANNELS];
 	u32 vref;
 	struct ads79xx_data *ads79xx_info;
+	u32 raw_data[ADS79XX_MAX_CHANNELS];
 };
 
 static ssize_t ads79xx_show_input(struct device *dev,
@@ -116,6 +117,7 @@ static ssize_t ads79xx_show_input(struct device *dev,
 	val &= val_mask;
 
 	converted_voltage = lsb_voltage * val / 1000;
+	ads->raw_data[channel] = converted_voltage;
 	ret = sprintf(buf, "%d\n", converted_voltage);
 
 out:
@@ -187,6 +189,23 @@ static ssize_t ads79xx_set_vref(struct device *dev,
 	return count;
 }
 
+static ssize_t ads79xx_raw_data_read(struct file *file, struct kobject *kobj,
+				    struct bin_attribute *attr,
+				    char *buf, loff_t off, size_t count)
+{
+	struct device *dev = container_of(kobj, struct device, kobj);
+	struct spi_device *spi = to_spi_device(dev);
+	struct ads79xx_device *ads = spi_get_drvdata(spi);
+	ssize_t size = sizeof(ads->raw_data);
+
+	/* Must read all data. */
+	if (off || count < size)
+		return 0;
+	memcpy(buf, ads->raw_data, size);
+
+	return size;
+}
+
 static SENSOR_DEVICE_ATTR(in0_input, S_IRUGO, ads79xx_show_input, NULL, 0);
 static SENSOR_DEVICE_ATTR(in1_input, S_IRUGO, ads79xx_show_input, NULL, 1);
 static SENSOR_DEVICE_ATTR(in2_input, S_IRUGO, ads79xx_show_input, NULL, 2);
@@ -239,6 +258,15 @@ static SENSOR_DEVICE_ATTR(in15_range, S_IRUGO | S_IWUSR, ads79xx_show_range,
 
 static DEVICE_ATTR(vref, S_IRUGO | S_IWUSR, ads79xx_show_vref, ads79xx_set_vref);
 static DEVICE_ATTR(name, S_IRUGO, ads79xx_show_name, NULL);
+
+static struct bin_attribute raw_data_attr = {
+	.attr = {
+		.name = "raw_data",
+		.mode = S_IRUGO,
+	},
+	.size = ADS79XX_MAX_CHANNELS * sizeof(u32),
+	.read = ads79xx_raw_data_read,
+};
 
 static struct attribute *ads79xx_4ch_attributes[] = {
 	&sensor_dev_attr_in0_input.dev_attr.attr,
@@ -429,7 +457,7 @@ static const struct spi_device_id ads79xx_ids[] = {
 };
 MODULE_DEVICE_TABLE(spi, ads79xx_ids);
 
-static int ads79xx_probe(struct spi_device *spi)
+static int __init ads79xx_probe(struct spi_device *spi)
 {
 	int chip_id = spi_get_device_id(spi)->driver_data;
 	int err, i;
@@ -453,7 +481,10 @@ static int ads79xx_probe(struct spi_device *spi)
 
 	err = sysfs_create_group(&spi->dev.kobj, &ad_data->ch_data->attr_grp);
 	if (err < 0)
-		return err;
+		goto err1;
+	err = sysfs_create_bin_file(&spi->dev.kobj, &raw_data_attr);
+	if (err < 0)
+		goto err2;
 
 	ads->ads79xx_info = ad_data;
 	mutex_init(&ads->lock);
@@ -472,24 +503,31 @@ static int ads79xx_probe(struct spi_device *spi)
 	ads->hwmon_dev = hwmon_device_register(&spi->dev);
 	if (IS_ERR(ads->hwmon_dev)) {
 		err = PTR_ERR(ads->hwmon_dev);
-		goto error_remove;
+		goto err3;
 	}
 
 	return 0;
 
-error_remove:
+err3:
+	spi_set_drvdata(spi, NULL);
+	sysfs_remove_bin_file(&spi->dev.kobj, &raw_data_attr);
+err2:
 	sysfs_remove_group(&spi->dev.kobj, &ad_data->ch_data->attr_grp);
+err1:
+	kfree(ads);
 	return err;
 }
 
-static int ads79xx_remove(struct spi_device *spi)
+static int __exit ads79xx_remove(struct spi_device *spi)
 {
 	struct ads79xx_device *ads = spi_get_drvdata(spi);
-	struct ads79xx_data *ad_data;
-
-	ad_data = ads->ads79xx_info;
+	struct ads79xx_data *ad_data = ads->ads79xx_info;
+	
 	hwmon_device_unregister(ads->hwmon_dev);
 	sysfs_remove_group(&spi->dev.kobj, &ad_data->ch_data->attr_grp);
+	sysfs_remove_bin_file(&spi->dev.kobj, &raw_data_attr);
+	kfree(ads);
+	spi_set_drvdata(spi, NULL);
 
 	return 0;
 }
@@ -501,7 +539,7 @@ static struct spi_driver ads79xx_driver = {
 	},
 	.id_table = ads79xx_ids,
 	.probe = ads79xx_probe,
-	.remove = ads79xx_remove,
+	.remove = __exit_p(ads79xx_remove),
 };
 module_spi_driver(ads79xx_driver);
 

@@ -635,7 +635,7 @@ static struct spi_board_info legoev3_spi0_board_info[] = {
 		.platform_data		= &legoev3_adc_platform_data,
 		.controller_data	= &legoev3_spi_analog_cfg,
 		.mode			= SPI_MODE_0,
-		.max_speed_hz		= 2000000,
+		.max_speed_hz		= 20000000,
 		.bus_num		= 0,
 		.chip_select		= 3,
 	},
