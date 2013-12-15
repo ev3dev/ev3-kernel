@@ -605,7 +605,9 @@ static const short legoev3_adc_pins[] = {
 };
 
 static struct ads79xx_platform_data legoev3_adc_platform_data = {
-	.range = { 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2 },
+	.range		= ADS79XX_RANGE_5V,
+	.mode		= ADS79XX_MODE_AUTO,
+	.auto_update_ns	= 100000000, /* 100 msec */
 };
 
 static struct davinci_spi_config legoev3_spi_analog_cfg = {

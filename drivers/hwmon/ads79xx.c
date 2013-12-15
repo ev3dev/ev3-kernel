@@ -18,6 +18,12 @@
 #define DRVNAME "ads79xx"
 #define pr_fmt(fmt) DRVNAME ": " fmt
 
+#define ADS79XX_MAX_CHANNELS	16
+#define ADS79XX_VREF_MAX	2510		/* mV */
+#define ADS79XX_VREF_MIN	2490		/* mV */
+#define ADS79XX_UPDATE_NS_MAX	10000000000	/* 10 sec */
+#define ADS79XX_UPDATE_NS_MIN	1000000l	/* 1 msec */
+
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/spi/spi.h>
@@ -26,6 +32,7 @@
 #include <linux/err.h>
 #include <linux/mutex.h>
 #include <linux/delay.h>
+#include <linux/hrtimer.h>
 #include <linux/platform_data/ads79xx.h>
 
 struct ads79x_ch {
@@ -39,40 +46,86 @@ struct ads79xx_data {
 };
 
 struct ads79xx_device {
+	struct spi_device *spi;
 	struct device *hwmon_dev;
 	struct mutex lock;
-	bool range[ADS79XX_MAX_CHANNELS];
-	u32 vref;
+	bool range;
+	u32 vref_mv;
+	u32 lsb_voltage;
+	u8 mode;
+	u64 auto_update_ns;
+	struct hrtimer timer;
+	bool auto_mode_read_busy;
+	u16 auto_mode_rx_buf[ADS79XX_MAX_CHANNELS];
+	struct spi_transfer auto_mode_transfer[ADS79XX_MAX_CHANNELS];
+	struct spi_message auto_mode_message;
 	struct ads79xx_data *ads79xx_info;
 	u32 raw_data[ADS79XX_MAX_CHANNELS];
 };
+
+static void ads79xx_auto_mode_read_complete(void* context)
+{
+	struct ads79xx_device *ads = context;
+	struct ads79xx_data *ad_data = ads->ads79xx_info;
+	u16 val_mask = (1 << ad_data->resolution) - 1;
+	int i = ad_data->ch_data->num_channels;
+	u16 val, channel;
+
+	mutex_lock(&ads->lock);
+	if (ads->auto_mode_message.status) {
+		dev_err(&ads->spi->dev, "%s: spi async fail %d\n",
+					__func__,
+					ads->auto_mode_message.status);
+		hrtimer_cancel(&ads->timer);
+	} else {
+		while (--i) {
+			channel = ads->auto_mode_rx_buf[i] >> 12;
+			val = ads->auto_mode_rx_buf[i] & val_mask;
+			ads->raw_data[channel] = ads->lsb_voltage * val / 1000;
+		}
+	}
+	ads->auto_mode_read_busy = false;
+	mutex_unlock(&ads->lock);
+}
+
+static enum hrtimer_restart ads79xx_timer_callback(struct hrtimer *pTimer)
+{
+	struct ads79xx_device *ads = container_of(pTimer, struct ads79xx_device,
+									timer);
+	struct spi_device *spi = ads->spi;
+	enum hrtimer_restart restart = HRTIMER_RESTART;
+	int ret;
+
+	hrtimer_forward_now(pTimer, ktime_set(0, ads->auto_update_ns));
+	if (!ads->auto_mode_read_busy) {
+		ads->auto_mode_read_busy = true;
+		ret = spi_async(spi, &ads->auto_mode_message);
+		if (ret < 0) {
+			dev_err(&spi->dev, "%s: spi async fail %d\n",
+					__func__, ret);
+			restart =  HRTIMER_NORESTART;
+		}
+	}
+
+	return restart;
+}
 
 static ssize_t ads79xx_show_input(struct device *dev,
 		struct device_attribute *da, char *buf)
 {
 	struct spi_device *spi = to_spi_device(dev);
 	struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
-	int ret = -EINVAL, i;
-	u8 channel;
-	u8 range;
-	u16 reg, val, val_mask;
-	u32 vref;
-	u32 converted_voltage, lsb_voltage;
+	int ret = -EINVAL;
+	int i;
+	u8 channel = attr->index;
+	u16 reg, val;
+	u32 converted_voltage;
 	struct ads79xx_device *ads = spi_get_drvdata(spi);
-	struct ads79xx_data *ad_data;
-
-	ad_data = ads->ads79xx_info;
-	channel = attr->index;
-	range = ads->range[channel];
-	vref = ads->vref;
-	val_mask = (1 << ad_data->resolution) - 1;
-	if (range) {
-		/* 5V i/p range */
-		lsb_voltage = 2000 * vref / (1 << ad_data->resolution);
-	} else {
-		/* 2.5V i/p range */
-		lsb_voltage = 1000 * vref / (1 << ad_data->resolution);
-	}
+	struct ads79xx_data *ad_data = ads->ads79xx_info;
+	u16 val_mask = (1 << ad_data->resolution) - 1;
+	bool range = ads->range;
+	u32 vref = ads->vref_mv;
+	u32 lsb_voltage = ads->lsb_voltage;
 
 	if (channel > ad_data->ch_data->num_channels) {
 		dev_crit(&spi->dev, "%s: chid%d > num channels %d\n",
@@ -81,43 +134,46 @@ static ssize_t ads79xx_show_input(struct device *dev,
 	}
 	mutex_lock(&ads->lock);
 
-	/* Mode control for manual mode */
-	reg = (0x1 << 12) |	/* manual mode */
-	      (0x1 << 11) |	/* allow programming of bits 0-6 */
-	      (channel << 7) |	/* Channel number */
-	      (range << 6) |	/* 2.5V or 5V range  */
-	      (0x0 << 5) |	/* NO Device shutdown */
-	      (0x0 << 4) |	/* D15-12 is channel number */
-	      (0x0 << 0) ;	/* GPIO data for output pins */
-	ret = spi_write(spi, &reg, sizeof(reg));
-	if (ret) {
-		dev_err(&spi->dev, "%s: write mode reg fail %d\n",
-			__func__, ret);
-		goto out;
-	}
-
-	/* Dummy read to get rid of Frame-1 data */
-	i = 2;
-	while (i) {
-		ret = spi_read(spi, &val, sizeof(val));
+	if (ads->mode == ADS79XX_MODE_AUTO)
+		converted_voltage = ads->raw_data[channel];
+	else {
+		/* Mode control for manual mode */
+		reg = (0x1 << 12) |	/* manual mode */
+		      (0x1 << 11) |	/* allow programming of bits 0-6 */
+		      (channel << 7) |	/* Channel number */
+		      (range << 6) |	/* 2.5V or 5V range  */
+		      (0x0 << 5) |	/* NO Device shutdown */
+		      (0x0 << 4) |	/* D15-12 is channel number */
+		      (0x0 << 0) ;	/* GPIO data for output pins */
+		ret = spi_write(spi, &reg, sizeof(reg));
 		if (ret) {
-			dev_err(&spi->dev, "%s: read of value fail %d\n",
+			dev_err(&spi->dev, "%s: write mode reg fail %d\n",
 				__func__, ret);
 			goto out;
 		}
-		i--;
+
+		/* Dummy read to get rid of Frame-1 data */
+		i = 2;
+		while (i--) {
+			ret = spi_read(spi, &val, sizeof(val));
+			if (ret) {
+				dev_err(&spi->dev, "%s: read of value fail %d\n",
+					__func__, ret);
+				goto out;
+			}
+		}
+
+		dev_dbg(&spi->dev, "%s: raw regval =0x%04x mask = 0x%04x vref=%dmV "
+			"range=%d lsb_voltage=%duV\n",
+			__func__, val, val_mask, vref, range + 1, lsb_voltage);
+		WARN(channel != val >> 12,
+		     "Channel=%d, val-chan=%d", channel, val >> 12);
+
+		val &= val_mask;
+
+		converted_voltage = lsb_voltage * val / 1000;
+		ads->raw_data[channel] = converted_voltage;
 	}
-
-	dev_dbg(&spi->dev, "%s: raw regval =0x%04x mask = 0x%04x vref=%dmV "
-		"range=%d lsb_voltage=%duV\n",
-		__func__, val, val_mask, vref, range + 1, lsb_voltage);
-	WARN(channel != val >> 12,
-	     "Channel=%d, val-chan=%d", channel, val >> 12);
-
-	val &= val_mask;
-
-	converted_voltage = lsb_voltage * val / 1000;
-	ads->raw_data[channel] = converted_voltage;
 	ret = sprintf(buf, "%d\n", converted_voltage);
 
 out:
@@ -125,23 +181,56 @@ out:
 	return ret;
 }
 
+static void ads79xx_set_lsb_voltage(struct ads79xx_device *ads)
+{
+	struct ads79xx_data *ad_data = ads->ads79xx_info;
+
+	if (ads->range)
+		/* 5V i/p range */
+		ads->lsb_voltage = 2000 * ads->vref_mv / (1 << ad_data->resolution);
+	else
+		 /* 2.5V i/p range */
+		ads->lsb_voltage = 1000 * ads->vref_mv / (1 << ad_data->resolution);
+}
+
+static int ads79xx_set_mode_auto(struct ads79xx_device *ads)
+{
+	struct spi_device *spi = ads->spi;
+	u8 range = ads->range;
+	u16 reg;
+	int err;
+
+	/* Mode control for auto mode */
+	reg = (0x2 << 12) |	/* auto mode */
+	      (0x1 << 11) |	/* allow programming of bits 0-10 */
+	      (0x1 << 10) |	/* reset channel counter */
+	      (range << 6) |	/* 2.5V or 5V range  */
+	      (0x0 << 5) |	/* NO Device shutdown */
+	      (0x0 << 4) |	/* D15-12 is channel number */
+	      (0x0 << 0) ;	/* GPIO data for output pins */
+	err = spi_write(spi, &reg, sizeof(reg));
+	if (err)
+		dev_err(&spi->dev, "%s: write mode reg fail %d\n",
+			__func__, err);
+
+	return err;
+}
+
 static ssize_t ads79xx_show_range(struct device *dev,
 				 struct device_attribute *devattr, char *buf)
 {
 	struct spi_device *spi = to_spi_device(dev);
 	struct ads79xx_device *ads = spi_get_drvdata(spi);
-	struct sensor_device_attribute *attr = to_sensor_dev_attr(devattr);
 
-	return sprintf(buf, "%d\n", ads->range[attr->index] ? 2 : 1);
+	return sprintf(buf, "%s = 2.5V, %s = 5V\n", ads->range ? "1" : "[1]",
+						ads->range ? "[2]" : "2");
 }
-
 
 static ssize_t ads79xx_set_range(struct device *dev,
 		struct device_attribute *devattr, const char *buf, size_t count)
 {
 	struct spi_device *spi = to_spi_device(dev);
 	struct ads79xx_device *ads = spi_get_drvdata(spi);
-	struct sensor_device_attribute *attr = to_sensor_dev_attr(devattr);
 	int val, ret;
 
 	ret = sscanf(buf, "%1d", &val);
@@ -151,7 +240,13 @@ static ssize_t ads79xx_set_range(struct device *dev,
 		return -EINVAL;
 	}
 
-	ads->range[attr->index] = (val == 2) ? true : false;
+	mutex_lock(&ads->lock);
+	ads->range = (val == 2);
+	ads79xx_set_lsb_voltage(ads);
+	if (ads->mode == ADS79XX_MODE_AUTO)
+		ads79xx_set_mode_auto(ads);
+	mutex_unlock(&ads->lock);
+
 	return count;
 }
 
@@ -167,7 +262,8 @@ static ssize_t ads79xx_show_vref(struct device *dev,
 {
 	struct spi_device *spi = to_spi_device(dev);
 	struct ads79xx_device *ads = spi_get_drvdata(spi);
-	return sprintf(buf, "%d\n", ads->vref);
+
+	return sprintf(buf, "%d\n", ads->vref_mv);
 }
 
 static ssize_t ads79xx_set_vref(struct device *dev,
@@ -179,19 +275,109 @@ static ssize_t ads79xx_set_vref(struct device *dev,
 	int val, ret;
 
 	ret = sscanf(buf, "%7d", &val);
-	if (ret != 1 || val > 2510000 || val < 2490000 ) {
-		dev_err(&spi->dev, "%s: value(%d) should [2490000 2510000]\n",
-			__func__, val);
+	if (ret != 1 || val > ADS79XX_VREF_MAX || val < ADS79XX_VREF_MIN) {
+		dev_err(&spi->dev, "%s: value(%d) should be between %d"
+			" and %d\n",
+			__func__, val, ADS79XX_VREF_MIN, ADS79XX_VREF_MAX);
 		return -EINVAL;
 	}
 
-	ads->vref = val;
+	mutex_lock(&ads->lock);
+	ads->vref_mv = val;
+	ads79xx_set_lsb_voltage(ads);
+	mutex_unlock(&ads->lock);
+
+	return count;
+}
+
+static ssize_t ads79xx_show_mode(struct device *dev,
+				 struct device_attribute *devattr,
+				 char *buf)
+{
+	struct spi_device *spi = to_spi_device(dev);
+	struct ads79xx_device *ads = spi_get_drvdata(spi);
+
+	return sprintf(buf, "%s  %s\n",
+		ads->mode == ADS79XX_MODE_MANUAL ? "[manual]" : "manual",
+		ads->mode == ADS79XX_MODE_AUTO ? "[auto]" : "auto");
+}
+
+static ssize_t ads79xx_set_mode(struct device *dev,
+				struct device_attribute *attr,
+				const char *buf, size_t count)
+{
+	struct spi_device *spi = to_spi_device(dev);
+	struct ads79xx_device *ads = spi_get_drvdata(spi);
+
+	mutex_lock(&ads->lock);
+	if (buf) {
+		if (!strcmp(buf, "manual\n"))
+			ads->mode = ADS79XX_MODE_MANUAL;
+		else if (!strcmp(buf, "auto\n"))
+			ads->mode = ADS79XX_MODE_AUTO;
+		else {
+			dev_err(&spi->dev, "%s: value must be \"auto\" or \"manual\"\n",
+				__func__);
+			mutex_unlock(&ads->lock);
+			return -EINVAL;
+		}
+	}
+
+	if (ads->mode == ADS79XX_MODE_AUTO) {
+		ads79xx_set_mode_auto(ads);
+		if (!hrtimer_active(&ads->timer))
+			hrtimer_start(&ads->timer,
+					ktime_set(0, ads->auto_update_ns),
+					HRTIMER_MODE_REL);
+	} else {
+		if (hrtimer_active(&ads->timer))
+			hrtimer_cancel(&ads->timer);
+	}
+
+	mutex_unlock(&ads->lock);
+
+	return count;
+}
+
+static ssize_t ads79xx_show_auto_update_ns(struct device *dev,
+					   struct device_attribute *attr,
+					   char *buf)
+{
+	struct spi_device *spi = to_spi_device(dev);
+	struct ads79xx_device *ads = spi_get_drvdata(spi);
+
+	return sprintf(buf, "%lld\n", ads->auto_update_ns);
+}
+
+static ssize_t ads79xx_set_auto_update_ns(struct device *dev,
+					  struct device_attribute *attr,
+					  const char *buf, size_t count)
+{
+	struct spi_device *spi = to_spi_device(dev);
+	struct ads79xx_device *ads = spi_get_drvdata(spi);
+	long val;
+	int ret;
+
+	ret = sscanf(buf, "%11ld", &val);
+	if (ret != 1 || val > ADS79XX_UPDATE_NS_MAX || val < ADS79XX_UPDATE_NS_MIN ) {
+		dev_err(&spi->dev, "%s: value(%ld) should be between %ld and %lld\n",
+			__func__, val, ADS79XX_UPDATE_NS_MIN, ADS79XX_UPDATE_NS_MAX);
+		return -EINVAL;
+	}
+
+	mutex_lock(&ads->lock);
+	ads->auto_update_ns = val;
+	mutex_unlock(&ads->lock);
+	if (hrtimer_active(&ads->timer))
+		hrtimer_set_expires(&ads->timer,
+					ktime_set(0, ads->auto_update_ns));
+
 	return count;
 }
 
 static ssize_t ads79xx_raw_data_read(struct file *file, struct kobject *kobj,
-				    struct bin_attribute *attr,
-				    char *buf, loff_t off, size_t count)
+				     struct bin_attribute *attr,
+				     char *buf, loff_t off, size_t count)
 {
 	struct device *dev = container_of(kobj, struct device, kobj);
 	struct spi_device *spi = to_spi_device(dev);
@@ -223,41 +409,12 @@ static SENSOR_DEVICE_ATTR(in13_input, S_IRUGO, ads79xx_show_input, NULL, 13);
 static SENSOR_DEVICE_ATTR(in14_input, S_IRUGO, ads79xx_show_input, NULL, 14);
 static SENSOR_DEVICE_ATTR(in15_input, S_IRUGO, ads79xx_show_input, NULL, 15);
 
-static SENSOR_DEVICE_ATTR(in0_range, S_IRUGO | S_IWUSR, ads79xx_show_range,
-							ads79xx_set_range, 0);
-static SENSOR_DEVICE_ATTR(in1_range, S_IRUGO | S_IWUSR, ads79xx_show_range,
-							ads79xx_set_range, 1);
-static SENSOR_DEVICE_ATTR(in2_range, S_IRUGO | S_IWUSR, ads79xx_show_range,
-							ads79xx_set_range, 2);
-static SENSOR_DEVICE_ATTR(in3_range, S_IRUGO | S_IWUSR, ads79xx_show_range,
-							ads79xx_set_range, 3);
-static SENSOR_DEVICE_ATTR(in4_range, S_IRUGO | S_IWUSR, ads79xx_show_range,
-							ads79xx_set_range, 4);
-static SENSOR_DEVICE_ATTR(in5_range, S_IRUGO | S_IWUSR, ads79xx_show_range,
-							ads79xx_set_range, 5);
-static SENSOR_DEVICE_ATTR(in6_range, S_IRUGO | S_IWUSR, ads79xx_show_range,
-							ads79xx_set_range, 6);
-static SENSOR_DEVICE_ATTR(in7_range, S_IRUGO | S_IWUSR, ads79xx_show_range,
-							ads79xx_set_range, 7);
-static SENSOR_DEVICE_ATTR(in8_range, S_IRUGO | S_IWUSR, ads79xx_show_range,
-							ads79xx_set_range, 8);
-static SENSOR_DEVICE_ATTR(in9_range, S_IRUGO | S_IWUSR, ads79xx_show_range,
-							ads79xx_set_range, 9);
-static SENSOR_DEVICE_ATTR(in10_range, S_IRUGO | S_IWUSR, ads79xx_show_range,
-							ads79xx_set_range, 10);
-static SENSOR_DEVICE_ATTR(in11_range, S_IRUGO | S_IWUSR, ads79xx_show_range,
-							ads79xx_set_range, 11);
-static SENSOR_DEVICE_ATTR(in12_range, S_IRUGO | S_IWUSR, ads79xx_show_range,
-							ads79xx_set_range, 12);
-static SENSOR_DEVICE_ATTR(in13_range, S_IRUGO | S_IWUSR, ads79xx_show_range,
-							ads79xx_set_range, 13);
-static SENSOR_DEVICE_ATTR(in14_range, S_IRUGO | S_IWUSR, ads79xx_show_range,
-							ads79xx_set_range, 14);
-static SENSOR_DEVICE_ATTR(in15_range, S_IRUGO | S_IWUSR, ads79xx_show_range,
-							ads79xx_set_range, 15);
-
-static DEVICE_ATTR(vref, S_IRUGO | S_IWUSR, ads79xx_show_vref, ads79xx_set_vref);
 static DEVICE_ATTR(name, S_IRUGO, ads79xx_show_name, NULL);
+static DEVICE_ATTR(range, S_IRUGO | S_IWUSR, ads79xx_show_range, ads79xx_set_range);
+static DEVICE_ATTR(vref, S_IRUGO | S_IWUSR, ads79xx_show_vref, ads79xx_set_vref);
+static DEVICE_ATTR(mode, S_IRUGO | S_IWUSR, ads79xx_show_mode, ads79xx_set_mode);
+static DEVICE_ATTR(auto_update_ns, S_IRUGO | S_IWUSR,
+		ads79xx_show_auto_update_ns, ads79xx_set_auto_update_ns);
 
 static struct bin_attribute raw_data_attr = {
 	.attr = {
@@ -273,12 +430,11 @@ static struct attribute *ads79xx_4ch_attributes[] = {
 	&sensor_dev_attr_in1_input.dev_attr.attr,
 	&sensor_dev_attr_in2_input.dev_attr.attr,
 	&sensor_dev_attr_in3_input.dev_attr.attr,
-	&sensor_dev_attr_in0_range.dev_attr.attr,
-	&sensor_dev_attr_in1_range.dev_attr.attr,
-	&sensor_dev_attr_in2_range.dev_attr.attr,
-	&sensor_dev_attr_in3_range.dev_attr.attr,
-	&dev_attr_vref.attr,
 	&dev_attr_name.attr,
+	&dev_attr_range.attr,
+	&dev_attr_vref.attr,
+	&dev_attr_mode.attr,
+	&dev_attr_auto_update_ns.attr,
 	NULL
 };
 
@@ -291,16 +447,11 @@ static struct attribute *ads79xx_8ch_attributes[] = {
 	&sensor_dev_attr_in5_input.dev_attr.attr,
 	&sensor_dev_attr_in6_input.dev_attr.attr,
 	&sensor_dev_attr_in7_input.dev_attr.attr,
-	&sensor_dev_attr_in0_range.dev_attr.attr,
-	&sensor_dev_attr_in1_range.dev_attr.attr,
-	&sensor_dev_attr_in2_range.dev_attr.attr,
-	&sensor_dev_attr_in3_range.dev_attr.attr,
-	&sensor_dev_attr_in4_range.dev_attr.attr,
-	&sensor_dev_attr_in5_range.dev_attr.attr,
-	&sensor_dev_attr_in6_range.dev_attr.attr,
-	&sensor_dev_attr_in7_range.dev_attr.attr,
-	&dev_attr_vref.attr,
 	&dev_attr_name.attr,
+	&dev_attr_range.attr,
+	&dev_attr_vref.attr,
+	&dev_attr_mode.attr,
+	&dev_attr_auto_update_ns.attr,
 	NULL
 };
 
@@ -317,20 +468,11 @@ static struct attribute *ads79xx_12ch_attributes[] = {
 	&sensor_dev_attr_in9_input.dev_attr.attr,
 	&sensor_dev_attr_in10_input.dev_attr.attr,
 	&sensor_dev_attr_in11_input.dev_attr.attr,
-	&sensor_dev_attr_in0_range.dev_attr.attr,
-	&sensor_dev_attr_in1_range.dev_attr.attr,
-	&sensor_dev_attr_in2_range.dev_attr.attr,
-	&sensor_dev_attr_in3_range.dev_attr.attr,
-	&sensor_dev_attr_in4_range.dev_attr.attr,
-	&sensor_dev_attr_in5_range.dev_attr.attr,
-	&sensor_dev_attr_in6_range.dev_attr.attr,
-	&sensor_dev_attr_in7_range.dev_attr.attr,
-	&sensor_dev_attr_in8_range.dev_attr.attr,
-	&sensor_dev_attr_in9_range.dev_attr.attr,
-	&sensor_dev_attr_in10_range.dev_attr.attr,
-	&sensor_dev_attr_in11_range.dev_attr.attr,
-	&dev_attr_vref.attr,
 	&dev_attr_name.attr,
+	&dev_attr_range.attr,
+	&dev_attr_vref.attr,
+	&dev_attr_mode.attr,
+	&dev_attr_auto_update_ns.attr,
 	NULL
 };
 
@@ -351,24 +493,11 @@ static struct attribute *ads79xx_16ch_attributes[] = {
 	&sensor_dev_attr_in13_input.dev_attr.attr,
 	&sensor_dev_attr_in14_input.dev_attr.attr,
 	&sensor_dev_attr_in15_input.dev_attr.attr,
-	&sensor_dev_attr_in0_range.dev_attr.attr,
-	&sensor_dev_attr_in1_range.dev_attr.attr,
-	&sensor_dev_attr_in2_range.dev_attr.attr,
-	&sensor_dev_attr_in3_range.dev_attr.attr,
-	&sensor_dev_attr_in4_range.dev_attr.attr,
-	&sensor_dev_attr_in5_range.dev_attr.attr,
-	&sensor_dev_attr_in6_range.dev_attr.attr,
-	&sensor_dev_attr_in7_range.dev_attr.attr,
-	&sensor_dev_attr_in8_range.dev_attr.attr,
-	&sensor_dev_attr_in9_range.dev_attr.attr,
-	&sensor_dev_attr_in10_range.dev_attr.attr,
-	&sensor_dev_attr_in11_range.dev_attr.attr,
-	&sensor_dev_attr_in12_range.dev_attr.attr,
-	&sensor_dev_attr_in13_range.dev_attr.attr,
-	&sensor_dev_attr_in14_range.dev_attr.attr,
-	&sensor_dev_attr_in15_range.dev_attr.attr,
-	&dev_attr_vref.attr,
 	&dev_attr_name.attr,
+	&dev_attr_range.attr,
+	&dev_attr_vref.attr,
+	&dev_attr_mode.attr,
+	&dev_attr_auto_update_ns.attr,
 	NULL
 };
 
@@ -465,6 +594,7 @@ static int __init ads79xx_probe(struct spi_device *spi)
 	struct ads79xx_data *ad_data;
 	struct ads79xx_platform_data *pdata;
 
+
 	if (chip_id >= ARRAY_SIZE(ads79xx_data))
 		return -EINVAL;
 	ad_data = &ads79xx_data[chip_id];
@@ -486,16 +616,64 @@ static int __init ads79xx_probe(struct spi_device *spi)
 	if (err < 0)
 		goto err2;
 
+	ads->spi = spi;
 	ads->ads79xx_info = ad_data;
 	mutex_init(&ads->lock);
-	ads->vref = 2500;
+	ads->vref_mv = 2500;
+	ads->auto_update_ns = NSEC_PER_SEC;
+	hrtimer_init(&ads->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+	ads->timer.function = ads79xx_timer_callback;
+	spi_message_init(&ads->auto_mode_message);
+	/*
+	 * each word has to have an individual transfer so that the CS line is
+	 * pulsed between transfers
+	 */
+	for (i  = 0; i < ADS79XX_MAX_CHANNELS; i++) {
+		ads->auto_mode_transfer[i].rx_buf = &ads->auto_mode_rx_buf[i];
+		ads->auto_mode_transfer[i].len = sizeof(ads->auto_mode_rx_buf[i]);
+		ads->auto_mode_transfer[i].cs_change = 1;
+		spi_message_add_tail(&ads->auto_mode_transfer[i], &ads->auto_mode_message);
+	}
+	ads->auto_mode_message.complete = ads79xx_auto_mode_read_complete;
+	ads->auto_mode_message.context = ads;
 
 	pdata = spi->dev.platform_data;
 	if (pdata) {
-		if (pdata->vref)
-			ads->vref = pdata->vref;
-		for (i = 0; i <= ADS79XX_MAX_CHANNELS; i++)
-			ads->range[i] = pdata->range[i] == 2;
+		if (pdata->range) {
+			if (pdata->range == ADS79XX_RANGE_5V)
+				ads->range = pdata->range;
+			else {
+				dev_err(&spi->dev, "Invalid range selected in platform data");
+				goto err3;
+			}
+		}
+		if (pdata->mode) {
+			if (pdata->mode == ADS79XX_MODE_MANUAL ||
+					pdata->mode == ADS79XX_MODE_AUTO)
+				ads->mode = pdata->mode;
+			else {
+				dev_err(&spi->dev, "Invalid mode selected in platform data");
+				goto err3;
+			}
+		}
+		if (pdata->auto_update_ns) {
+			if (pdata->auto_update_ns <= ADS79XX_UPDATE_NS_MAX  &&
+				pdata->auto_update_ns >= ADS79XX_UPDATE_NS_MIN)
+				ads->auto_update_ns = pdata->auto_update_ns;
+			else {
+				dev_err(&spi->dev, "Invalid auto_update_ns selected in platform data");
+				goto err3;
+			}
+		}
+		if (pdata->vref_mv) {
+			if (pdata->vref_mv <= ADS79XX_VREF_MAX &&
+						pdata->vref_mv >= ADS79XX_VREF_MIN)
+				ads->vref_mv = pdata->vref_mv;
+			else {
+				dev_err(&spi->dev, "Invalid vref selected in platform data");
+				goto err3;
+			}
+		}
 	}
 
 	spi_set_drvdata(spi, ads);
@@ -503,18 +681,26 @@ static int __init ads79xx_probe(struct spi_device *spi)
 	ads->hwmon_dev = hwmon_device_register(&spi->dev);
 	if (IS_ERR(ads->hwmon_dev)) {
 		err = PTR_ERR(ads->hwmon_dev);
-		goto err3;
+		goto err4;
+	}
+
+	ads79xx_set_lsb_voltage(ads);
+	if (ads->mode == ADS79XX_MODE_AUTO) {
+		ads79xx_set_mode_auto(ads);
+		hrtimer_start(&ads->timer, ktime_set(0, ads->auto_update_ns),
+							HRTIMER_MODE_REL);
 	}
 
 	return 0;
 
-err3:
+err4:
 	spi_set_drvdata(spi, NULL);
+err3:
 	sysfs_remove_bin_file(&spi->dev.kobj, &raw_data_attr);
 err2:
 	sysfs_remove_group(&spi->dev.kobj, &ad_data->ch_data->attr_grp);
 err1:
-	kfree(ads);
+	devm_kfree(&spi->dev, ads);
 	return err;
 }
 
@@ -523,10 +709,11 @@ static int __exit ads79xx_remove(struct spi_device *spi)
 	struct ads79xx_device *ads = spi_get_drvdata(spi);
 	struct ads79xx_data *ad_data = ads->ads79xx_info;
 	
+	hrtimer_cancel(&ads->timer);
 	hwmon_device_unregister(ads->hwmon_dev);
 	sysfs_remove_group(&spi->dev.kobj, &ad_data->ch_data->attr_grp);
 	sysfs_remove_bin_file(&spi->dev.kobj, &raw_data_attr);
-	kfree(ads);
+	devm_kfree(&spi->dev, ads);
 	spi_set_drvdata(spi, NULL);
 
 	return 0;

@@ -16,11 +16,19 @@
 #ifndef __LINUX_PLATFORM_DATA_ADS79XX_H
 #define __LINUX_PLATFORM_DATA_ADS79XX_H
 
-#define ADS79XX_MAX_CHANNELS 16
+#include<linux/ktime.h>
+
+#define ADS79XX_RANGE_2_5V	0x0
+#define ADS79XX_RANGE_5V	0x1
+
+#define ADS79XX_MODE_MANUAL	0x1
+#define ADS79XX_MODE_AUTO	0x2
 
 struct ads79xx_platform_data {
-	u8 range[ADS79XX_MAX_CHANNELS];
-	u32 vref;
+	u8 range;
+	u8 mode;
+	u64 auto_update_ns;
+	u32 vref_mv;
 };
 
 #endif /* __LINUX_PLATFORM_DATA_ADS79XX_H */
