@@ -382,12 +382,14 @@ static ssize_t ads79xx_raw_data_read(struct file *file, struct kobject *kobj,
 	struct device *dev = container_of(kobj, struct device, kobj);
 	struct spi_device *spi = to_spi_device(dev);
 	struct ads79xx_device *ads = spi_get_drvdata(spi);
-	ssize_t size = sizeof(ads->raw_data);
+	size_t size = sizeof(ads->raw_data);
 
-	/* Must read all data. */
-	if (off || count < size)
+	if (off >= size || !count)
 		return 0;
-	memcpy(buf, ads->raw_data, size);
+	size -= off;
+	if (count < size)
+		size = count;
+	memcpy(buf + off, ads->raw_data, size);
 
 	return size;
 }
