@@ -13,8 +13,8 @@
  * GNU General Public License for more details.
  */
 
-#ifndef __LINUX_PLATFORM_DATA_ADS79XX_H
-#define __LINUX_PLATFORM_DATA_ADS79XX_H
+#ifndef __LINUX_HWMON_ADS79XX_H
+#define __LINUX_HWMON_DATA_ADS79XX_H
 
 #include<linux/ktime.h>
 
@@ -31,4 +31,4 @@ struct ads79xx_platform_data {
 	u32 vref_mv;
 };
 
-#endif /* __LINUX_PLATFORM_DATA_ADS79XX_H */
+#endif /* __LINUX_HWMON_ADS79XX_H */

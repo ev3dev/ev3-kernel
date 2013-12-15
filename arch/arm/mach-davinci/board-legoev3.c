@@ -20,7 +20,7 @@
 #include <linux/clk.h>
 #include <linux/console.h>
 #include <linux/gpio.h>
-#include <linux/platform_data/ads79xx.h>
+#include <linux/hwmon/ads79xx.h>
 #include <linux/platform_device.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/nand.h>

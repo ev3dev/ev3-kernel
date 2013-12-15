@@ -33,7 +33,7 @@
 #include <linux/mutex.h>
 #include <linux/delay.h>
 #include <linux/hrtimer.h>
-#include <linux/platform_data/ads79xx.h>
+#include <linux/hwmon/ads79xx.h>
 
 struct ads79x_ch {
 	struct attribute_group attr_grp;
