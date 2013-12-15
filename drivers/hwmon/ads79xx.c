@@ -588,7 +588,7 @@ static const struct spi_device_id ads79xx_ids[] = {
 };
 MODULE_DEVICE_TABLE(spi, ads79xx_ids);
 
-static int __init ads79xx_probe(struct spi_device *spi)
+static int __devinit ads79xx_probe(struct spi_device *spi)
 {
 	int chip_id = spi_get_device_id(spi)->driver_data;
 	int err, i;
@@ -706,7 +706,7 @@ err1:
 	return err;
 }
 
-static int __exit ads79xx_remove(struct spi_device *spi)
+static int __devexit ads79xx_remove(struct spi_device *spi)
 {
 	struct ads79xx_device *ads = spi_get_drvdata(spi);
 	struct ads79xx_data *ad_data = ads->ads79xx_info;
@@ -728,7 +728,7 @@ static struct spi_driver ads79xx_driver = {
 	},
 	.id_table = ads79xx_ids,
 	.probe = ads79xx_probe,
-	.remove = __exit_p(ads79xx_remove),
+	.remove = __devexit_p(ads79xx_remove),
 };
 module_spi_driver(ads79xx_driver);
 
