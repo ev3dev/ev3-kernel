@@ -21,6 +21,7 @@
 #include <linux/console.h>
 #include <linux/gpio.h>
 #include <linux/hwmon/ads79xx.h>
+#include <linux/power/legoev3_battery.h>
 #include <linux/platform_device.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/nand.h>
@@ -690,6 +691,15 @@ struct uio_pruss_pdata da8xx_pruss_uio_pdata = {
 
 #define DA850EVM_SATA_REFCLKPN_RATE	(100 * 1000 * 1000)
 
+/*
+ * EV3 power configuration:
+ */
+
+static const short legoev3_power_pins[] = {
+	EV3_SYS_5V_POWER, EV3_BATT_TYPE,
+	-1
+};
+
 static void legoev3_power_off(void)
 {
 	if (!gpio_request(EV3_SYS_5V_POWER_PIN, "EV3 system 5V power enable"))
@@ -699,6 +709,25 @@ static void legoev3_power_off(void)
 			EV3_SYS_5V_POWER_PIN);
 }
 
+static struct legoev3_battery_platform_data ev3_battery_data = {
+	.spi_dev_name	= "spi0.3",
+	.batt_type_gpio	= EV3_BATT_TYPE_PIN,
+	.adc_volt_ch	= 4,
+	.adc_curr_ch	= 3,
+};
+
+static struct platform_device ev3_device_battery = {
+	.name	= "legoev3-battery",
+	.id	= -1,
+	.dev	= {
+		.platform_data	= &ev3_battery_data,
+	},
+};
+
+/*
+ * EV3 init:
+ */
+
 static __init void legoev3_init(void)
 {
 	int ret;
@@ -706,8 +735,6 @@ static __init void legoev3_init(void)
 	struct davinci_soc_info *soc_info = &davinci_soc_info;
 
 	u8 rmii_en = soc_info->emac_pdata->rmii_en;
-
-	pm_power_off = legoev3_power_off;
 
 	/* Support for EV3 LCD */
 	ret = davinci_cfg_reg_list(legoev3_lcd_pins);
@@ -807,6 +834,24 @@ static __init void legoev3_init(void)
 		pr_warning("legoev3_init: A/D converter mux setup failed:"
 			" %d\n", ret);
 
+	ret = da8xx_register_spi(0, legoev3_spi0_board_info,
+				 ARRAY_SIZE(legoev3_spi0_board_info));
+	if (ret)
+		pr_warning("legoev3_init: spi 0 registration failed: %d\n",
+				ret);
+
+	/* Support for EV3 power */
+	ret = davinci_cfg_reg_list(legoev3_power_pins);
+	if (ret)
+		pr_warning("legoev3_init: power pin mux setup failed:"
+			" %d\n", ret);
+	pm_power_off = legoev3_power_off;
+
+	ret = platform_device_register(&ev3_device_battery);
+	if (ret)
+		pr_warning("legoev3_init: battery registration failed:"
+			" %d\n", ret);
+
 	/* Sound support */
 #if defined(CONFIG_DAVINCI_EHRPWM) || defined(CONFIG_DAVINCI_EHRPWM_MODULE)
 	/* eHRPWM0B is used to drive the EV3 speaker */
@@ -892,12 +937,6 @@ static __init void legoev3_init(void)
 	ret = da850_register_pm(&da850_pm_device);
 	if (ret)
 		pr_warning("legoev3_init: suspend registration failed: %d\n",
-				ret);
-
-	ret = da8xx_register_spi(0, legoev3_spi0_board_info,
-				 ARRAY_SIZE(legoev3_spi0_board_info));
-	if (ret)
-		pr_warning("legoev3_init: spi 0 registration failed: %d\n",
 				ret);
 
 	legoev3_usb_init();

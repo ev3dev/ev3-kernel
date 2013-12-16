@@ -14,9 +14,7 @@
  */
 
 #ifndef __LINUX_HWMON_ADS79XX_H
-#define __LINUX_HWMON_DATA_ADS79XX_H
-
-#include<linux/ktime.h>
+#define __LINUX_HWMON_ADS79XX_H
 
 #define ADS79XX_RANGE_2_5V	0x0
 #define ADS79XX_RANGE_5V	0x1
@@ -30,5 +28,9 @@ struct ads79xx_platform_data {
 	u64 auto_update_ns;
 	u32 vref_mv;
 };
+
+struct ads79xx_device;
+
+extern u32 ads79xx_get_data_for_ch(struct ads79xx_device *ads, u8 channel);
 
 #endif /* __LINUX_HWMON_ADS79XX_H */

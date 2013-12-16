@@ -110,18 +110,14 @@ static enum hrtimer_restart ads79xx_timer_callback(struct hrtimer *pTimer)
 	return restart;
 }
 
-static ssize_t ads79xx_show_input(struct device *dev,
-		struct device_attribute *da, char *buf)
+u32 ads79xx_get_data_for_ch(struct ads79xx_device *ads, u8 channel)
 {
-	struct spi_device *spi = to_spi_device(dev);
-	struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
+	struct ads79xx_data *ad_data = ads->ads79xx_info;
+	struct spi_device *spi = ads->spi;
 	int ret = -EINVAL;
 	int i;
-	u8 channel = attr->index;
 	u16 reg, val;
 	u32 converted_voltage;
-	struct ads79xx_device *ads = spi_get_drvdata(spi);
-	struct ads79xx_data *ad_data = ads->ads79xx_info;
 	u16 val_mask = (1 << ad_data->resolution) - 1;
 	bool range = ads->range;
 	u32 vref = ads->vref_mv;
@@ -174,14 +170,29 @@ static ssize_t ads79xx_show_input(struct device *dev,
 		converted_voltage = lsb_voltage * val / 1000;
 		ads->raw_data[channel] = converted_voltage;
 	}
-	ret = sprintf(buf, "%d\n", converted_voltage);
-
+	ret = converted_voltage;
 out:
 	mutex_unlock(&ads->lock);
 	return ret;
 }
+EXPORT_SYMBOL_GPL(ads79xx_get_data_for_ch);
 
-static void ads79xx_set_lsb_voltage(struct ads79xx_device *ads)
+static ssize_t ads79xx_show_input(struct device *dev,
+		struct device_attribute *da, char *buf)
+{
+	struct spi_device *spi = to_spi_device(dev);
+	struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
+	struct ads79xx_device *ads = spi_get_drvdata(spi);
+	int ret;
+
+	ret = ads79xx_get_data_for_ch(ads, attr->index);
+	if (ret < 0)
+		return ret;
+	ret = sprintf(buf, "%d\n", ret);
+	return ret;
+}
+
+void ads79xx_set_lsb_voltage(struct ads79xx_device *ads)
 {
 	struct ads79xx_data *ad_data = ads->ads79xx_info;
 
@@ -193,7 +204,7 @@ static void ads79xx_set_lsb_voltage(struct ads79xx_device *ads)
 		ads->lsb_voltage = 1000 * ads->vref_mv / (1 << ad_data->resolution);
 }
 
-static int ads79xx_set_mode_auto(struct ads79xx_device *ads)
+int ads79xx_set_mode_auto(struct ads79xx_device *ads)
 {
 	struct spi_device *spi = ads->spi;
 	u8 range = ads->range;
