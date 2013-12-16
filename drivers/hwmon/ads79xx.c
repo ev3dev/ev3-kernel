@@ -81,7 +81,7 @@ static void ads79xx_auto_mode_read_complete(void* context)
 		while (--i) {
 			channel = ads->auto_mode_rx_buf[i] >> 12;
 			val = ads->auto_mode_rx_buf[i] & val_mask;
-			ads->raw_data[channel] = ads->lsb_voltage * val / 1000;
+			ads->raw_data[channel] = val;
 		}
 	}
 	ads->auto_mode_read_busy = false;
@@ -117,7 +117,6 @@ u32 ads79xx_get_data_for_ch(struct ads79xx_device *ads, u8 channel)
 	int ret = -EINVAL;
 	int i;
 	u16 reg, val;
-	u32 converted_voltage;
 	u16 val_mask = (1 << ad_data->resolution) - 1;
 	bool range = ads->range;
 	u32 vref = ads->vref_mv;
@@ -131,7 +130,7 @@ u32 ads79xx_get_data_for_ch(struct ads79xx_device *ads, u8 channel)
 	mutex_lock(&ads->lock);
 
 	if (ads->mode == ADS79XX_MODE_AUTO)
-		converted_voltage = ads->raw_data[channel];
+		val = ads->raw_data[channel];
 	else {
 		/* Mode control for manual mode */
 		reg = (0x1 << 12) |	/* manual mode */
@@ -166,11 +165,9 @@ u32 ads79xx_get_data_for_ch(struct ads79xx_device *ads, u8 channel)
 		     "Channel=%d, val-chan=%d", channel, val >> 12);
 
 		val &= val_mask;
-
-		converted_voltage = lsb_voltage * val / 1000;
-		ads->raw_data[channel] = converted_voltage;
+		ads->raw_data[channel] = val;
 	}
-	ret = converted_voltage;
+	ret = val * ads->lsb_voltage / 1000;
 out:
 	mutex_unlock(&ads->lock);
 	return ret;
@@ -198,10 +195,12 @@ void ads79xx_set_lsb_voltage(struct ads79xx_device *ads)
 
 	if (ads->range)
 		/* 5V i/p range */
-		ads->lsb_voltage = 2000 * ads->vref_mv / (1 << ad_data->resolution);
+		ads->lsb_voltage = 2000 * ads->vref_mv /
+			((1 << ad_data->resolution) - 1);
 	else
 		 /* 2.5V i/p range */
-		ads->lsb_voltage = 1000 * ads->vref_mv / (1 << ad_data->resolution);
+		ads->lsb_voltage = 1000 * ads->vref_mv /
+			((1 << ad_data->resolution) - 1);
 }
 
 int ads79xx_set_mode_auto(struct ads79xx_device *ads)
@@ -562,7 +561,7 @@ static struct ads79xx_data ads79xx_data[] = {
 	},
 	[7]	= {
 		.ch_data = &ad79x_16ch_data,
-		.resolution = 10,
+		.resolution = 12, /* datasheet says 10-bit, but 12-bit data is returned */
 	},
 	[8]	= {
 		.ch_data = &ad79x_4ch_data,
