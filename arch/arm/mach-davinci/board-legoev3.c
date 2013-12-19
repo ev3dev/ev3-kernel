@@ -20,7 +20,7 @@
 #include <linux/clk.h>
 #include <linux/console.h>
 #include <linux/gpio.h>
-#include <linux/hwmon/ads79xx.h>
+#include <linux/legoev3/ads7957.h>
 #include <linux/power/legoev3_battery.h>
 #include <linux/platform_device.h>
 #include <linux/mtd/mtd.h>
@@ -605,13 +605,15 @@ static const short legoev3_adc_pins[] = {
 	-1
 };
 
-static struct ads79xx_platform_data legoev3_adc_platform_data = {
-	.range		= ADS79XX_RANGE_5V,
-	.mode		= ADS79XX_MODE_AUTO,
-	.auto_update_ns	= 100000000, /* 100 msec */
+static struct ads7957_platform_data legoev3_adc_platform_data = {
+	.in_pin1_ch	= { 6, 8, 10, 12 },
+	.in_pin6_ch	= { 5, 7, 9, 11 },
+	.out_pin5_ch	= { 1, 0, 13, 14 },
+	.batt_volt_ch	= 4,
+	.batt_curr_ch	= 3,
 };
 
-static struct davinci_spi_config legoev3_spi_analog_cfg = {
+static struct davinci_spi_config legoev3_spi_adc_cfg = {
 	.io_type	= SPI_IO_TYPE_POLL,
 	.c2tdelay	= 10,
 	.t2cdelay	= 10,
@@ -634,9 +636,9 @@ static struct spi_board_info legoev3_spi0_board_info[] = {
 		.chip_select		= 2,
 	},
 	[3] = {
-		.modalias		= "ads7957",
+		.modalias		= "legoev3-ads7957",
 		.platform_data		= &legoev3_adc_platform_data,
-		.controller_data	= &legoev3_spi_analog_cfg,
+		.controller_data	= &legoev3_spi_adc_cfg,
 		.mode			= SPI_MODE_0,
 		.max_speed_hz		= 20000000,
 		.bus_num		= 0,

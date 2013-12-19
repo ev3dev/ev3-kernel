@@ -12,6 +12,8 @@
 #ifndef __ASM_ARCH_DAVINCI_LEGOEV3_H
 #define __ASM_ARCH_DAVINCI_LEGOEV3_H
 
+#include <linux/gpio.h>
+
 #include <mach/mux.h>
 
 extern void __iomem *da8xx_psc1_base; 		// LEGO BT slow clock
@@ -53,6 +55,22 @@ extern void __iomem *da8xx_ecap2_base; 		// LEGO BT slow clock
 #define PINMUX17		0x44
 #define PINMUX18		0x48
 #define PINMUX19		0x4c
+
+enum legoev3_input_port {
+	LEGOEV3_PORT_IN1,
+	LEGOEV3_PORT_IN2,
+	LEGOEV3_PORT_IN3,
+	LEGOEV3_PORT_IN4,
+	LEGOEV3_NUM_PORT_IN,
+};
+
+enum legoev3_output_port {
+	LEGOEV3_PORT_OUT1,
+	LEGOEV3_PORT_OUT2,
+	LEGOEV3_PORT_OUT3,
+	LEGOEV3_PORT_OUT4,
+	LEGOEV3_NUM_PORT_OUT,
+};
 
 #define PIN(ev3_name, da850_name) \
 EV3_##ev3_name		= DA850_##da850_name,
