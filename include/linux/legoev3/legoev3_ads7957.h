@@ -18,7 +18,7 @@
 
 #include <mach/legoev3.h>
 
-struct ads7957_platform_data {
+struct legoev3_ads7957_platform_data {
 	u8 in_pin1_ch[LEGOEV3_NUM_PORT_IN];
 	u8 in_pin6_ch[LEGOEV3_NUM_PORT_IN];
 	u8 out_pin5_ch[LEGOEV3_NUM_PORT_OUT];
@@ -26,8 +26,15 @@ struct ads7957_platform_data {
 	u8 batt_curr_ch;
 };
 
-struct ads7957_device;
+struct legoev3_ads7957_device;
 
-extern u16 ads7957_get_data_for_ch(struct ads7957_device *ads, u8 channel);
+extern u16 legoev3_ads7957_get_data_for_ch(struct legoev3_ads7957_device *ads,
+					   u8 channel);
+extern u16 legoev3_ads7957_get_value_for_in_pin1(struct legoev3_ads7957_device *ads,
+						 enum legoev3_input_port port);
+extern u16 legoev3_ads7957_get_value_for_in_pin6(struct legoev3_ads7957_device *ads,
+						 enum legoev3_input_port port);
+extern u16 legoev3_ads7957_get_value_for_out_pin5(struct legoev3_ads7957_device *ads,
+						  enum legoev3_output_port port);
 
 #endif /* __LINUX_LEGOEV3_ADS79XX_H */

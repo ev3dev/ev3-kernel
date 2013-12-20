@@ -20,7 +20,7 @@
 #include <linux/clk.h>
 #include <linux/console.h>
 #include <linux/gpio.h>
-#include <linux/legoev3/ads7957.h>
+#include <linux/legoev3/legoev3_ads7957.h>
 #include <linux/power/legoev3_battery.h>
 #include <linux/platform_device.h>
 #include <linux/mtd/mtd.h>
