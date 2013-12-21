@@ -595,7 +595,7 @@ static struct edma_rsv_info *da850_edma_rsv[2] = {
 /* EV3 analog/digital converter configuration:
  * The A/D converter is a TI ADS7957. It monitors analog inputs from
  * each of the 4 input ports, motor voltage and current for each of the
- * 4 ouput ports and the battery voltage. The A/D chip is connected to
+ * 4 ouput ports and the voltage. The A/D chip is connected to
  * the processor via SPI0. We are using the linux hwmon class to read 
  * the raw voltages in userspace.
  */
@@ -605,7 +605,7 @@ static const short legoev3_adc_pins[] = {
 	-1
 };
 
-static struct ads7957_platform_data legoev3_adc_platform_data = {
+static struct legoev3_ads7957_platform_data legoev3_adc_platform_data = {
 	.in_pin1_ch	= { 6, 8, 10, 12 },
 	.in_pin6_ch	= { 5, 7, 9, 11 },
 	.out_pin5_ch	= { 1, 0, 13, 14 },
@@ -712,10 +712,8 @@ static void legoev3_power_off(void)
 }
 
 static struct legoev3_battery_platform_data ev3_battery_data = {
-	.spi_dev_name	= "spi0.3",
-	.batt_type_gpio	= EV3_BATT_TYPE_PIN,
-	.adc_volt_ch	= 4,
-	.adc_curr_ch	= 3,
+	.analog_dev_name	= "legoev3-ads7957",
+	.batt_type_gpio		= EV3_BATT_TYPE_PIN,
 };
 
 static struct platform_device ev3_device_battery = {

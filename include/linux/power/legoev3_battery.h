@@ -13,10 +13,8 @@
 #define __LINUX_POWER_LEGOEV3_BATTERY_H
 
 struct legoev3_battery_platform_data {
-	const char *spi_dev_name;
+	const char *analog_dev_name;
 	unsigned int batt_type_gpio;
-	unsigned int adc_volt_ch;
-	unsigned int adc_curr_ch;
 };
 
 #endif /* __LINUX_POWER_LEGOEV3_BATTERY_H */
