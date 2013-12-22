@@ -47,8 +47,9 @@
 
 #include <video/st7586fb.h>
 
-/* LCD configuration:
- *
+/*
+ * LCD configuration:
+ * ==================
  * The LCD is connected via SPI1 and uses the st7586fb frame buffer driver.
  */
 
@@ -86,8 +87,9 @@ static const short legoev3_led_pins[] = {
 	-1
 };
 
-/* LED configuration:
- *
+/*
+ * LED configuration:
+ * ==================
  * The LEDs are connected via GPIOs and use the leds-gpio driver.
  * The default triggers are set so that during boot, the left LED will flash
  * amber to indicate CPU activity and the right LED will flash amber to
@@ -134,8 +136,9 @@ static struct platform_device ev3_device_gpio_leds = {
 };
 #endif
 
-/* EV3 button configuration:
- *
+/*
+ * EV3 button configuration:
+ * =========================
  * The buttons are connected via GPIOs and use the gpio-keys driver.
  * The buttons are mapped to the UP, DOWN, LEFT, RIGHT, ENTER and ESC keys.
  */
@@ -181,7 +184,12 @@ static const int legoev3_button_gpio[] = {
 };
 #endif
 
-/* what is pm? */
+/*
+ * Power management configuration:
+ * ===============================
+ * Not sure about this, but the comments in arch/arm/mach-davinci/include/mach/pm.h
+ * imply that a value of 128 indicates that we have an external oscillator.
+ */
 
 static struct davinci_pm_config da850_pm_pdata = {
 	.sleepcount = 128,
@@ -195,31 +203,9 @@ static struct platform_device da850_pm_device = {
 	.id	= -1,
 };
 
-#if defined(CONFIG_MMC_DAVINCI) || defined(CONFIG_MMC_DAVINCI_MODULE)
-#define HAS_MMC 1
-#else
-#define HAS_MMC 0
-#endif
-
-static struct i2c_board_info __initdata da850_evm_i2c_devices[] = {
-	{
-		I2C_BOARD_INFO("24FC128", 0x50),
-	},
-	{
-		I2C_BOARD_INFO("PIC_CodedDataTo", 0x54),
-	},
-	{
-		I2C_BOARD_INFO("PIC_ReadStatus", 0x55),
-	},
-	{
-		I2C_BOARD_INFO("PIC_RawDataTo", 0x56),
-	},
-	{
-		I2C_BOARD_INFO("PIC_ReadDataFrom", 0x57),
-	},
-};
-
-/* EV3 USB configuration:
+/*
+ * EV3 USB configuration:
+ * ======================
  */
 
 static const short legoev3_usb1_pins[] = {
@@ -293,6 +279,28 @@ static __init void legoev3_usb_init(void)
 	da8xx_board_usb_init(legoev3_usb1_pins, &legoev3_usb1_pdata);
 }
 
+/*
+ * What is this for? Bluetooth?
+ */
+
+static struct i2c_board_info __initdata da850_evm_i2c_devices[] = {
+	{
+		I2C_BOARD_INFO("24FC128", 0x50),
+	},
+	{
+		I2C_BOARD_INFO("PIC_CodedDataTo", 0x54),
+	},
+	{
+		I2C_BOARD_INFO("PIC_ReadStatus", 0x55),
+	},
+	{
+		I2C_BOARD_INFO("PIC_RawDataTo", 0x56),
+	},
+	{
+		I2C_BOARD_INFO("PIC_ReadDataFrom", 0x57),
+	},
+};
+
 #ifdef CONFIG_MACH_DAVINCI_LEGOEV3
 #warning "Fixup the da850_evm_bt_slow_clock_init "
 /* Bluetooth Slow clock init using ecap 2 */
@@ -348,31 +356,37 @@ static struct davinci_uart_config da850_evm_uart_config __initdata = {
 	.enabled_uarts = 0x7,
 };
 
-static int da850_evm_mmc_get_ro(int index)
+/*
+ * SD card reader configuration:
+ * =============================
+ * LEGO did not hook up the write protect pin? And does not use card detect?
+ */
+
+static const short legoev3_sd_pins[] __initconst = {
+	EV3_SD_DAT_0, EV3_SD_DAT_1, EV3_SD_DAT_2,
+	EV3_SD_DAT_3, EV3_SD_CLK, EV3_SD_CMD,
+	-1
+};
+/*
+static int legoev3_mmc_get_ro(int index)
 {
-//	return gpio_get_value(DA850_MMCSD_WP_PIN);
-//        return( 0 );
+	return gpio_get_value(EV3_SD_WP_PIN);
 }
 
-static int da850_evm_mmc_get_cd(int index)
+static int legoev3_mmc_get_cd(int index)
 {
-//	return !gpio_get_value(DA850_MMCSD_CD_PIN);
-//          return( 1 );
+	return !gpio_get_value(EV3_SD_CD_PIN);
 }
-static struct davinci_mmc_config da850_mmc_config = {
-//	.get_ro		= da850_evm_mmc_get_ro,
-//	.get_cd		= da850_evm_mmc_get_cd,
+*/
+static struct davinci_mmc_config legoev3_sd_config = {
+/*
+	.get_ro		= legoev3_mmc_get_ro,
+	.get_cd		= legoev3_mmc_get_cd,
+*/
 	.wires		= 4,
 	.max_freq	= 50000000,
 	.caps		= MMC_CAP_MMC_HIGHSPEED | MMC_CAP_SD_HIGHSPEED,
 	.version	= MMC_CTLR_VERSION_2,
-};
-
-static const short da850_evm_mmcsd0_pins[] __initconst = {
-	DA850_MMCSD0_DAT_0, DA850_MMCSD0_DAT_1, DA850_MMCSD0_DAT_2,
-	DA850_MMCSD0_DAT_3, DA850_MMCSD0_CLK, DA850_MMCSD0_CMD,
-	DA850_GPIO4_0, DA850_GPIO4_1,
-	-1
 };
 
 #ifdef CONFIG_CPU_FREQ
@@ -592,7 +606,9 @@ static struct edma_rsv_info *da850_edma_rsv[2] = {
 	&da850_edma_cc1_rsv,
 };
 
-/* EV3 analog/digital converter configuration:
+/*
+ * EV3 analog/digital converter configuration:
+ * ===========================================
  * The A/D converter is a TI ADS7957. It monitors analog inputs from
  * each of the 4 input ports, motor voltage and current for each of the
  * 4 ouput ports and the voltage. The A/D chip is connected to
@@ -622,7 +638,8 @@ static struct davinci_spi_config legoev3_spi_adc_cfg = {
 };
 
 static struct spi_board_info legoev3_spi0_board_info[] = {
-	/* We have to have 4 devices or the spi driver will fail to load because
+	/*
+	 * We have to have 4 devices or the spi driver will fail to load because
 	 * chip_select >= ARRAY_SIZE(legoev3_spi0_board_info). 0 - 2 are not
 	 * actually used.
 	 */
@@ -656,7 +673,6 @@ static const short legoev3_sound_pins[] = {
 	EV3_SND_PWM, EV3_SND_ENA,
 	-1
 };
-
 
 #if defined(CONFIG_SND_LEGOEV3) || defined(CONFIG_SND_LEGOEV3_MODULE)
 #include <sound/legoev3.h>
@@ -695,6 +711,10 @@ struct uio_pruss_pdata da8xx_pruss_uio_pdata = {
 
 /*
  * EV3 power configuration:
+ * ========================
+ * System power is switched off via gpio.
+ * The battery voltage and current are monitored and there is a switch to
+ * indicate if a rechargable battery pack is being used.
  */
 
 static const short legoev3_power_pins[] = {
@@ -890,26 +910,25 @@ static __init void legoev3_init(void)
 	gpio_direction_output(DA850_BT_EN, 0);
 #endif
 
-	if (HAS_MMC) {
-		ret = davinci_cfg_reg_list(da850_evm_mmcsd0_pins);
-		if (ret)
-			pr_warning("legoev3_init: mmcsd0 mux setup failed:"
-					" %d\n", ret);
+#if defined(CONFIG_MMC_DAVINCI) || defined(CONFIG_MMC_DAVINCI_MODULE)
+	ret = davinci_cfg_reg_list(legoev3_sd_pins);
+	if (ret)
+		pr_warning("legoev3_init: mmcsd0 mux setup failed:"
+				" %d\n", ret);
 
-		ret = da8xx_register_mmcsd0(&da850_mmc_config);
-		if (ret)
-			pr_warning("legoev3_init: mmcsd0 registration failed:"
+	ret = da8xx_register_mmcsd0(&legoev3_sd_config);
+	if (ret)
+		pr_warning("legoev3_init: mmcsd0 registration failed:"
 					" %d\n", ret);
-
 #ifdef CONFIG_MACH_DAVINCI_LEGOEV3
 #warning "Sort out this bluetooth init code! Needed for EV3???? See WL1271"
 #else
-		ret = da850_wl12xx_init();
-		if (ret)
-			pr_warning("legoev3_init: wl12xx initialization"
-				   " failed: %d\n", ret);
+	ret = da850_wl12xx_init();
+	if (ret)
+		pr_warning("legoev3_init: wl12xx initialization"
+			   " failed: %d\n", ret);
 #endif
-	}
+#endif
 
 	davinci_serial_init(&da850_evm_uart_config);
 

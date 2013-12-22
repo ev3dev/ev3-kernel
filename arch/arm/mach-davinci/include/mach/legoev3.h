@@ -118,6 +118,14 @@ enum legoev3_pin_defs {
 	/* USB1 VBUS pins */
 	GPIO_PIN(USB1_DRV, 1, 4)
 	GPIO_PIN(USB1_OVC, 6, 3)
+
+	/* SD card reader pins */
+	PIN(SD_DAT_0, MMCSD0_DAT_0)
+	PIN(SD_DAT_1, MMCSD0_DAT_1)
+	PIN(SD_DAT_2, MMCSD0_DAT_2)
+	PIN(SD_DAT_3, MMCSD0_DAT_3)
+	PIN(SD_CLK, MMCSD0_CLK)
+	PIN(SD_CMD, MMCSD0_CMD)
 };
 
 int da8xx_register_pru_can(void);

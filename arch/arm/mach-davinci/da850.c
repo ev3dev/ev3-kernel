@@ -837,13 +837,6 @@ static const struct mux_config da850_pins[] = {
 	MUX_CFG(DA850, SPI1_ENA,	5,	8,	15,	1,	false)
 	MUX_CFG(DA850, SPI1_SOMI,	5,	16,	15,	1,	false)
 	MUX_CFG(DA850, SPI1_SIMO,	5,	20,	15,	1,	false)
-	/* MMC/SD1 function */
-	MUX_CFG(DA850, MMCSD1_DAT_0,	0,	0,	0,	0,	false)
-	MUX_CFG(DA850, MMCSD1_DAT_1,	0,	0,	0,	0,	false)
-	MUX_CFG(DA850, MMCSD1_DAT_2,	0,	0,	0,	0,	false)
-	MUX_CFG(DA850, MMCSD1_DAT_3,	0,	0,	0,	0,	false)
-	MUX_CFG(DA850, MMCSD1_CLK,	0,	0,	0,	0,	false)
-	MUX_CFG(DA850, MMCSD1_CMD,	0,	0,	0,	0,	false)
 	/* McBSP0 function */
 	MUX_CFG(DA850, MCBSP0_CLKR,	2,	4,	15,	2,	false)
 	MUX_CFG(DA850, MCBSP0_CLKX,	2,	8,	15,	2,	false)
