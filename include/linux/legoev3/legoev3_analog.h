@@ -16,39 +16,30 @@
 #ifndef __LINUX_LEGOEV3_ANALOG_H
 #define __LINUX_LEGOEV3_ANALOG_H
 
+#include <linux/spi/spi.h>
 #include <mach/legoev3.h>
 
 #define to_legoev3_analog_device(x) container_of((x), struct legoev3_analog_device, dev)
 
+struct legoev3_analog_platform_data {
+	u8 in_pin1_ch[LEGOEV3_NUM_PORT_IN];
+	u8 in_pin6_ch[LEGOEV3_NUM_PORT_IN];
+	u8 out_pin5_ch[LEGOEV3_NUM_PORT_OUT];
+	u8 batt_volt_ch;
+	u8 batt_curr_ch;
+};
+
 struct legoev3_analog_device;
 
-struct legoev3_analog_ops  {
-	u16 (*get_in_pin1_value)(struct legoev3_analog_device *alg,
-				 enum legoev3_input_port port);
-	u16 (*get_in_pin6_value)(struct legoev3_analog_device *alg,
-				 enum legoev3_input_port port);
-	u16 (*get_out_pin5_value)(struct legoev3_analog_device *alg,
-				  enum legoev3_output_port port);
-	u16 (*get_batt_volt_value)(struct legoev3_analog_device *alg);
-	u16 (*get_batt_curr_value)(struct legoev3_analog_device *alg);
-	int (*set_nxt_color_read)(struct legoev3_analog_device *alg,
-				  enum legoev3_input_port port, bool enable);
-	bool (*get_nxt_color_read_busy)(struct legoev3_analog_device *alg,
+extern u16 legoev3_analog_in_pin1_value(struct legoev3_analog_device *alg,
 					enum legoev3_input_port port);
-};
+extern u16 legoev3_analog_in_pin6_value(struct legoev3_analog_device *alg,
+					enum legoev3_input_port port);
+extern u16 legoev3_analog_out_pin5_value(struct legoev3_analog_device *alg,
+					 enum legoev3_output_port port);
+extern u16 legoev3_analog_batt_volt_value(struct legoev3_analog_device *alg);
+extern u16 legoev3_analog_batt_curr_value(struct legoev3_analog_device *alg);
 
-struct legoev3_analog_device {
-	const char *name;
-	struct legoev3_analog_ops *ops;
-
-	/* private */
-	struct device *dev;
-};
-
-extern int legoev3_analog_device_register(struct device *parent,
-					  struct legoev3_analog_device *alg);
-extern void legoev3_analog_device_unregister(struct legoev3_analog_device *alg);
-
-extern struct class *legoev3_analog_class;
+extern struct spi_driver legoev3_analog_driver;
 
 #endif /* __LINUX_LEGOEV3_ANALOG_H */

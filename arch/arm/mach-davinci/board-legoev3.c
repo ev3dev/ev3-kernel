@@ -20,7 +20,7 @@
 #include <linux/clk.h>
 #include <linux/console.h>
 #include <linux/gpio.h>
-#include <linux/legoev3/legoev3_ads7957.h>
+#include <linux/legoev3/legoev3_analog.h>
 #include <linux/power/legoev3_battery.h>
 #include <linux/platform_device.h>
 #include <linux/mtd/mtd.h>
@@ -605,7 +605,7 @@ static const short legoev3_adc_pins[] = {
 	-1
 };
 
-static struct legoev3_ads7957_platform_data legoev3_adc_platform_data = {
+static struct legoev3_analog_platform_data legoev3_adc_platform_data = {
 	.in_pin1_ch	= { 6, 8, 10, 12 },
 	.in_pin6_ch	= { 5, 7, 9, 11 },
 	.out_pin5_ch	= { 1, 0, 13, 14 },
@@ -636,7 +636,7 @@ static struct spi_board_info legoev3_spi0_board_info[] = {
 		.chip_select		= 2,
 	},
 	[3] = {
-		.modalias		= "legoev3-ads7957",
+		.modalias		= "legoev3-analog",
 		.platform_data		= &legoev3_adc_platform_data,
 		.controller_data	= &legoev3_spi_adc_cfg,
 		.mode			= SPI_MODE_0,
@@ -712,7 +712,7 @@ static void legoev3_power_off(void)
 }
 
 static struct legoev3_battery_platform_data ev3_battery_data = {
-	.analog_dev_name	= "legoev3-ads7957",
+	.spi_analog_dev_name	= "spi0.3",
 	.batt_type_gpio		= EV3_BATT_TYPE_PIN,
 };
 
