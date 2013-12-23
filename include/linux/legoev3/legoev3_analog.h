@@ -31,6 +31,7 @@ struct legoev3_analog_platform_data {
 
 struct legoev3_analog_device;
 
+extern struct legoev3_analog_device *request_legoev3_analog(void);
 extern u16 legoev3_analog_in_pin1_value(struct legoev3_analog_device *alg,
 					enum legoev3_input_port port);
 extern u16 legoev3_analog_in_pin6_value(struct legoev3_analog_device *alg,

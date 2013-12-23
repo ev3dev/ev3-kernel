@@ -21,6 +21,7 @@
 #include <linux/console.h>
 #include <linux/gpio.h>
 #include <linux/legoev3/legoev3_analog.h>
+#include <linux/legoev3/legoev3_ports.h>
 #include <linux/power/legoev3_battery.h>
 #include <linux/platform_device.h>
 #include <linux/mtd/mtd.h>
@@ -661,7 +662,115 @@ static struct spi_board_info legoev3_spi0_board_info[] = {
 	},
 };
 
-/* EV3 sound configuration:
+/*
+ * EV3 input and output port configuration:
+ * ========================================
+ * These are the input and output ports on the EV3 brick that connect to sensors
+ * and motors.
+ *
+ * Note: The i2c clock and uart functions of the input port share the same
+ * physical pin on the chip, so instead of including them in the board pin mux,
+ * there are functions to set the pin mux that are passed to input port driver.
+ */
+
+static const short legoev3_in_out_pins[] __initconst = {
+	EV3_IN1_PIN1, EV3_IN1_PIN2, EV3_IN1_PIN5, EV3_IN1_PIN6, EV3_IN1_BUF_ENA,
+	EV3_IN2_PIN1, EV3_IN2_PIN2, EV3_IN2_PIN5, EV3_IN2_PIN6, EV3_IN2_BUF_ENA,
+	EV3_IN3_PIN1, EV3_IN3_PIN2, EV3_IN3_PIN5, EV3_IN3_PIN6, EV3_IN3_BUF_ENA,
+	EV3_IN4_PIN1, EV3_IN4_PIN2, EV3_IN4_PIN5, EV3_IN4_PIN6, EV3_IN4_BUF_ENA,
+	EV3_OUT1_PIN1, EV3_OUT1_PIN2, EV3_OUT1_PIN5, EV3_OUT1_PIN6,
+	EV3_OUT2_PIN1, EV3_OUT2_PIN2, EV3_OUT2_PIN5, EV3_OUT2_PIN6,
+	EV3_OUT3_PIN1, EV3_OUT3_PIN2, EV3_OUT3_PIN5, EV3_OUT3_PIN6,
+	EV3_OUT4_PIN1, EV3_OUT4_PIN2, EV3_OUT4_PIN5, EV3_OUT4_PIN6,
+	EV3_OUT1_PWM, EV3_OUT2_PWM, EV3_OUT3_PWM, EV3_OUT4_PWM,
+	-1
+};
+
+static struct legoev3_input_port_device legoev3_input_ports[] = {
+	{
+		.id			= LEGOEV3_PORT_IN1,
+		.pin1_gpio		= EV3_IN1_PIN1_PIN,
+		.pin2_gpio		= EV3_IN1_PIN2_PIN,
+		.pin5_gpio		= EV3_IN1_PIN5_PIN,
+		.pin6_gpio		= EV3_IN1_PIN6_PIN,
+		.buf_ena_gpio		= EV3_IN1_BUF_ENA_PIN,
+		.i2c_clk_gpio		= EV3_IN1_I2C_CLK_PIN,
+		.i2c_pin_mux		= EV3_IN1_I2C_CLK,
+		.uart_pin_mux		= EV3_IN1_UART,
+	},
+	{
+		.id			= LEGOEV3_PORT_IN2,
+		.pin1_gpio		= EV3_IN2_PIN1_PIN,
+		.pin2_gpio		= EV3_IN2_PIN2_PIN,
+		.pin5_gpio		= EV3_IN2_PIN5_PIN,
+		.pin6_gpio		= EV3_IN2_PIN6_PIN,
+		.buf_ena_gpio		= EV3_IN2_BUF_ENA_PIN,
+		.i2c_clk_gpio		= EV3_IN2_I2C_CLK_PIN,
+		.i2c_pin_mux		= EV3_IN2_I2C_CLK,
+		.uart_pin_mux		= EV3_IN2_UART,
+	},
+	{
+		.id			= LEGOEV3_PORT_IN3,
+		.pin1_gpio		= EV3_IN3_PIN1_PIN,
+		.pin2_gpio		= EV3_IN3_PIN2_PIN,
+		.pin5_gpio		= EV3_IN3_PIN5_PIN,
+		.pin6_gpio		= EV3_IN3_PIN6_PIN,
+		.buf_ena_gpio		= EV3_IN3_BUF_ENA_PIN,
+		.i2c_clk_gpio		= EV3_IN3_I2C_CLK_PIN,
+		.i2c_pin_mux		= EV3_IN3_I2C_CLK,
+		.uart_pin_mux		= EV3_IN3_UART,
+	},
+	{
+		.id			= LEGOEV3_PORT_IN4,
+		.pin1_gpio		= EV3_IN4_PIN1_PIN,
+		.pin2_gpio		= EV3_IN4_PIN2_PIN,
+		.pin5_gpio		= EV3_IN4_PIN5_PIN,
+		.pin6_gpio		= EV3_IN4_PIN6_PIN,
+		.buf_ena_gpio		= EV3_IN4_BUF_ENA_PIN,
+		.i2c_clk_gpio		= EV3_IN4_I2C_CLK_PIN,
+		.i2c_pin_mux		= EV3_IN4_I2C_CLK,
+		.uart_pin_mux		= EV3_IN4_UART,
+	},
+};
+
+static struct legoev3_output_port_device legoev3_output_port[] = {
+	{
+		.id			= LEGOEV3_PORT_OUT1,
+		.pin1_gpio		= EV3_OUT1_PIN1_PIN,
+		.pin2_gpio		= EV3_OUT1_PIN2_PIN,
+		.pin5_gpio		= EV3_OUT1_PIN5_PIN,
+		.pin6_gpio		= EV3_OUT1_PIN6_PIN,
+		.pwm_dev_name		= "ehrpwm1.1",
+	},
+	{
+		.id			= LEGOEV3_PORT_OUT2,
+		.pin1_gpio		= EV3_OUT2_PIN1_PIN,
+		.pin2_gpio		= EV3_OUT2_PIN2_PIN,
+		.pin5_gpio		= EV3_OUT2_PIN5_PIN,
+		.pin6_gpio		= EV3_OUT2_PIN6_PIN,
+		.pwm_dev_name		= "ehrpwm1.0",
+	},
+	{
+		.id			= LEGOEV3_PORT_OUT3,
+		.pin1_gpio		= EV3_OUT3_PIN1_PIN,
+		.pin2_gpio		= EV3_OUT3_PIN2_PIN,
+		.pin5_gpio		= EV3_OUT3_PIN5_PIN,
+		.pin6_gpio		= EV3_OUT3_PIN6_PIN,
+		.pwm_dev_name		= "pwm?",
+	},
+	{
+		.id			= LEGOEV3_PORT_OUT4,
+		.pin1_gpio		= EV3_OUT4_PIN1_PIN,
+		.pin2_gpio		= EV3_OUT4_PIN2_PIN,
+		.pin5_gpio		= EV3_OUT4_PIN5_PIN,
+		.pin6_gpio		= EV3_OUT4_PIN6_PIN,
+		.pwm_dev_name		= "pwm?",
+	},
+};
+
+/*
+ * EV3 sound configuration:
+ * ========================
  * The speaker is driven by eHRPWM0B and the amplifier is switched on/off
  * using the EV3_SND_ENA_PIN. The snd-legoev3 driver can be used to play sounds
  * and also provides a standard sound event input for system beep/bell.
@@ -876,7 +985,20 @@ static __init void legoev3_init(void)
 			" %d\n", ret);
 #endif
 
-	/* Sound support */
+	/* Input/Output port support */
+	ret = davinci_cfg_reg_list(legoev3_in_out_pins);
+	if (ret)
+		pr_warning("legoev3_init: "
+			"input port pin mux failed: %d\n", ret);
+#if defined(CONFIG_LEGOEV3_DEV_PORTS) || defined(CONFIG_LEGOEV3_DEV_PORTS_MODULE)
+	ret = legoev3_register_input_ports(legoev3_input_ports,
+					   ARRAY_SIZE(legoev3_input_ports));
+	if (ret)
+		pr_warning("legoev3_init: "
+			"input port registration failed: %d\n", ret);
+#endif
+
+	/* eHRPWM support */
 #if defined(CONFIG_DAVINCI_EHRPWM) || defined(CONFIG_DAVINCI_EHRPWM_MODULE)
 #if defined(CONFIG_SND_LEGOEV3) || defined(CONFIG_SND_LEGOEV3_MODULE)
 	/* eHRPWM0B is used to drive the EV3 speaker */
