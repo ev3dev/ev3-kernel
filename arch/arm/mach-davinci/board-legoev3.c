@@ -53,7 +53,7 @@
  * The LCD is connected via SPI1 and uses the st7586fb frame buffer driver.
  */
 
-static const short legoev3_lcd_pins[] = {
+static const short legoev3_lcd_pins[] __initconst = {
 	EV3_LCD_DATA_IN, EV3_LCD_RESET, EV3_LCD_A0, EV3_LCD_CS
 	-1
 };
@@ -82,7 +82,7 @@ static struct spi_board_info legoev3_spi1_board_info[] = {
 	},
 };
 
-static const short legoev3_led_pins[] = {
+static const short legoev3_led_pins[] __initconst = {
 	EV3_LED_0, EV3_LED_1, EV3_LED_2, EV3_LED_3,
 	-1
 };
@@ -143,7 +143,7 @@ static struct platform_device ev3_device_gpio_leds = {
  * The buttons are mapped to the UP, DOWN, LEFT, RIGHT, ENTER and ESC keys.
  */
 
-static const short legoev3_button_pins[] = {
+static const short legoev3_button_pins[] __initconst = {
 	EV3_BUTTON_0, EV3_BUTTON_1, EV3_BUTTON_2,
 	EV3_BUTTON_3, EV3_BUTTON_4, EV3_BUTTON_5,
 	-1
@@ -208,7 +208,7 @@ static struct platform_device da850_pm_device = {
  * ======================
  */
 
-static const short legoev3_usb1_pins[] = {
+static const short legoev3_usb1_pins[] __initconst = {
 	EV3_USB1_DRV, EV3_USB1_OVC,
 	-1
 };
@@ -283,7 +283,7 @@ static __init void legoev3_usb_init(void)
  * What is this for? Bluetooth?
  */
 
-static struct i2c_board_info __initdata da850_evm_i2c_devices[] = {
+static struct i2c_board_info da850_evm_i2c_devices[] = {
 	{
 		I2C_BOARD_INFO("24FC128", 0x50),
 	},
@@ -329,7 +329,6 @@ static __init void da850_evm_bt_slow_clock_init(void)						// LEGO BT
 }
 #endif
 
-#warning "Are these definitions just the dumb way of doing this?"
 #define  DA850_ECAP2_OUT		        GPIO_TO_PIN(0, 7)      //LEGO BT
 #define  DA850_ECAP2_OUT_ENABLE		GPIO_TO_PIN(0, 12)      //LEGO BT
 
@@ -338,7 +337,6 @@ static __init void da850_evm_bt_slow_clock_init(void)						// LEGO BT
 // 	-1
 // };
 
-#warning "Are these definitions just the dumb way of doing this?"
 #define  DA850_BT_SHUT_DOWN		GPIO_TO_PIN(4, 1)      //LEGO BT
 #define  DA850_BT_SHUT_DOWN_EP2		GPIO_TO_PIN(4, 9)      //LEGO BT
 
@@ -352,7 +350,7 @@ static struct davinci_i2c_platform_data lego_i2c_0_pdata = {
 	.bus_delay	= 0	/* usec */,
 };
 
-static struct davinci_uart_config da850_evm_uart_config __initdata = {
+static struct davinci_uart_config da850_evm_uart_config = {
 	.enabled_uarts = 0x7,
 };
 
@@ -616,7 +614,7 @@ static struct edma_rsv_info *da850_edma_rsv[2] = {
  * the raw voltages in userspace.
  */
 
-static const short legoev3_adc_pins[] = {
+static const short legoev3_adc_pins[] __initconst = {
 	EV3_ADC_DATA_IN, EV3_ADC_DATA_OUT, EV3_ADC_CS, EV3_ADC_CLK, EV3_ADC_ENA,
 	-1
 };
@@ -669,7 +667,7 @@ static struct spi_board_info legoev3_spi0_board_info[] = {
  * and also provides a standard sound event input for system beep/bell.
  */
 
-static const short legoev3_sound_pins[] = {
+static const short legoev3_sound_pins[] __initconst = {
 	EV3_SND_PWM, EV3_SND_ENA,
 	-1
 };
@@ -717,7 +715,7 @@ struct uio_pruss_pdata da8xx_pruss_uio_pdata = {
  * indicate if a rechargable battery pack is being used.
  */
 
-static const short legoev3_power_pins[] = {
+static const short legoev3_power_pins[] __initconst = {
 	EV3_SYS_5V_POWER, EV3_BATT_TYPE,
 	-1
 };
@@ -736,7 +734,7 @@ static struct legoev3_battery_platform_data ev3_battery_data = {
 	.batt_type_gpio		= EV3_BATT_TYPE_PIN,
 };
 
-static struct platform_device ev3_device_battery = {
+static struct platform_device legoev3_battery_device = {
 	.name	= "legoev3-battery",
 	.id	= -1,
 	.dev	= {
@@ -746,33 +744,36 @@ static struct platform_device ev3_device_battery = {
 
 /*
  * EV3 init:
+ * =========
+ * Initalization items generally follow this pattern:
+ *	- comment describing the device(s) we are about to configure
+ *	- perform pin mux and any other hardware configuration
+ *	- if the driver is enabled, the register the device that uses the driver
  */
 
 static __init void legoev3_init(void)
 {
 	int ret;
-	char mask = 0;
-	struct davinci_soc_info *soc_info = &davinci_soc_info;
-
-	u8 rmii_en = soc_info->emac_pdata->rmii_en;
+	u8 ehrpwm_mask = 0;
 
 	/* Support for EV3 LCD */
 	ret = davinci_cfg_reg_list(legoev3_lcd_pins);
 	if (ret)
 		pr_warning("legoev3_init: LCD pin mux setup failed:"
 			" %d\n", ret);
+#if defined(CONFIG_FB_ST7586) || defined(CONFIG_FB_ST7586_MODULE)
 	ret = da8xx_register_spi(1, legoev3_spi1_board_info,
 				 ARRAY_SIZE(legoev3_spi1_board_info));
 	if (ret)
-		pr_warning("legoev3_init: spi 1 registration failed:"
+		pr_warning("legoev3_init: spi1/framebuffer registration failed:"
 			" %d\n", ret);
+#endif
 
-	/* Support for EV3 UI LEDs */
+	/* Support for EV3 LEDs */
 	ret = davinci_cfg_reg_list(legoev3_led_pins);
 	if (ret)
 		pr_warning("legoev3_init: LED mux setup failed:"
 			" %d\n", ret);
-
 #if defined(CONFIG_LEDS_GPIO) || defined(CONFIG_LEDS_GPIO_MODULE)
 	ret = platform_device_register(&ev3_device_gpio_leds);
 	if (ret)
@@ -780,7 +781,7 @@ static __init void legoev3_init(void)
 			" %d\n", ret);
 #endif
 
-	/* Support for EV3 UI LEDs */
+	/* Support for EV3 buttonss */
 	ret = davinci_cfg_reg_list(legoev3_button_pins);
 	if (ret)
 		pr_warning("legoev3_init: Button mux setup failed:"
@@ -847,18 +848,20 @@ static __init void legoev3_init(void)
 		pr_warning("legoev3_init: UART 2 mux setup failed:"
 						" %d\n", ret);
 #endif
+	davinci_serial_init(&da850_evm_uart_config);
 
 	/* Analog/Digital converter support */
 	ret = davinci_cfg_reg_list(legoev3_adc_pins);
 	if (ret)
 		pr_warning("legoev3_init: A/D converter mux setup failed:"
 			" %d\n", ret);
-
+#if defined(CONFIG_LEGOEV3_ANALOG) || defined(CONFIG_LEGOEV3_ANALOG_MODULE)
 	ret = da8xx_register_spi(0, legoev3_spi0_board_info,
 				 ARRAY_SIZE(legoev3_spi0_board_info));
 	if (ret)
-		pr_warning("legoev3_init: spi 0 registration failed: %d\n",
+		pr_warning("legoev3_init: spi0/analog registration failed: %d\n",
 				ret);
+#endif
 
 	/* Support for EV3 power */
 	ret = davinci_cfg_reg_list(legoev3_power_pins);
@@ -866,36 +869,45 @@ static __init void legoev3_init(void)
 		pr_warning("legoev3_init: power pin mux setup failed:"
 			" %d\n", ret);
 	pm_power_off = legoev3_power_off;
-
-	ret = platform_device_register(&ev3_device_battery);
+#if defined(CONFIG_BATTERY_LEGOEV3) || defined(CONFIG_BATTERY_LEGOEV3_MODULE)
+	ret = platform_device_register(&legoev3_battery_device);
 	if (ret)
 		pr_warning("legoev3_init: battery registration failed:"
 			" %d\n", ret);
+#endif
 
 	/* Sound support */
 #if defined(CONFIG_DAVINCI_EHRPWM) || defined(CONFIG_DAVINCI_EHRPWM_MODULE)
+#if defined(CONFIG_SND_LEGOEV3) || defined(CONFIG_SND_LEGOEV3_MODULE)
 	/* eHRPWM0B is used to drive the EV3 speaker */
+	ehrpwm_mask |= 0x2;
+#endif
+	da850_register_ehrpwm(ehrpwm_mask);
+#endif
+
+	/* Sound support */
 	ret = davinci_cfg_reg_list(legoev3_sound_pins);
 	if (ret)
 		pr_warning("legoev3_init: "
 			"sound mux setup failed: %d\n", ret);
-
+#if defined(CONFIG_SND_LEGOEV3) || defined(CONFIG_SND_LEGOEV3_MODULE)
+	/*
+	 * TODO:
+	 * We should probably give the sound driver ownership of this gpio
+	 * instead of requesting it here.
+	 */
 	ret = gpio_request_one(EV3_SND_ENA_PIN, GPIOF_OUT_INIT_LOW, "snd_ena");
 	if (ret)
 		pr_warning("legoev3_init:"
 			" sound gpio setup failed: %d\n", ret);
 
-	da850_register_ehrpwm(0x02);
-#endif	
-
-#if defined(CONFIG_SND_LEGOEV3) || defined(CONFIG_SND_LEGOEV3_MODULE)
 	ret = platform_device_register(&snd_legoev3);
 	if (ret)
 		pr_warning("legoev3_init: "
 			"sound device registration failed: %d\n", ret);
 #endif
 
-
+	/* Bluetooth support */
 #ifdef CONFIG_MACH_DAVINCI_LEGOEV3
 #warning "Sort out this bluetooth init code! Needed for EV3"
 #else
@@ -910,12 +922,12 @@ static __init void legoev3_init(void)
 	gpio_direction_output(DA850_BT_EN, 0);
 #endif
 
-#if defined(CONFIG_MMC_DAVINCI) || defined(CONFIG_MMC_DAVINCI_MODULE)
+	/* SD card support */
 	ret = davinci_cfg_reg_list(legoev3_sd_pins);
 	if (ret)
 		pr_warning("legoev3_init: mmcsd0 mux setup failed:"
 				" %d\n", ret);
-
+#if defined(CONFIG_MMC_DAVINCI) || defined(CONFIG_MMC_DAVINCI_MODULE)
 	ret = da8xx_register_mmcsd0(&legoev3_sd_config);
 	if (ret)
 		pr_warning("legoev3_init: mmcsd0 registration failed:"
@@ -929,8 +941,6 @@ static __init void legoev3_init(void)
 			   " failed: %d\n", ret);
 #endif
 #endif
-
-	davinci_serial_init(&da850_evm_uart_config);
 
 	i2c_register_board_info(1, da850_evm_i2c_devices,
 			ARRAY_SIZE(da850_evm_i2c_devices));
@@ -958,8 +968,10 @@ static __init void legoev3_init(void)
 		pr_warning("legoev3_init: suspend registration failed: %d\n",
 				ret);
 
+	/* USB support */
 	legoev3_usb_init();
 
+	/* Bluetooth support */
 	if (gpio_request(DA850_BT_SHUT_DOWN, "bt_en")) {			// LEGO BT
 		printk(KERN_ERR "Failed to request gpio DA850_BT_SHUT_DOWN\n");	// LEGO BT
 		return;								// LEGO BT
@@ -1006,13 +1018,6 @@ static int __init da850_evm_console_init(void)
 }
 console_initcall(da850_evm_console_init);
 #endif
-
-static __init void da850_evm_irq_init(void)
-{
-	struct davinci_soc_info *soc_info = &davinci_soc_info;
-
-	cp_intc_init();
-}
 
 static void __init legoev3_map_io(void)
 {
