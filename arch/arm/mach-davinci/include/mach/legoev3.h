@@ -56,7 +56,7 @@ extern void __iomem *da8xx_ecap2_base; 		// LEGO BT slow clock
 #define PINMUX18		0x48
 #define PINMUX19		0x4c
 
-enum legoev3_input_port {
+enum legoev3_input_port_id {
 	LEGOEV3_PORT_IN1,
 	LEGOEV3_PORT_IN2,
 	LEGOEV3_PORT_IN3,
@@ -64,7 +64,7 @@ enum legoev3_input_port {
 	LEGOEV3_NUM_PORT_IN,
 };
 
-enum legoev3_output_port {
+enum legoev3_output_port_id {
 	LEGOEV3_PORT_OUT1,
 	LEGOEV3_PORT_OUT2,
 	LEGOEV3_PORT_OUT3,
@@ -176,11 +176,6 @@ enum legoev3_pin_defs {
 	GPIO_PIN(OUT4_PIN5, 5, 15)
 	GPIO_PIN(OUT4_PIN6, 2, 8)
 	PIN(OUT4_PWM, ECAP1_APWM1)
-};
-
-enum legoev3_in_pin5_mux_mode {
-	EV3_IN_PIN5_MUX_MODE_I2C,
-	EV3_IN_PIN5_MUX_MODE_UART,
 };
 
 int da8xx_register_pru_can(void);

@@ -22,9 +22,8 @@
 #include <linux/i2c-gpio.h>
 #include <mach/legoev3.h>
 
-struct legoev3_input_port_device {
-	/* initalize these in board init */
-	enum legoev3_input_port id;
+struct legoev3_input_port_platform_data {
+	enum legoev3_input_port_id id;
 	unsigned pin1_gpio;
 	unsigned pin2_gpio;
 	unsigned pin5_gpio;
@@ -33,36 +32,19 @@ struct legoev3_input_port_device {
 	unsigned i2c_clk_gpio;
 	unsigned i2c_pin_mux;
 	unsigned uart_pin_mux;
-
-	/* these are automatically initalized */
-	struct device dev;
-	struct legoev3_analog_device *analog;
-	struct hrtimer timer;
-	struct i2c_gpio_platform_data i2c_data;
 };
 
-static inline struct legoev3_input_port_device
-*to_legoev3_input_port_device(struct device *dev)
-{
-	return dev ? container_of(dev, struct legoev3_input_port_device, dev) : NULL;
-}
-
-extern int legoev3_register_input_ports(struct legoev3_input_port_device *,
+extern int legoev3_register_input_ports(struct legoev3_input_port_platform_data *,
 					unsigned);
-extern void legoev3_unregister_input_ports(struct legoev3_input_port_device *,
-					   unsigned);
+extern void legoev3_unregister_input_ports(enum legoev3_input_port_id *, unsigned);
 
-struct legoev3_output_port_device {
-	/* initalize these in board init */
-	enum legoev3_output_port id;
+struct legoev3_output_port_platform_data {
+	enum legoev3_output_port_id id;
 	unsigned pin1_gpio;
 	unsigned pin2_gpio;
 	unsigned pin5_gpio;
 	unsigned pin6_gpio;
 	const char *pwm_dev_name;
-
-	/* these are automatically initalized */
-	struct device dev;
 };
 
 struct legoev3_port_driver {

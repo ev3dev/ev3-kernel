@@ -686,7 +686,7 @@ static const short legoev3_in_out_pins[] __initconst = {
 	-1
 };
 
-static struct legoev3_input_port_device legoev3_input_ports[] = {
+static struct legoev3_input_port_platform_data legoev3_input_port_data[] = {
 	{
 		.id			= LEGOEV3_PORT_IN1,
 		.pin1_gpio		= EV3_IN1_PIN1_PIN,
@@ -733,7 +733,7 @@ static struct legoev3_input_port_device legoev3_input_ports[] = {
 	},
 };
 
-static struct legoev3_output_port_device legoev3_output_port[] = {
+static struct legoev3_output_port_platform_data legoev3_output_port_data[] = {
 	{
 		.id			= LEGOEV3_PORT_OUT1,
 		.pin1_gpio		= EV3_OUT1_PIN1_PIN,
@@ -991,8 +991,8 @@ static __init void legoev3_init(void)
 		pr_warning("legoev3_init: "
 			"input port pin mux failed: %d\n", ret);
 #if defined(CONFIG_LEGOEV3_DEV_PORTS) || defined(CONFIG_LEGOEV3_DEV_PORTS_MODULE)
-	ret = legoev3_register_input_ports(legoev3_input_ports,
-					   ARRAY_SIZE(legoev3_input_ports));
+	ret = legoev3_register_input_ports(legoev3_input_port_data,
+					   ARRAY_SIZE(legoev3_input_port_data));
 	if (ret)
 		pr_warning("legoev3_init: "
 			"input port registration failed: %d\n", ret);
