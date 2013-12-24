@@ -865,6 +865,11 @@ static __init void legoev3_init(void)
 	int ret;
 	u8 ehrpwm_mask = 0;
 
+	/* Disable all internal pullup/pulldown resistors */
+	ret = __raw_readl(DA8XX_SYSCFG1_VIRT(DA8XX_PUPD_ENA_REG));
+	ret &= ~0xFFFFFFFF;
+	__raw_writel(ret, DA8XX_SYSCFG1_VIRT(DA8XX_PUPD_ENA_REG));
+
 	/* Support for EV3 LCD */
 	ret = davinci_cfg_reg_list(legoev3_lcd_pins);
 	if (ret)
@@ -895,14 +900,6 @@ static __init void legoev3_init(void)
 	if (ret)
 		pr_warning("legoev3_init: Button mux setup failed:"
 			" %d\n", ret);
-
-	/*
-	 * This is CRITICAL code to making the LEFT button work - it disables
-	 * the internal pullup on pin group 25 which is where the GPIO6_6 lives.
-	 */
-	ret = __raw_readl(DA8XX_SYSCFG1_VIRT(DA8XX_PUPD_SEL_REG));
-	ret &= 0xFDFFFFFF;
-	__raw_writel(ret, DA8XX_SYSCFG1_VIRT(DA8XX_PUPD_SEL_REG));
 
 #if defined(CONFIG_KEYBOARD_GPIO) || defined(CONFIG_KEYBOARD_GPIO_MODULE)
 	ret = platform_device_register(&ev3_device_gpiokeys);
