@@ -62,6 +62,7 @@ extern void legoev3_unregister_port_driver(struct legoev3_port_driver *);
 #define legoev3_port_driver(driver) \
 module_driver(driver, legoev3_register_port_driver, legoev3_unregister_port_driver);
 
+extern struct attribute_group legoev3_device_type_attr_grp;
 extern struct platform_device legoev3_port;
 extern struct bus_type legoev3_bus_type;
 
