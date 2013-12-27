@@ -842,7 +842,6 @@ static void legoev3_power_off(void)
 }
 
 static struct legoev3_battery_platform_data ev3_battery_data = {
-	.spi_analog_dev_name	= "spi0.3",
 	.batt_type_gpio		= EV3_BATT_TYPE_PIN,
 };
 
