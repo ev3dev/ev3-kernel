@@ -2,10 +2,10 @@
  * LEGO MINDSTORMS EV3 DA850/OMAP-L138
  *
  * Copyright (C) 2013 Ralph Hempel
- * Copyright (C) 2012 David Lechner <david@lechnology.com>
+ * Copyright (C) 2013 David Lechner <david@lechnology.com>
  *
  * Derived from: arch/arm/mach-davinci/board-da850-evm.c
- * Original Copyrights follow:
+ * Original Copyrights follows:
  *
  * Copyright (C) 2009 Texas Instruments Incorporated - http://www.ti.com/
  *
@@ -605,7 +605,7 @@ static struct edma_rsv_info *da850_edma_rsv[2] = {
  * The A/D converter is a TI ADS7957. It monitors analog inputs from
  * each of the 4 input ports, motor voltage and current for each of the
  * 4 ouput ports and the voltage. The A/D chip is connected to
- * the processor via SPI0. We are using the linux hwmon class to read 
+ * the processor via SPI0. We are using the linux hwmon class to read
  * the raw voltages in userspace.
  */
 

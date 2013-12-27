@@ -1,7 +1,8 @@
 /*
  * Chip specific defines for LEGO MINDSTORMS EV3
  *
- * Author: Ralph Hempel
+ * Authors:	Ralph Hempel
+ *		David Lechner
  *
  * Based on changes made by LEGO 
  * 2007, 2009-2010 (c) MontaVista Software, Inc. This file is licensed under
