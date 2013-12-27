@@ -680,85 +680,94 @@ static const short legoev3_in_out_pins[] __initconst = {
 	-1
 };
 
-static struct legoev3_input_port_platform_data legoev3_input_port_data[] = {
-	{
-		.id			= LEGOEV3_PORT_IN1,
-		.pin1_gpio		= EV3_IN1_PIN1_PIN,
-		.pin2_gpio		= EV3_IN1_PIN2_PIN,
-		.pin5_gpio		= EV3_IN1_PIN5_PIN,
-		.pin6_gpio		= EV3_IN1_PIN6_PIN,
-		.buf_ena_gpio		= EV3_IN1_BUF_ENA_PIN,
-		.i2c_clk_gpio		= EV3_IN1_I2C_CLK_PIN,
-		.i2c_pin_mux		= EV3_IN1_I2C_CLK,
-		.uart_pin_mux		= EV3_IN1_UART,
+static struct legoev3_ports_platform_data legoev3_ports_data = {
+	.input_port_data = {
+		{
+			.id			= LEGOEV3_PORT_IN1,
+			.pin1_gpio		= EV3_IN1_PIN1_PIN,
+			.pin2_gpio		= EV3_IN1_PIN2_PIN,
+			.pin5_gpio		= EV3_IN1_PIN5_PIN,
+			.pin6_gpio		= EV3_IN1_PIN6_PIN,
+			.buf_ena_gpio		= EV3_IN1_BUF_ENA_PIN,
+			.i2c_clk_gpio		= EV3_IN1_I2C_CLK_PIN,
+			.i2c_pin_mux		= EV3_IN1_I2C_CLK,
+			.uart_pin_mux		= EV3_IN1_UART,
+		},
+		{
+			.id			= LEGOEV3_PORT_IN2,
+			.pin1_gpio		= EV3_IN2_PIN1_PIN,
+			.pin2_gpio		= EV3_IN2_PIN2_PIN,
+			.pin5_gpio		= EV3_IN2_PIN5_PIN,
+			.pin6_gpio		= EV3_IN2_PIN6_PIN,
+			.buf_ena_gpio		= EV3_IN2_BUF_ENA_PIN,
+			.i2c_clk_gpio		= EV3_IN2_I2C_CLK_PIN,
+			.i2c_pin_mux		= EV3_IN2_I2C_CLK,
+			.uart_pin_mux		= EV3_IN2_UART,
+		},
+		{
+			.id			= LEGOEV3_PORT_IN3,
+			.pin1_gpio		= EV3_IN3_PIN1_PIN,
+			.pin2_gpio		= EV3_IN3_PIN2_PIN,
+			.pin5_gpio		= EV3_IN3_PIN5_PIN,
+			.pin6_gpio		= EV3_IN3_PIN6_PIN,
+			.buf_ena_gpio		= EV3_IN3_BUF_ENA_PIN,
+			.i2c_clk_gpio		= EV3_IN3_I2C_CLK_PIN,
+			.i2c_pin_mux		= EV3_IN3_I2C_CLK,
+			.uart_pin_mux		= EV3_IN3_UART,
+		},
+		{
+			.id			= LEGOEV3_PORT_IN4,
+			.pin1_gpio		= EV3_IN4_PIN1_PIN,
+			.pin2_gpio		= EV3_IN4_PIN2_PIN,
+			.pin5_gpio		= EV3_IN4_PIN5_PIN,
+			.pin6_gpio		= EV3_IN4_PIN6_PIN,
+			.buf_ena_gpio		= EV3_IN4_BUF_ENA_PIN,
+			.i2c_clk_gpio		= EV3_IN4_I2C_CLK_PIN,
+			.i2c_pin_mux		= EV3_IN4_I2C_CLK,
+			.uart_pin_mux		= EV3_IN4_UART,
+		},
 	},
-	{
-		.id			= LEGOEV3_PORT_IN2,
-		.pin1_gpio		= EV3_IN2_PIN1_PIN,
-		.pin2_gpio		= EV3_IN2_PIN2_PIN,
-		.pin5_gpio		= EV3_IN2_PIN5_PIN,
-		.pin6_gpio		= EV3_IN2_PIN6_PIN,
-		.buf_ena_gpio		= EV3_IN2_BUF_ENA_PIN,
-		.i2c_clk_gpio		= EV3_IN2_I2C_CLK_PIN,
-		.i2c_pin_mux		= EV3_IN2_I2C_CLK,
-		.uart_pin_mux		= EV3_IN2_UART,
-	},
-	{
-		.id			= LEGOEV3_PORT_IN3,
-		.pin1_gpio		= EV3_IN3_PIN1_PIN,
-		.pin2_gpio		= EV3_IN3_PIN2_PIN,
-		.pin5_gpio		= EV3_IN3_PIN5_PIN,
-		.pin6_gpio		= EV3_IN3_PIN6_PIN,
-		.buf_ena_gpio		= EV3_IN3_BUF_ENA_PIN,
-		.i2c_clk_gpio		= EV3_IN3_I2C_CLK_PIN,
-		.i2c_pin_mux		= EV3_IN3_I2C_CLK,
-		.uart_pin_mux		= EV3_IN3_UART,
-	},
-	{
-		.id			= LEGOEV3_PORT_IN4,
-		.pin1_gpio		= EV3_IN4_PIN1_PIN,
-		.pin2_gpio		= EV3_IN4_PIN2_PIN,
-		.pin5_gpio		= EV3_IN4_PIN5_PIN,
-		.pin6_gpio		= EV3_IN4_PIN6_PIN,
-		.buf_ena_gpio		= EV3_IN4_BUF_ENA_PIN,
-		.i2c_clk_gpio		= EV3_IN4_I2C_CLK_PIN,
-		.i2c_pin_mux		= EV3_IN4_I2C_CLK,
-		.uart_pin_mux		= EV3_IN4_UART,
+	.output_port_data = {
+		{
+			.id			= LEGOEV3_PORT_OUT1,
+			.pin1_gpio		= EV3_OUT1_PIN1_PIN,
+			.pin2_gpio		= EV3_OUT1_PIN2_PIN,
+			.pin5_gpio		= EV3_OUT1_PIN5_PIN,
+			.pin6_gpio		= EV3_OUT1_PIN6_PIN,
+			.pwm_dev_name		= "ehrpwm1.1",
+		},
+		{
+			.id			= LEGOEV3_PORT_OUT2,
+			.pin1_gpio		= EV3_OUT2_PIN1_PIN,
+			.pin2_gpio		= EV3_OUT2_PIN2_PIN,
+			.pin5_gpio		= EV3_OUT2_PIN5_PIN,
+			.pin6_gpio		= EV3_OUT2_PIN6_PIN,
+			.pwm_dev_name		= "ehrpwm1.0",
+		},
+		{
+			.id			= LEGOEV3_PORT_OUT3,
+			.pin1_gpio		= EV3_OUT3_PIN1_PIN,
+			.pin2_gpio		= EV3_OUT3_PIN2_PIN,
+			.pin5_gpio		= EV3_OUT3_PIN5_PIN,
+			.pin6_gpio		= EV3_OUT3_PIN6_PIN,
+			.pwm_dev_name		= "pwm?",
+		},
+		{
+			.id			= LEGOEV3_PORT_OUT4,
+			.pin1_gpio		= EV3_OUT4_PIN1_PIN,
+			.pin2_gpio		= EV3_OUT4_PIN2_PIN,
+			.pin5_gpio		= EV3_OUT4_PIN5_PIN,
+			.pin6_gpio		= EV3_OUT4_PIN6_PIN,
+			.pwm_dev_name		= "pwm?",
+		},
 	},
 };
 
-static struct legoev3_output_port_platform_data legoev3_output_port_data[] = {
-	{
-		.id			= LEGOEV3_PORT_OUT1,
-		.pin1_gpio		= EV3_OUT1_PIN1_PIN,
-		.pin2_gpio		= EV3_OUT1_PIN2_PIN,
-		.pin5_gpio		= EV3_OUT1_PIN5_PIN,
-		.pin6_gpio		= EV3_OUT1_PIN6_PIN,
-		.pwm_dev_name		= "ehrpwm1.1",
-	},
-	{
-		.id			= LEGOEV3_PORT_OUT2,
-		.pin1_gpio		= EV3_OUT2_PIN1_PIN,
-		.pin2_gpio		= EV3_OUT2_PIN2_PIN,
-		.pin5_gpio		= EV3_OUT2_PIN5_PIN,
-		.pin6_gpio		= EV3_OUT2_PIN6_PIN,
-		.pwm_dev_name		= "ehrpwm1.0",
-	},
-	{
-		.id			= LEGOEV3_PORT_OUT3,
-		.pin1_gpio		= EV3_OUT3_PIN1_PIN,
-		.pin2_gpio		= EV3_OUT3_PIN2_PIN,
-		.pin5_gpio		= EV3_OUT3_PIN5_PIN,
-		.pin6_gpio		= EV3_OUT3_PIN6_PIN,
-		.pwm_dev_name		= "pwm?",
-	},
-	{
-		.id			= LEGOEV3_PORT_OUT4,
-		.pin1_gpio		= EV3_OUT4_PIN1_PIN,
-		.pin2_gpio		= EV3_OUT4_PIN2_PIN,
-		.pin5_gpio		= EV3_OUT4_PIN5_PIN,
-		.pin6_gpio		= EV3_OUT4_PIN6_PIN,
-		.pwm_dev_name		= "pwm?",
+static struct platform_device legoev3_ports_device = {
+	.name	= "legoev3-ports",
+	.id	= -1,
+	.dev	= {
+		.platform_data	= &legoev3_ports_data,
 	},
 };
 
@@ -982,11 +991,10 @@ static __init void legoev3_init(void)
 		pr_warning("legoev3_init: "
 			"input port pin mux failed: %d\n", ret);
 #if defined(CONFIG_LEGOEV3_DEV_PORTS) || defined(CONFIG_LEGOEV3_DEV_PORTS_MODULE)
-	ret = legoev3_register_input_ports(legoev3_input_port_data,
-					   ARRAY_SIZE(legoev3_input_port_data));
+	ret = platform_device_register(&legoev3_ports_device);
 	if (ret)
 		pr_warning("legoev3_init: "
-			"input port registration failed: %d\n", ret);
+			"input/output port registration failed: %d\n", ret);
 #endif
 
 	/* eHRPWM support */

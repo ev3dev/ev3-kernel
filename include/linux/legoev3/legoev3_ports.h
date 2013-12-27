@@ -34,10 +34,6 @@ struct legoev3_input_port_platform_data {
 	unsigned uart_pin_mux;
 };
 
-extern int legoev3_register_input_ports(struct legoev3_input_port_platform_data *,
-					unsigned);
-extern void legoev3_unregister_input_ports(enum legoev3_input_port_id *, unsigned);
-
 struct legoev3_output_port_platform_data {
 	enum legoev3_output_port_id id;
 	unsigned pin1_gpio;
@@ -45,6 +41,11 @@ struct legoev3_output_port_platform_data {
 	unsigned pin5_gpio;
 	unsigned pin6_gpio;
 	const char *pwm_dev_name;
+};
+
+struct legoev3_ports_platform_data {
+	struct legoev3_input_port_platform_data input_port_data[LEGOEV3_NUM_PORT_IN];
+	struct legoev3_output_port_platform_data output_port_data[LEGOEV3_NUM_PORT_OUT];
 };
 
 struct legoev3_port_driver {
@@ -63,7 +64,6 @@ extern void legoev3_unregister_port_driver(struct legoev3_port_driver *);
 module_driver(driver, legoev3_register_port_driver, legoev3_unregister_port_driver);
 
 extern struct attribute_group legoev3_device_type_attr_grp;
-extern struct platform_device legoev3_port;
 extern struct bus_type legoev3_bus_type;
 
 #endif /* __LINUX_LEGOEV3_PORTS_H */
