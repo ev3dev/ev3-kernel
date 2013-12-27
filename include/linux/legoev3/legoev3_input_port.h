@@ -18,8 +18,29 @@
 
 struct legoev3_input_port_device {
 	int (*pin1_mv)(struct legoev3_input_port_device *ipd);
+	int (*pin6_mv)(struct legoev3_input_port_device *ipd);
 	/* private */
 	struct device dev;
+};
+
+/* resistor ids for EV3 dumb sensor devices */
+enum ev3_in_dev_id {
+	EV3_IN_DEV_ID_01,
+	EV3_IN_DEV_ID_02,
+	EV3_IN_DEV_ID_03,
+	EV3_IN_DEV_ID_04,
+	EV3_IN_DEV_ID_05,
+	EV3_IN_DEV_ID_06,
+	EV3_IN_DEV_ID_07,
+	EV3_IN_DEV_ID_08,
+	EV3_IN_DEV_ID_09,
+	EV3_IN_DEV_ID_10,
+	EV3_IN_DEV_ID_11,
+	EV3_IN_DEV_ID_12,
+	EV3_IN_DEV_ID_13,
+	EV3_IN_DEV_ID_14,
+	NUM_EV3_IN_DEV_ID,
+	EV3_IN_DEV_ID_ERR = -1
 };
 
 #endif /* __LINUX_LEGOEV3_INPUT_PORT_H */
