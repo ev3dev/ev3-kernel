@@ -69,7 +69,7 @@ static struct davinci_spi_config legoev3_st7586fb_cfg = {
 	.io_type	= SPI_IO_TYPE_DMA,
 	.c2tdelay	= 10,
 	.t2cdelay	= 10,
- };
+};
 
 static struct spi_board_info legoev3_spi1_board_info[] = {
 	[0] = {
@@ -83,11 +83,6 @@ static struct spi_board_info legoev3_spi1_board_info[] = {
 	},
 };
 
-static const short legoev3_led_pins[] __initconst = {
-	EV3_LED_0, EV3_LED_1, EV3_LED_2, EV3_LED_3,
-	-1
-};
-
 /*
  * LED configuration:
  * ==================
@@ -96,6 +91,11 @@ static const short legoev3_led_pins[] __initconst = {
  * amber to indicate CPU activity and the right LED will flash amber to
  * indicate disk (SD card) activity.
  */
+
+static const short legoev3_led_pins[] __initconst = {
+	EV3_LED_0, EV3_LED_1, EV3_LED_2, EV3_LED_3,
+	-1
+};
 
 #if defined(CONFIG_LEDS_GPIO) || defined(CONFIG_LEDS_GPIO_MODULE)
 #include <linux/leds.h>
@@ -152,7 +152,7 @@ static const short legoev3_button_pins[] __initconst = {
 
 #if defined(CONFIG_KEYBOARD_GPIO) || defined(CONFIG_KEYBOARD_GPIO_MODULE)
 #include <linux/gpio_keys.h>
-#include<linux/input.h>
+#include <linux/input.h>
 
 static struct gpio_keys_button ev3_gpio_keys_table[] = {
 	{KEY_UP,    EV3_BUTTON_0_PIN, 1, "ev3:UP",    EV_KEY, 0, 50, 1},
@@ -173,15 +173,6 @@ static struct platform_device ev3_device_gpiokeys = {
 	.dev = {
 		.platform_data = &ev3_gpio_keys_data,
 	},
-};
-
-static const int legoev3_button_gpio[] = {
-	EV3_BUTTON_0_PIN,
-	EV3_BUTTON_1_PIN,
-	EV3_BUTTON_2_PIN,
-	EV3_BUTTON_3_PIN,
-	EV3_BUTTON_4_PIN,
-	EV3_BUTTON_5_PIN
 };
 #endif
 
@@ -357,6 +348,11 @@ static struct davinci_mmc_config legoev3_sd_config = {
 	.version	= MMC_CTLR_VERSION_2,
 };
 
+/*
+ * EV3 CPU frequency scaling configuration:
+ * ========================================
+ */
+
 #ifdef CONFIG_CPU_FREQ
 static __init int legoev3_init_cpufreq(void)
 {
@@ -525,7 +521,8 @@ static struct spi_board_info legoev3_spi0_board_info[] = {
  *
  * Note: The i2c clock and uart functions of the input port share the same
  * physical pin on the chip, so instead of including them in the board pin mux,
- * there are functions to set the pin mux that are passed to input port driver.
+ * they are passed to input port driver which performs the mux as necessary when
+ * devices are added and removed.
  */
 
 static const short legoev3_in_out_pins[] __initconst = {
@@ -667,6 +664,11 @@ static struct platform_device snd_legoev3 =
 };
 #endif
 
+/*
+ * EV3 PLL clock configuration:
+ * ============================
+ */
+
 static __init int da850_set_emif_clk_rate(void)
 {
 	struct clk *emif_clk;
@@ -677,12 +679,6 @@ static __init int da850_set_emif_clk_rate(void)
 
 	return clk_set_rate(emif_clk, CONFIG_DA850_FIX_PLL0_SYSCLK3RATE);
 }
-
-struct uio_pruss_pdata da8xx_pruss_uio_pdata = {
-	.pintc_base	= 0x4000,
-};
-
-#define DA850EVM_SATA_REFCLKPN_RATE	(100 * 1000 * 1000)
 
 /*
  * EV3 power configuration:
