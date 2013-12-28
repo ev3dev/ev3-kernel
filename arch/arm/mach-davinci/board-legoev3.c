@@ -281,26 +281,9 @@ static __init void legoev3_usb_init(void)
 }
 
 /*
- * What is this for? Bluetooth?
+ * EV3 bluetooth configuration:
+ * ============================
  */
-
-static struct i2c_board_info da850_evm_i2c_devices[] = {
-	{
-		I2C_BOARD_INFO("24FC128", 0x50),
-	},
-	{
-		I2C_BOARD_INFO("PIC_CodedDataTo", 0x54),
-	},
-	{
-		I2C_BOARD_INFO("PIC_ReadStatus", 0x55),
-	},
-	{
-		I2C_BOARD_INFO("PIC_RawDataTo", 0x56),
-	},
-	{
-		I2C_BOARD_INFO("PIC_ReadDataFrom", 0x57),
-	},
-};
 
 #ifdef CONFIG_MACH_DAVINCI_LEGOEV3
 #warning "Fixup the da850_evm_bt_slow_clock_init "
@@ -340,14 +323,6 @@ static __init void da850_evm_bt_slow_clock_init(void)						// LEGO BT
 // 	-1
 // };
 
-static struct davinci_i2c_platform_data lego_i2c_0_pdata = {
-	.bus_freq	= 400	/* kHz */,
-	.bus_delay	= 0	/* usec */,
-};
-
-static struct davinci_uart_config da850_evm_uart_config = {
-	.enabled_uarts = 0x7,
-};
 
 /*
  * SD card reader configuration:
@@ -403,127 +378,13 @@ static __init int legoev3_init_cpufreq(void)
 static __init int legoev3_init_cpufreq(void) { return 0; }
 #endif
 
-#ifdef CONFIG_MACH_DAVINCI_LEGOEV3
-#warning "Eliminate this code and eliminate this warning after copying this file to board-legoev3.c"
-#warning "This may be needed to handle the BT init???"
-#else
-#ifdef CONFIG_DA850_WL12XX
+/*
+ * EV3 UART configuration:
+ * =======================
+ */
 
-static void wl12xx_set_power(int index, bool power_on)
-{
-	static bool power_state;
-
-	pr_debug("Powering %s wl12xx", power_on ? "on" : "off");
-
-	if (power_on == power_state)
-		return;
-	power_state = power_on;
-
-	if (power_on) {
-		/* Power up sequence required for wl127x devices */
-		gpio_set_value_cansleep(DA850_WLAN_EN, 1);
-		usleep_range(15000, 15000);
-		gpio_set_value_cansleep(DA850_WLAN_EN, 0);
-		usleep_range(1000, 1000);
-		gpio_set_value_cansleep(DA850_WLAN_EN, 1);
-		msleep(70);
-	} else {
-		gpio_set_value_cansleep(DA850_WLAN_EN, 0);
-	}
-}
-
-static struct davinci_mmc_config da850_wl12xx_mmc_config = {
-	.set_power	= wl12xx_set_power,
-	.wires		= 4,
-	.max_freq	= 25000000,
-	.caps		= MMC_CAP_4_BIT_DATA | MMC_CAP_NONREMOVABLE |
-			  MMC_CAP_POWER_OFF_CARD,
-	.version	= MMC_CTLR_VERSION_2,
-};
-
-static const short da850_wl12xx_pins[] __initconst = {
-	DA850_MMCSD1_DAT_0, DA850_MMCSD1_DAT_1, DA850_MMCSD1_DAT_2,
-	DA850_MMCSD1_DAT_3, DA850_MMCSD1_CLK, DA850_MMCSD1_CMD,
-	DA850_GPIO6_9, DA850_GPIO6_10,
-	-1
-};
-
-static struct wl12xx_platform_data da850_wl12xx_wlan_data __initdata = {
-	.irq			= -1,
-	.board_ref_clock	= WL12XX_REFCLOCK_38,
-	.platform_quirks	= WL12XX_PLATFORM_QUIRK_EDGE_IRQ,
-};
-
-static __init int da850_wl12xx_init(void)
-{
-	int ret;
-
-	ret = davinci_cfg_reg_list(da850_wl12xx_pins);
-	if (ret) {
-		pr_err("wl12xx/mmc mux setup failed: %d\n", ret);
-		goto exit;
-	}
-
-	ret = da850_register_mmcsd1(&da850_wl12xx_mmc_config);
-	if (ret) {
-		pr_err("wl12xx/mmc registration failed: %d\n", ret);
-		goto exit;
-	}
-
-	ret = gpio_request_one(DA850_WLAN_EN, GPIOF_OUT_INIT_LOW, "wl12xx_en");
-	if (ret) {
-		pr_err("Could not request wl12xx enable gpio: %d\n", ret);
-		goto exit;
-	}
-
-	ret = gpio_request_one(DA850_WLAN_IRQ, GPIOF_IN, "wl12xx_irq");
-	if (ret) {
-		pr_err("Could not request wl12xx irq gpio: %d\n", ret);
-		goto free_wlan_en;
-	}
-
-	da850_wl12xx_wlan_data.irq = gpio_to_irq(DA850_WLAN_IRQ);
-
-	ret = wl12xx_set_platform_data(&da850_wl12xx_wlan_data);
-	if (ret) {
-		pr_err("Could not set wl12xx data: %d\n", ret);
-		goto free_wlan_irq;
-	}
-
-	return 0;
-
-free_wlan_irq:
-	gpio_free(DA850_WLAN_IRQ);
-
-free_wlan_en:
-	gpio_free(DA850_WLAN_EN);
-
-exit:
-	return ret;
-}
-
-#else /* CONFIG_DA850_WL12XX */
-
-static __init int da850_wl12xx_init(void)
-{
-	return 0;
-}
-
-#endif /* CONFIG_DA850_WL12XX */
-#endif
-
-static struct i2c_gpio_platform_data da850_gpio_i2c_pdata = {
-	.sda_pin	= GPIO_TO_PIN(1, 4),
-	.scl_pin	= GPIO_TO_PIN(1, 5),
-	.udelay		= 2,			/* 250 KHz */
-};
-
-static struct platform_device da850_gpio_i2c = {
-	.name		= "i2c-gpio",
-	.id		= 1,
-	.dev		= {
-		.platform_data	= &da850_gpio_i2c_pdata,
-	},
+static struct davinci_uart_config da850_evm_uart_config = {
+	.enabled_uarts = 0x7,
 };
 
 #warning "Fix up the pru_suart code here so it works"
@@ -690,6 +551,7 @@ static struct legoev3_ports_platform_data legoev3_ports_data = {
 			.pin6_gpio		= EV3_IN1_PIN6_PIN,
 			.buf_ena_gpio		= EV3_IN1_BUF_ENA_PIN,
 			.i2c_clk_gpio		= EV3_IN1_I2C_CLK_PIN,
+			.i2c_dev_id		= 0,
 			.i2c_pin_mux		= EV3_IN1_I2C_CLK,
 			.uart_pin_mux		= EV3_IN1_UART,
 		},
@@ -701,6 +563,7 @@ static struct legoev3_ports_platform_data legoev3_ports_data = {
 			.pin6_gpio		= EV3_IN2_PIN6_PIN,
 			.buf_ena_gpio		= EV3_IN2_BUF_ENA_PIN,
 			.i2c_clk_gpio		= EV3_IN2_I2C_CLK_PIN,
+			.i2c_dev_id		= 1,
 			.i2c_pin_mux		= EV3_IN2_I2C_CLK,
 			.uart_pin_mux		= EV3_IN2_UART,
 		},
@@ -712,6 +575,7 @@ static struct legoev3_ports_platform_data legoev3_ports_data = {
 			.pin6_gpio		= EV3_IN3_PIN6_PIN,
 			.buf_ena_gpio		= EV3_IN3_BUF_ENA_PIN,
 			.i2c_clk_gpio		= EV3_IN3_I2C_CLK_PIN,
+			.i2c_dev_id		= 2,
 			.i2c_pin_mux		= EV3_IN3_I2C_CLK,
 			.uart_pin_mux		= EV3_IN3_UART,
 		},
@@ -723,6 +587,7 @@ static struct legoev3_ports_platform_data legoev3_ports_data = {
 			.pin6_gpio		= EV3_IN4_PIN6_PIN,
 			.buf_ena_gpio		= EV3_IN4_BUF_ENA_PIN,
 			.i2c_clk_gpio		= EV3_IN4_I2C_CLK_PIN,
+			.i2c_dev_id		= 3,
 			.i2c_pin_mux		= EV3_IN4_I2C_CLK,
 			.uart_pin_mux		= EV3_IN4_UART,
 		},
@@ -925,17 +790,6 @@ static __init void legoev3_init(void)
 		pr_warning("legoev3_init: edma registration failed: %d\n",
 				ret);
 
-#ifdef CONFIG_MACH_DAVINCI_LEGOEV3
-#warning "Eventually, we'll re-enable these pins!"
-#else
-	ret = davinci_cfg_reg_list(da850_i2c0_pins);
-	if (ret)
-		pr_warning("legoev3_init: i2c0 mux setup failed: %d\n",
-				ret);
-
-	platform_device_register(&da850_gpio_i2c);
-#endif
-
 	ret = da8xx_register_watchdog();
 	if (ret)
 		pr_warning("da830_evm_init: watchdog registration failed: %d\n",
@@ -1052,18 +906,7 @@ static __init void legoev3_init(void)
 	if (ret)
 		pr_warning("legoev3_init: mmcsd0 registration failed:"
 					" %d\n", ret);
-#ifdef CONFIG_MACH_DAVINCI_LEGOEV3
-#warning "Sort out this bluetooth init code! Needed for EV3???? See WL1271"
-#else
-	ret = da850_wl12xx_init();
-	if (ret)
-		pr_warning("legoev3_init: wl12xx initialization"
-			   " failed: %d\n", ret);
 #endif
-#endif
-
-	i2c_register_board_info(1, da850_evm_i2c_devices,
-			ARRAY_SIZE(da850_evm_i2c_devices));
 
 #warning "Is da8xx_register_rtc needed?"
 	ret = da8xx_register_rtc();

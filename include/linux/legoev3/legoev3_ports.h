@@ -30,6 +30,7 @@ struct legoev3_input_port_platform_data {
 	unsigned pin6_gpio;
 	unsigned buf_ena_gpio;
 	unsigned i2c_clk_gpio;
+	unsigned i2c_dev_id;
 	unsigned i2c_pin_mux;
 	unsigned uart_pin_mux;
 };
