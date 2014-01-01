@@ -1,7 +1,3 @@
-#ifdef CONFIG_MACH_DAVINCI_LEGOEV3
-#warning "This is still really fragile test code"
-#endif
-
 /*
  * TI DA850/OMAP-L138 chip specific setup
  *
@@ -856,89 +852,13 @@ static const struct mux_config da850_pins[] = {
 #endif
 };
 
-/* ev3dev not needed
-const short da850_pru_can_pins[] __initdata = {
-	DA850_GPIO7_9,DA850_GPIO7_10,DA850_GPIO2_0, DA850_PRU0_R31_0, DA850_PRU1_R30_15,
-	DA850_PRU1_R31_18,
-	-1
-};
-
-const short da850_pru_suart_pins[] __initdata = {
-	DA850_AHCLKX, DA850_ACLKX, DA850_AFSX,
-    DA850_AHCLKR, DA850_ACLKR, DA850_AFSR,
-    DA850_AXR_1, DA850_AXR_2, DA850_AXR_3,
-	DA850_AXR_4, 
-	-1
-};
-*/
-
-/* TI
-const short da850_pru_suart_pins[] __initdata = {
-	DA850_AHCLKX, DA850_ACLKX, DA850_AFSX,
-    DA850_AHCLKR, DA850_ACLKR, DA850_AFSR,
-    DA850_AXR_13, DA850_AXR_9, DA850_AXR_7,
-	DA850_AXR_14, DA850_AXR_10, DA850_AXR_8,
-	-1
-};
-*/
-
-/* ev3dev not needed
-const short da850_uart1_pins[] __initdata = {
-	DA850_UART1_RXD, DA850_UART1_TXD,
-	DA850_NUART1_CTS,DA850_NUART1_RTS,
-	-1
-};
-*/
-
-//const short da850_uart2_pins[] __initdata = {
-//	DA850_UART2_RXD, DA850_UART2_TXD,
-//	-1
-//};
-
-/* ev3dev not needed
-const short da850_uart2_pins[] __initdata = {
-	DA850_UART2_RXD, DA850_UART2_TXD,
-	DA850_NUART2_CTS, DA850_NUART2_RTS,     // LEGO BT
-//#ifdef CONFIG_WIFI_CONTROL_FUNC                 // LEGO BT
-        DA850_GPIO0_15,                         // LEGO BT
-//#endif                                          // LEGO BT
-
-	-1
-};
-
-
 const short da850_i2c0_pins[] __initdata = {
-//	DA850_GPIO1_4, DA850_GPIO1_5,
-	DA850_I2C0_SCL, DA850_I2C0_SDA,
+	DA850_GPIO1_4, DA850_GPIO1_5,
 	-1
 };
 
 const short da850_i2c1_pins[] __initdata = {
 	DA850_I2C1_SCL, DA850_I2C1_SDA,
-	-1
-};
-
-const short da850_cpgmac_pins[] __initdata = {
-	DA850_MII_TXEN, DA850_MII_TXCLK, DA850_MII_COL, DA850_MII_TXD_3,
-	DA850_MII_TXD_2, DA850_MII_TXD_1, DA850_MII_TXD_0, DA850_MII_RXER,
-	DA850_MII_CRS, DA850_MII_RXCLK, DA850_MII_RXDV, DA850_MII_RXD_3,
-	DA850_MII_RXD_2, DA850_MII_RXD_1, DA850_MII_RXD_0, DA850_MDIO_CLK,
-	DA850_MDIO_D,
-	-1
-};
-
-const short da850_rmii_pins[] __initdata = {
-	DA850_RMII_TXD_0, DA850_RMII_TXD_1, DA850_RMII_TXEN,
-	DA850_RMII_CRS_DV, DA850_RMII_RXD_0, DA850_RMII_RXD_1,
-	DA850_RMII_RXER, DA850_RMII_MHZ_50_CLK, DA850_MDIO_CLK,
-	DA850_MDIO_D,
-	-1
-};
-
-const short da850_mcasp_pins[] __initdata = {
-	DA850_AHCLKX, DA850_ACLKX, DA850_AFSX,
-	DA850_AHCLKR, DA850_ACLKR, DA850_AFSR, DA850_AMUTE,
-	DA850_AXR_11, DA850_AXR_12,
 	-1
 };
 
@@ -952,94 +872,24 @@ const short da850_lcdcntl_pins[] __initdata = {
 	-1
 };
 
-const short da850_mmcsd0_pins[] __initdata = {
-	DA850_MMCSD0_DAT_0, DA850_MMCSD0_DAT_1, DA850_MMCSD0_DAT_2,
-	DA850_MMCSD0_DAT_3, DA850_MMCSD0_CLK, DA850_MMCSD0_CMD,
-	DA850_GPIO4_0, DA850_GPIO4_1,
-	-1
-};
-*/
-
-//Lego - DAT3 is CD ..DAT3 is Muxed with GPIO_$_2
-
-/*const short da850_mmcsd0_pins[] __initdata = {
-	DA850_MMCSD0_DAT_0, DA850_MMCSD0_DAT_1, DA850_MMCSD0_DAT_2,
-	DA850_MMCSD0_CLK, DA850_MMCSD0_CMD,
-	DA850_GPIO4_2, DA850_GPIO4_1,
-	-1
-};*/
-
-/* ev3dev not needed
-const short da850_nand_pins[] __initdata = {
-	DA850_EMA_D_7, DA850_EMA_D_6, DA850_EMA_D_5, DA850_EMA_D_4,
-	DA850_EMA_D_3, DA850_EMA_D_2, DA850_EMA_D_1, DA850_EMA_D_0,
-	DA850_EMA_A_1, DA850_EMA_A_2, DA850_NEMA_CS_3, DA850_NEMA_CS_4,
-	DA850_NEMA_WE, DA850_NEMA_OE,
-	-1
-};
-
-const short da850_nor_pins[] __initdata = {
-	DA850_EMA_BA_1, DA850_EMA_CLK, DA850_EMA_WAIT_1, DA850_NEMA_CS_2,
-	DA850_NEMA_WE, DA850_NEMA_OE, DA850_EMA_D_0, DA850_EMA_D_1,
-	DA850_EMA_D_2, DA850_EMA_D_3, DA850_EMA_D_4, DA850_EMA_D_5,
-	DA850_EMA_D_6, DA850_EMA_D_7, DA850_EMA_D_8, DA850_EMA_D_9,
-	DA850_EMA_D_10, DA850_EMA_D_11, DA850_EMA_D_12, DA850_EMA_D_13,
-	DA850_EMA_D_14, DA850_EMA_D_15, DA850_EMA_A_0, DA850_EMA_A_1,
-	DA850_EMA_A_2, DA850_EMA_A_3, DA850_EMA_A_4, DA850_EMA_A_5,
-	DA850_EMA_A_6, DA850_EMA_A_7, DA850_EMA_A_8, DA850_EMA_A_9,
-//	DA850_EMA_A_10,
-        DA850_EMA_A_11, DA850_EMA_A_12, DA850_EMA_A_13,
-	DA850_EMA_A_14, DA850_EMA_A_15, DA850_EMA_A_16, DA850_EMA_A_17,
-	DA850_EMA_A_18, DA850_EMA_A_19, DA850_EMA_A_20, DA850_EMA_A_21,
-	DA850_EMA_A_22, DA850_EMA_A_23,
-	-1
-};
-*/
-
-/* ev3dev not needed
-
-const short da850_spi0_pins[] __initdata = {
-	DA850_SPI0_CS_0, DA850_SPI0_CLK, DA850_SPI0_SOMI, DA850_SPI0_SIMO,
-	-1
-};
-
-const short da850_spi1_pins[] __initdata = {
-	DA850_SPI1_CS_0, DA850_SPI1_CLK, DA850_SPI1_SOMI, DA850_SPI1_SIMO,
-	-1
-};
-
-const short da850_mcbsp0_pins[] __initdata = {
-	DA850_MCBSP0_CLKR, DA850_MCBSP0_CLKX, DA850_MCBSP0_FSR,
-	DA850_MCBSP0_FSX, DA850_MCBSP0_DR, DA850_MCBSP0_DX, DA850_MCBSP0_CLKS,
-	-1
-};
-
-const short da850_mcbsp1_pins[] __initdata = {
-	DA850_MCBSP1_CLKR, DA850_MCBSP1_CLKX, DA850_MCBSP1_FSR,
-	DA850_MCBSP1_FSX, DA850_MCBSP1_DR, DA850_MCBSP1_DX, DA850_MCBSP1_CLKS,
-	-1
-};
-*/
-
 const short da850_ehrpwm0_pins[] __initdata = {
 	DA850_EHRPWM0_A, DA850_EHRPWM0_B, DA850_EHRPWM0_TZ,
 	-1
 };
 
-// const short da850_ehrpwm1_pins[] __initdata = {
-// 	DA850_EHRPWM1_A, DA850_EHRPWM1_TZ,
-// 	-1
-// };
-// 
-// const short da850_uart1_pins[] __initdata = {
-// 	DA850_UART1_RXD, DA850_UART1_TXD,
-// #ifdef CONFIG_DAVINCI_UART1_AFE
-// 	DA850_NUART1_CTS, DA850_NUART1_RTS,
-// #endif
-// 	-1
-// };
+const short da850_ehrpwm1_pins[] __initdata = {
+	DA850_EHRPWM1_A, DA850_EHRPWM1_TZ,
+	-1
+};
 
-/* ev3dev - not needed
+const short da850_uart1_pins[] __initdata = {
+	DA850_UART1_RXD, DA850_UART1_TXD,
+#ifdef CONFIG_DAVINCI_UART1_AFE
+	DA850_NUART1_CTS, DA850_NUART1_RTS,
+#endif
+	-1
+};
+
 const short da850_vpif_capture_pins[] __initdata = {
 	DA850_VPIF_DIN0, DA850_VPIF_DIN1, DA850_VPIF_DIN2, DA850_VPIF_DIN3,
 	DA850_VPIF_DIN4, DA850_VPIF_DIN5, DA850_VPIF_DIN6, DA850_VPIF_DIN7,
@@ -1060,16 +910,6 @@ const short da850_vpif_display_pins[] __initdata = {
 	-1
 };
 
-const short da850_evm_usb11_pins[] __initdata = {
-//	DA850_GPIO6_11, DA850_GPIO6_14, -1
-	DA850_GPIO6_3, -1
-};
-
-const short da850_sata_pins[] __initdata = {
-	-1
-};
-*/
-
 /* FIQ are pri 0-1; otherwise 2-7, with 7 lowest priority */
 static u8 da850_default_priorities[DA850_N_CP_INTC_IRQ] = {
 	[IRQ_DA8XX_COMMTX]		= 7,
@@ -1081,7 +921,6 @@ static u8 da850_default_priorities[DA850_N_CP_INTC_IRQ] = {
 	[IRQ_DA8XX_EVTOUT3]		= 7,
 	[IRQ_DA8XX_EVTOUT4]		= 7,
 	[IRQ_DA8XX_EVTOUT5]		= 7,
-	[IRQ_DA8XX_EVTOUT6]		= 7,
 	[IRQ_DA8XX_EVTOUT6]		= 7,
 	[IRQ_DA8XX_EVTOUT7]		= 7,
 	[IRQ_DA8XX_CCINT0]		= 7,
@@ -1097,7 +936,7 @@ static u8 da850_default_priorities[DA850_N_CP_INTC_IRQ] = {
 	[IRQ_DA8XX_TINT12_0]		= 7,
 	[IRQ_DA8XX_TINT34_0]		= 7,
 	[IRQ_DA8XX_TINT12_1]		= 7,
-	[IRQ_DA8XX_TINT34_1]		= 0,
+	[IRQ_DA8XX_TINT34_1]		= 0,	/* Uses FIQ for EV3 input port i2c */
 	[IRQ_DA8XX_UARTINT0]		= 7,
 	[IRQ_DA8XX_KEYMGRINT]		= 7,
 	[IRQ_DA8XX_SECINT]		= 7,
@@ -1949,23 +1788,6 @@ void __init da850_init(void)
 	da8xx_syscfg1_base = ioremap(DA8XX_SYSCFG1_BASE, SZ_4K);
 	if (WARN(!da8xx_syscfg1_base, "Unable to map syscfg1 module"))
 		return;
-
-
-// FIXME: Add support for these two items if we need it
-//	da8xx_psc1_base = ioremap(DA8XX_PSC1_BASE, SZ_4K);		// LEGO BT slow clock
-//	if (WARN(!da8xx_psc1_base, "Unable to map psc1 module"))	// LEGO BT slow clock
-//		return;							// LEGO BT slow clock
-//
-//	da8xx_ecap2_base = ioremap(DA8XX_ECAP2_BASE, SZ_4K);		// LEGO BT slow clock
-//	if (WARN(!da8xx_ecap2_base, "Unable to map ecap2 module"))	// LEGO BT slow clock
-//		return;							// LEGO BT slow clock
-//
-
-
-//	davinci_soc_info_da850.jtag_id_base =
-//					DA8XX_SYSCFG0_VIRT(DA8XX_JTAG_ID_REG);
-//	davinci_soc_info_da850.pinmux_base = DA8XX_SYSCFG0_VIRT(0x120);
-
 
 	/*
 	 * Move the clock source of Async3 domain to PLL1 SYSCLK2.
