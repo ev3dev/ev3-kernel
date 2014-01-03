@@ -279,11 +279,13 @@ legoev3_fiq_timer_callback(struct legoev3_fiq_port_data *data)
 		break;
 
 	case TRANSFER_STOP:
-		/* generate stop condition - sda low to high while clock is high */
-//		if ((msg->flags & I2C_M_RD) && data->buf_offset < msg->len)
-			fiq_gpio_dir_out(&data->gpio[FIQ_I2C_PIN_SDA], 0);
-//		else
-//			fiq_gpio_dir_in(&data->gpio[FIQ_I2C_PIN_SDA]);
+		/*
+		 * Note: The official LEGO firmware does not generate stop
+		 * condition except for in the middle of reads (see below).
+		 * We are going by the book and doing a stop when we are
+		 * suppoed to. We can change it back if there are problems.
+		 */
+		fiq_gpio_dir_out(&data->gpio[FIQ_I2C_PIN_SDA], 0);
 
 		if (data->clock_state)
 			data->transfer_state = TRANSFER_STOP2;
@@ -320,8 +322,9 @@ legoev3_fiq_timer_callback(struct legoev3_fiq_port_data *data)
 
 	case TRANSFER_STOP3:
 		/*
-		 * Leave sda in input position when not in use so that
-		 * we can detect when a sensor is disconnected. (Device
+		 * Generate stop condition - sda low to high while clock
+		 * is high. Leave sda in input position when not in use so
+		 * that we can detect when a sensor is disconnected. (Device
 		 * detection is implemented in the ev3-input-ports driver.)
 		 */
 		fiq_gpio_dir_in(&data->gpio[FIQ_I2C_PIN_SDA]);
