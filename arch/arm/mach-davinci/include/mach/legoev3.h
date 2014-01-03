@@ -157,6 +157,11 @@ enum legoev3_pin_map {
 	GPIO_PIN(OUT4_PIN5, 5, 15)
 	GPIO_PIN(OUT4_PIN6, 2, 8)
 	PIN(OUT4_PWM, ECAP1_APWM1)
+	GPIO_PIN(FIQ_STAT, 2, 7) /* used by FIQ handler routine to notify
+					the OS when status has changed.
+					See arch/arm/mach-davinci/legoev3-fiq.c.
+					This pin is TP4 in the lms2012 source
+					code, so it should be safe to use. */
 };
 
 #endif /* __ASM_ARCH_DAVINCI_LEGOEV3_H */

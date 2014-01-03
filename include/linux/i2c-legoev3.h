@@ -11,14 +11,21 @@
 #ifndef _LINUX_I2C_LEGOEV3_H
 #define _LINUX_I2C_LEGOEV3_H
 
+#include <mach/legoev3.h>
+
 /**
  * struct i2c_legoev3_platform_data - Platform-dependent data for i2c-legoev3
- * @sda_pin: GPIO pin ID to use for SDA
- * @scl_pin: GPIO pin ID to use for SCL
+ * @sda_pin: GPIO pin ID to use for SDA.
+ * @scl_pin: GPIO pin ID to use for SCL.
+ * @irq_pin: GPIO pin ID to use for triggering an IRQ from the FIQ context.
+ *	We can use the other pin 5 gpio on the input port since we know
+ *	it is not being used as long as we are using I2C.
+ * @port_id: The input port identifier.
  */
 struct i2c_legoev3_platform_data {
 	unsigned int	sda_pin;
 	unsigned int	scl_pin;
+	enum legoev3_input_port_id port_id;
 };
 
 #endif /* _LINUX_I2C_LEGOEV3_H */

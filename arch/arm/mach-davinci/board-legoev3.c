@@ -41,6 +41,7 @@
 #include <mach/cp_intc.h>
 #include <mach/da8xx.h>
 #include <mach/legoev3.h>
+#include <mach/legoev3-fiq.h>
 #include <mach/nand.h>
 #include <mach/mux.h>
 #include <mach/spi.h>
@@ -534,7 +535,7 @@ static const short legoev3_in_out_pins[] __initconst = {
 	EV3_OUT2_PIN1, EV3_OUT2_PIN2, EV3_OUT2_PIN5, EV3_OUT2_PIN6,
 	EV3_OUT3_PIN1, EV3_OUT3_PIN2, EV3_OUT3_PIN5, EV3_OUT3_PIN6,
 	EV3_OUT4_PIN1, EV3_OUT4_PIN2, EV3_OUT4_PIN5, EV3_OUT4_PIN6,
-	EV3_OUT1_PWM, EV3_OUT2_PWM, EV3_OUT3_PWM, EV3_OUT4_PWM,
+	EV3_OUT1_PWM, EV3_OUT2_PWM, EV3_OUT3_PWM, EV3_OUT4_PWM, EV3_FIQ_STAT,
 	-1
 };
 
@@ -630,6 +631,35 @@ static struct platform_device legoev3_ports_device = {
 	.id	= -1,
 	.dev	= {
 		.platform_data	= &legoev3_ports_data,
+	},
+};
+
+/*
+ * EV3 input port I2C configuration:
+ * =================================
+ * The input ports each can communicate via I2C. The AM1808 processor only has
+ * two I2C ports and the NXT ultrasonic sensor requires a non-standard hack
+ * to make it work, so we implement our own I2C using GPIO. In order to get
+ * the required performance, we use a system timer and an FIQ interrupt.
+ */
+
+static struct resource legoev3_in_port_i2c_resources[] = {
+	DEFINE_RES_MEM_NAMED(DA8XX_GPIO_BASE, 0xD8, "gpio-mem"),
+	DEFINE_RES_MEM_NAMED(DA8XX_CP_INTC_BASE, 0x608, "intc-mem"),
+	DEFINE_RES_IRQ_NAMED(IRQ_DA8XX_TINT34_1, "timer-irq"),
+};
+
+static struct legoev3_fiq_platform_data legoev3_in_port_i2c_platform_data = {
+	.status_gpio	= EV3_FIQ_STAT_PIN,
+};
+
+static struct platform_device legoev3_in_port_i2c_fiq = {
+	.name		= "legoev3-fiq",
+	.id		= -1,
+	.resource	= legoev3_in_port_i2c_resources,
+	.num_resources	= ARRAY_SIZE(legoev3_in_port_i2c_resources),
+	.dev		= {
+		.platform_data	= &legoev3_in_port_i2c_platform_data,
 	},
 };
 
@@ -844,6 +874,12 @@ static __init void legoev3_init(void)
 	if (ret)
 		pr_warning("legoev3_init: "
 			"input/output port registration failed: %d\n", ret);
+#endif
+#if defined(CONFIG_LEGOEV3_FIQ)
+	ret = platform_device_register(&legoev3_in_port_i2c_fiq);
+	if (ret)
+		pr_warning("legoev3_init: "
+			"FIQ I2C backend registration failed: %d\n", ret);
 #endif
 
 	/* eHRPWM support */

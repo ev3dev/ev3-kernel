@@ -936,7 +936,7 @@ static u8 da850_default_priorities[DA850_N_CP_INTC_IRQ] = {
 	[IRQ_DA8XX_TINT12_0]		= 7,
 	[IRQ_DA8XX_TINT34_0]		= 7,
 	[IRQ_DA8XX_TINT12_1]		= 7,
-	[IRQ_DA8XX_TINT34_1]		= 0,	/* Uses FIQ for EV3 input port i2c */
+	[IRQ_DA8XX_TINT34_1]		= 0, /* Uses FIQ for EV3 input port i2c */
 	[IRQ_DA8XX_UARTINT0]		= 7,
 	[IRQ_DA8XX_KEYMGRINT]		= 7,
 	[IRQ_DA8XX_SECINT]		= 7,
@@ -1107,12 +1107,14 @@ static struct davinci_timer_instance da850_timer_instance[4] = {
 /*
  * T0_BOT: Timer 0, bottom		: Used for clock_event
  * T0_TOP: Timer 0, top			: Used for clocksource
- * T1_BOT, T1_TOP: Timer 1, bottom & top: Used for watchdog timer
+ * T1_TOP: Timer 1, bottom		: Used for fiqsource - see legoev3-fiq.c
+ * T1_BOT and T1_TOP are also used for watchdog
  */
 static struct davinci_timer_info da850_timer_info = {
 	.timers		= da850_timer_instance,
 	.clockevent_id	= T0_BOT,
 	.clocksource_id	= T0_TOP,
+	.fiqsource_id	= T1_TOP,
 };
 
 static void da850_set_async3_src(int pllnum)
