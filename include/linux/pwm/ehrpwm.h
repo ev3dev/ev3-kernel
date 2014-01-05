@@ -3,6 +3,155 @@
 
 #include <linux/pwm/pwm.h>
 
+/* TODO: should we make these defines into enums? */
+
+/* TBLCTL (Time-Based Control) */
+
+/* TBCNT Mode bits */
+#define TB_COUNT_UP      0x0
+#define TB_COUNT_DOWN    0x1
+#define TB_COUNT_UP_DOWN 0x2
+#define TB_FREEZE        0x3
+/* PHSEN bit */
+#define TB_DISABLE       0x0
+#define TB_ENABLE        0x1
+/* PRDLD bit */
+#define TB_SHADOW        0x0
+#define TB_IMMEDIATE     0x1
+/* SYNCOSEL bits */
+#define TB_SYNC_IN       0x0
+#define TB_CTR_ZERO      0x1
+#define TB_CTR_CMPB      0x2
+#define TB_SYNC_DISABLE  0x3
+/* HSPCLKDIV bits */
+#define TB_HS_DIV1       0x0
+#define TB_HS_DIV2       0x1
+#define TB_HS_DIV4       0x2
+#define TB_HS_DIV6       0x3
+#define TB_HS_DIV8       0x4
+#define TB_HS_DIV10      0x5
+#define TB_HS_DIV12      0x6
+#define TB_HS_DIV14      0x7
+/* CLKDIV bits */
+#define TB_DIV1          0x0
+#define TB_DIV2          0x1
+#define TB_DIV4          0x2
+#define TB_DIV8          0x3
+#define TB_DIV16         0x4
+#define TB_DIV32         0x5
+#define TB_DIV64         0x6
+#define TB_DIV128        0x7
+/* PHSRDIR bit */
+#define TB_DOWN          0x0
+#define TB_UP            0x1
+
+/* CMPCTL (Compare Control) */
+
+/* LOADAMODE and LOADBMODE bits */
+#define CC_CTR_ZERO      0x0
+#define CC_CTR_PRD       0x1
+#define CC_CTR_ZERO_PRD  0x2
+#define CC_LD_DISABLE    0x3
+/* SHDWAMODE and SHDWBMODE bits */
+#define CC_SHADOW        0x0
+#define CC_IMMEDIATE     0x1
+
+/* AQCCTLA and AQCTLB (Action-qualifier Control) */
+
+/* channel */
+#define AQ_CHA           0x0
+#define AQ_CHB           0x1
+/* ZRO, PRD, CAU, CAD, CBU and CBD bits */
+#define AQ_NO_ACTION     0x0
+#define AQ_CLEAR         0x1
+#define AQ_SET           0x2
+#define AQ_TOGGLE        0x3
+
+/* DBCTL (Dead-Band Control) */
+
+/* MODE bits */
+#define DB_DISABLE       0x0
+#define DBA_ENABLE       0x1
+#define DBB_ENABLE       0x2
+#define DB_FULL_ENABLE   0x3
+/* POLESL bits */
+#define DB_ACTIVE_HIGH   0x0
+#define DB_ACTIVE_LOWC   0x1
+#define DB_ACTIVE_HIGHC  0x2
+#define DB_ACTIVE_LOW    0x3
+
+/* PCCTL (Pulse-chopper control) */
+
+/* CHPEN bit */
+#define PC_DISABLE       0x0
+#define PC_ENABLE        0x1
+/* CHPFREQ bits */
+#define PC_DIV1          0x0
+#define PC_DIV2          0x1
+#define PC_DIV3          0x2
+#define PC_DIV4          0x3
+#define PC_DIV5          0x4
+#define PC_DIV6          0x5
+#define PC_DIV7          0x6
+#define PC_DIV8          0x7
+/* CHPDUTY bits */
+#define PC_1_8TH         0x0
+#define PC_2_8TH         0x1
+#define PC_3_8TH         0x2
+#define PC_4_8TH         0x3
+#define PC_5_8TH         0x4
+#define PC_6_8TH         0x5
+#define PC_7_8TH         0x6
+
+/* TZSEL (Trip-zone Select) */
+
+/* CBCn and OSHTn bits */
+#define TZ_ENABLE        0x0
+#define TZ_DISABLE       0x1
+
+/* TZCTL (Trip-zone Control) */
+
+/* TZA and TZB bits */
+#define TZ_HIGHZ         0x0
+#define TZ_FORCE_HIGH    0x1
+#define TZ_FORCE_LOW     0x2
+#define TZ_TZ_DISABLE    0x3
+
+/* ETSEL (Event-trigger Select) */
+
+/* INTEN bit */
+#define ET_DISABLE       0x0
+#define ET_ENABLE        0x1
+/* INTSEL, SOCASEL, SOCBSEL bits */
+#define ET_CTR_ZERO      0x1
+#define ET_CTR_PRD       0x2
+#define ET_CTRU_CMPA     0x4
+#define ET_CTRD_CMPA     0x5
+#define EC_CTRU_CMPB     0x6
+#define EC_CTRD_CMPB     0x7
+
+/* ETPS (Event-trigger Prescale) */
+
+/* INTPRD, SOCAPRD, SOCBPRD bits */
+#define ET_DISABLE       0x0
+#define ET_1ST           0x1
+#define ET_2ND           0x2
+#define ET_3RD           0x3
+
+/* HRCNFG (High-resolution PWM configuration) */
+
+/* EDGMODE */
+#define HR_MEP_DISABLE   0x0
+#define HR_MEP_RISING    0x1
+#define HR_MEP_FALLING   0x2
+#define HR_MEP_BOTH      0x3
+/* CTLMODE */
+#define HR_DUTY          0x0
+#define HR_PHASE         0x1
+/* HRLOAD */
+#define HR_CTR_ZERO      0x0
+#define HR_CTR_PRD       0x1
+
 #define NCHAN 2
 
 struct ehrpwm_platform_data {
@@ -75,6 +224,8 @@ int ehrpwm_tb_force_sync(struct pwm_device *p);
 
 int ehrpwm_tb_set_periodload(struct pwm_device *p, unsigned char
 	       loadmode);
+
+int ehrpwm_tb_set_counter(struct pwm_device *p, unsigned short val);
 
 int ehrpwm_tb_read_status(struct pwm_device *p, unsigned short *val);
 
@@ -169,8 +320,5 @@ int ehrpwm_tz_cb_register(struct pwm_device *p, void *data,
 int ehrpwm_pwm_suspend(struct pwm_device *p, enum
 	       config_mask config_mask,
 	       unsigned long val);
-
-#define ENABLE 1
-#define DISABLE 0
 
 #endif
