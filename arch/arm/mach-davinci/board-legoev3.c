@@ -75,6 +75,8 @@
 #define EV3_BUTTON_4_PIN                GPIO_TO_PIN(6, 6 )
 #define EV3_BUTTON_5_PIN                GPIO_TO_PIN(6, 10)
 
+#define EV3_POWER_PIN                   GPIO_TO_PIN(6, 11)
+
 #define EV3_SND_ENA_PIN                 GPIO_TO_PIN(6, 15)
 
 #else
@@ -2029,16 +2031,10 @@ static const short da850_lms2012_lcd_pins[] = {
 #define EV3_BUTTON_5  EV3_GPIO6_10
 
 static const short legoev3_ui_pins[] = {
-#if !(defined(CONFIG_LEDS_GPIO) || defined(CONFIG_LEDS_GPIO_MODULE))
-  #warning "The LEDs are owned by the ui driver, not the kernel - LED triggers will not work"
         EV3_LED_0, EV3_LED_1, EV3_LED_2, EV3_LED_3,
-#endif
 
-#if !(defined(CONFIG_KEYBOARD_GPIO) || defined(CONFIG_KEYBOARD_GPIO_MODULE))
-  #warning "The buttons are owned by the ui driver, not the kernel - button events will not work"
         EV3_BUTTON_0, EV3_BUTTON_1, EV3_BUTTON_2,
         EV3_BUTTON_3, EV3_BUTTON_4, EV3_BUTTON_5,
-#endif
 	-1
 };
 static const short legoev3_sound_pins[] = {
@@ -2158,6 +2154,15 @@ struct uio_pruss_pdata da8xx_pruss_uio_pdata = {
 
 #define DA850EVM_SATA_REFCLKPN_RATE	(100 * 1000 * 1000)
 
+static void ev3dev_power_off(void)
+{
+        if (!gpio_request(EV3_POWER_PIN, "EV3 power enable"))
+                gpio_direction_output(EV3_POWER_PIN, 0);
+        else
+                pr_err("da850_evm_init: can not open GPIO %d for power off\n",
+                  EV3_POWER_PIN);
+}
+
 static __init void da850_legoev3_init(void)
 {
 	int ret;
@@ -2165,6 +2170,8 @@ static __init void da850_legoev3_init(void)
 	struct davinci_soc_info *soc_info = &davinci_soc_info;
 
 	u8 rmii_en = soc_info->emac_pdata->rmii_en;
+
+        pm_power_off = ev3dev_power_off;
 
 #ifdef CONFIG_MACH_DAVINCI_LEGOEV3
 #warning "Keep this code and eliminate this warning after copying this file to board-legoev3.c"
@@ -2213,17 +2220,15 @@ static __init void da850_legoev3_init(void)
                                  ret);
 #endif
 
-#if defined(CONFIG_KEYBOARD_GPIO) || defined(CONFIG_KEYBOARD_GPIO_MODULE)
-  /* This is CRITICAL code to making the LEFT button work - it disables
+  /*
+   * This is CRITICAL code to making the LEFT button work - it disables
    * the internal pullup on pin group 25 which is where the GPIO6_6 lives.
    */
   ret = __raw_readl(DA8XX_SYSCFG1_VIRT(DA8XX_PUPD_SEL_REG));
   ret &= 0xFDFFFFFF;
   __raw_writel(ret, DA8XX_SYSCFG1_VIRT(DA8XX_PUPD_SEL_REG));
 
-  gpio_request_array(legoev3_button_gpio, ARRAY_SIZE(legoev3_button_gpio));
-  gpio_free_array(legoev3_button_gpio, ARRAY_SIZE(legoev3_button_gpio));
-
+#if defined(CONFIG_KEYBOARD_GPIO) || defined(CONFIG_KEYBOARD_GPIO_MODULE)
   ret = platform_device_register(&ev3_device_gpiokeys);
   if (ret)
     pr_warning("da850_evm_init: button registration failed: %d\n",

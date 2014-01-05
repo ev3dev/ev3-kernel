@@ -55,6 +55,8 @@ modules.builtin
 #
 !.gitignore
 !.mailmap
+!.config
+!.version
 !pru*/*
 
 #
