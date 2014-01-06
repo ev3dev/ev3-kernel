@@ -40,6 +40,7 @@
 #define BUFFER_SIZE (64*1024)
 #define TONE_MIN_HZ 100
 #define TONE_MAX_HZ 10000
+#define SAMPLE_RATE 22050
 
 struct snd_legoev3 {
 	struct pwm_device *pwm;
@@ -70,7 +71,7 @@ static struct snd_pcm_hardware snd_legoev3_playback_hw = {
 	.periods_max =      1024,
 };
 
-static unsigned int rates[] = { 48000 };
+static unsigned int rates[] = { SAMPLE_RATE };
 static struct snd_pcm_hw_constraint_list constraints_rates = {
 	.count = ARRAY_SIZE(rates),
 	.list = rates,
@@ -144,11 +145,12 @@ static int snd_legoev3_et_callback(struct ehrpwm_pwm *ehrpwm, void *data)
 	struct snd_legoev3 *chip = snd_pcm_substream_chip(substream);
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct pwm_device *pwm = chip->pwm;
+	int sample;
 	unsigned long duty_ticks;
 
-	duty_ticks = (*(short *)(runtime->dma_area + chip->playback_ptr)
-	              ^ 0x8000) * pwm->period_ticks / 0xffff *
-	              chip->global_volume / 0xffff;
+	sample = *(short *)(runtime->dma_area + chip->playback_ptr);
+	sample = sample * chip->global_volume / 0xffff;
+	duty_ticks = (sample + 0x8000) * pwm->period_ticks / 0xffff;
 
 	pwm_set_duty_ticks(pwm, duty_ticks);
 
@@ -221,7 +223,7 @@ static int __devinit snd_legoev3_init_ehrpwm(struct pwm_device *pwm)
 	err = ehrpwm_pc_en_dis(pwm, PC_DISABLE);
 	if (err < 0)
 		return err;
-	err = ehrpwm_et_set_sel_evt(pwm, ET_CTR_PRD, ET_1ST);
+	err = ehrpwm_et_set_sel_evt(pwm, ET_CTR_PRD, ET_3RD);
 	if (err < 0)
 		return err;
 	err = ehrpwm_hr_config(pwm, HR_CTR_ZERO, HR_DUTY, HR_MEP_DISABLE);
@@ -341,7 +343,7 @@ static int snd_legoev3_pcm_playback_open(struct snd_pcm_substream *substream)
 	if (err < 0)
 		return err;
 
-	err = pwm_set_frequency(chip->pwm, 48000);
+	err = pwm_set_frequency(chip->pwm, SAMPLE_RATE * 3);
 	if (err < 0)
 		return err;
 
