@@ -62,7 +62,7 @@ EV3_##ev3_name##_PIN	= GPIO_TO_PIN(group, pin),
 
 enum legoev3_pin_map {
 	/* LCD pins */
-	PIN(LCD_DATA_IN, SPI1_SOMI)
+	PIN(LCD_DATA_OUT, SPI1_SIMO)
 	GPIO_PIN(LCD_RESET, 5, 0)
 	GPIO_PIN(LCD_A0, 2, 11)
 	GPIO_PIN(LCD_CS, 2, 12)
@@ -87,7 +87,12 @@ enum legoev3_pin_map {
 
 	/* power pins */
 	GPIO_PIN(SYS_5V_POWER, 6, 11)
+	GPIO_PIN(SYS_POWER_ENA, 6, 5) /* LEGO uses 6, 5 for power off, but lejos use 6, 11 */
 	GPIO_PIN(BATT_TYPE, 8, 8)
+
+	/* I2C board pins */
+	PIN(I2C_BOARD_SDA, I2C0_SDA)
+	PIN(I2C_BOARD_SCL, I2C0_SCL)
 
 	/* analog/digital converter pins */
 	PIN(ADC_DATA_IN, SPI0_SOMI)
@@ -97,7 +102,6 @@ enum legoev3_pin_map {
 	GPIO_PIN(ADC_ENA, 0, 6)
 
 	/* USB1 VBUS pins */
-	GPIO_PIN(USB1_DRV, 1, 4)
 	GPIO_PIN(USB1_OVC, 6, 3)
 
 	/* SD card reader pins */

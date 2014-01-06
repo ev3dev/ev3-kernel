@@ -56,7 +56,7 @@
  */
 
 static const short legoev3_lcd_pins[] __initconst = {
-	EV3_LCD_DATA_IN, EV3_LCD_RESET, EV3_LCD_A0, EV3_LCD_CS
+	EV3_LCD_DATA_OUT, EV3_LCD_RESET, EV3_LCD_A0, EV3_LCD_CS
 	-1
 };
 
@@ -80,7 +80,6 @@ static struct spi_board_info legoev3_spi1_board_info[] = {
 		.mode			= SPI_MODE_3 | SPI_NO_CS,
 		.max_speed_hz		= 10000000,
 		.bus_num		= 1,
-		.chip_select		= 0,
 	},
 };
 
@@ -202,7 +201,7 @@ static struct platform_device da850_pm_device = {
  */
 
 static const short legoev3_usb1_pins[] __initconst = {
-	EV3_USB1_DRV, EV3_USB1_OVC,
+	EV3_USB1_OVC,
 	-1
 };
 
@@ -212,7 +211,6 @@ static struct da8xx_ohci_root_hub legoev3_usb1_pdata = {
 	.type	= GPIO_BASED,
 	.method	= {
 		.gpio_method = {
-			.power_control_pin	= EV3_USB1_DRV_PIN,
 			.over_current_indicator = EV3_USB1_OVC_PIN,
 		},
 	},
@@ -376,6 +374,46 @@ static __init int legoev3_init_cpufreq(void) { return 0; }
 #endif
 
 /*
+ * EV3 I2C board configuration:
+ * ============================
+ * This is the I2C that communicates with other devices on the main board,
+ * not the input ports. (Using I2C0)
+ * Devices are:
+ * - EEPROM (24FC128) to get the hardware version and the bluetooth MAC
+ *	address for the EV3.
+ * - The bluetooth module (PIC_*) for lms2012 Mode 2 communications,
+ *	whatever that is.
+ */
+
+static const short legoev3_i2c_board_pins[] __initconst = {
+	EV3_I2C_BOARD_SDA, EV3_I2C_BOARD_SCL,
+	-1
+};
+
+static struct i2c_board_info __initdata legoev3_i2c_board_devices[] = {
+	{
+		I2C_BOARD_INFO("24FC128", 0x50),
+	},
+	{
+		I2C_BOARD_INFO("PIC_CodedDataTo", 0x54),
+	},
+	{
+		I2C_BOARD_INFO("PIC_ReadStatus", 0x55),
+	},
+	{
+		I2C_BOARD_INFO("PIC_RawDataTo", 0x56),
+	},
+	{
+		I2C_BOARD_INFO("PIC_ReadDataFrom", 0x57),
+	},
+};
+
+static struct davinci_i2c_platform_data legoev3_i2c_board_pdata = {
+	.bus_freq	= 400	/* kHz */,
+	.bus_delay	= 0	/* usec */,
+};
+
+/*
  * EV3 UART configuration:
  * =======================
  */
@@ -523,7 +561,8 @@ static struct spi_board_info legoev3_spi0_board_info[] = {
  * Note: The i2c clock and uart functions of the input port share the same
  * physical pin on the chip, so instead of including them in the board pin mux,
  * they are passed to input port driver which performs the mux as necessary when
- * devices are added and removed.
+ * devices are added and removed. I2C device ids start at 3 because the SoC
+ * I2Cs use 1 and 2.
  */
 
 static const short legoev3_in_out_pins[] __initconst = {
@@ -549,7 +588,7 @@ static struct legoev3_ports_platform_data legoev3_ports_data = {
 			.pin6_gpio		= EV3_IN1_PIN6_PIN,
 			.buf_ena_gpio		= EV3_IN1_BUF_ENA_PIN,
 			.i2c_clk_gpio		= EV3_IN1_I2C_CLK_PIN,
-			.i2c_dev_id		= 0,
+			.i2c_dev_id		= 3,
 			.i2c_pin_mux		= EV3_IN1_I2C_CLK,
 			.uart_pin_mux		= EV3_IN1_UART,
 		},
@@ -561,7 +600,7 @@ static struct legoev3_ports_platform_data legoev3_ports_data = {
 			.pin6_gpio		= EV3_IN2_PIN6_PIN,
 			.buf_ena_gpio		= EV3_IN2_BUF_ENA_PIN,
 			.i2c_clk_gpio		= EV3_IN2_I2C_CLK_PIN,
-			.i2c_dev_id		= 1,
+			.i2c_dev_id		= 4,
 			.i2c_pin_mux		= EV3_IN2_I2C_CLK,
 			.uart_pin_mux		= EV3_IN2_UART,
 		},
@@ -573,7 +612,7 @@ static struct legoev3_ports_platform_data legoev3_ports_data = {
 			.pin6_gpio		= EV3_IN3_PIN6_PIN,
 			.buf_ena_gpio		= EV3_IN3_BUF_ENA_PIN,
 			.i2c_clk_gpio		= EV3_IN3_I2C_CLK_PIN,
-			.i2c_dev_id		= 2,
+			.i2c_dev_id		= 5,
 			.i2c_pin_mux		= EV3_IN3_I2C_CLK,
 			.uart_pin_mux		= EV3_IN3_UART,
 		},
@@ -585,7 +624,7 @@ static struct legoev3_ports_platform_data legoev3_ports_data = {
 			.pin6_gpio		= EV3_IN4_PIN6_PIN,
 			.buf_ena_gpio		= EV3_IN4_BUF_ENA_PIN,
 			.i2c_clk_gpio		= EV3_IN4_I2C_CLK_PIN,
-			.i2c_dev_id		= 3,
+			.i2c_dev_id		= 6,
 			.i2c_pin_mux		= EV3_IN4_I2C_CLK,
 			.uart_pin_mux		= EV3_IN4_UART,
 		},
@@ -788,7 +827,7 @@ static __init void legoev3_init(void)
 			" %d\n", ret);
 #endif
 
-	/* Support for EV3 buttonss */
+	/* Support for EV3 buttons */
 	ret = davinci_cfg_reg_list(legoev3_button_pins);
 	if (ret)
 		pr_warning("legoev3_init: Button mux setup failed:"
@@ -820,6 +859,15 @@ static __init void legoev3_init(void)
 	if (ret)
 		pr_warning("da830_evm_init: watchdog registration failed: %d\n",
 				ret);
+
+	/* support for board-level I2C */
+	ret = davinci_cfg_reg_list(legoev3_i2c_board_pins);
+	if (ret)
+		pr_warning("legoev3_init: board i2c mux setup failed: %d\n",
+				ret);
+	i2c_register_board_info(1, legoev3_i2c_board_devices,
+				ARRAY_SIZE(legoev3_i2c_board_devices));
+	da8xx_register_i2c(0, &legoev3_i2c_board_pdata);
 
 #ifdef CONFIG_MACH_DAVINCI_LEGOEV3
 #warning "Let's find out which one of these UARTS we really need to update!"
