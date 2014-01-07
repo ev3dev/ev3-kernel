@@ -758,16 +758,30 @@ static __init int da850_set_emif_clk_rate(void)
  */
 
 static const short legoev3_power_pins[] __initconst = {
-	EV3_SYS_5V_POWER, EV3_BATT_TYPE,
+	EV3_SYS_POWER_ENA, EV3_SYS_5V_POWER, EV3_BATT_TYPE,
 	-1
+};
+
+static struct gpio legoev3_sys_power_gpio[] = {
+	{
+		.gpio	= EV3_SYS_POWER_ENA_PIN,
+		.flags	= GPIOF_OUT_INIT_HIGH,
+		.label	= "System power enable",
+	},
+	{
+		.gpio	= EV3_SYS_5V_POWER_PIN,
+		.flags	= GPIOF_OUT_INIT_HIGH,
+		.label	= "System 5V power enable",
+	},
 };
 
 static void legoev3_power_off(void)
 {
-	if (!gpio_request(EV3_SYS_5V_POWER_PIN, "EV3 system 5V power enable"))
-		gpio_direction_output(EV3_SYS_5V_POWER_PIN, 0);
-	else
-		pr_err("legoev3_init: can not open GPIO %d for power off\n",
+	int ret;
+
+	ret = gpio_direction_output(EV3_SYS_5V_POWER_PIN, 0);
+	if (ret)
+		pr_err("legoev3_init: can not set GPIO %d for power off\n",
 			EV3_SYS_5V_POWER_PIN);
 }
 
@@ -905,6 +919,12 @@ static __init void legoev3_init(void)
 		pr_warning("legoev3_init: power pin mux setup failed:"
 			" %d\n", ret);
 	pm_power_off = legoev3_power_off;
+	/* request the power gpios so that they cannot be accidentally used */
+	ret = gpio_request_array(legoev3_sys_power_gpio,
+				 ARRAY_SIZE(legoev3_sys_power_gpio));
+	if (ret)
+		pr_warning("legoev3_init: requesting power pins failed:"
+			" %d\n", ret);
 #if defined(CONFIG_BATTERY_LEGOEV3) || defined(CONFIG_BATTERY_LEGOEV3_MODULE)
 	ret = platform_device_register(&legoev3_battery_device);
 	if (ret)
