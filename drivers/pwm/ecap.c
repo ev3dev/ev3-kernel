@@ -207,7 +207,7 @@ static int ecap_frequency_transition_cb(struct pwm_device *p)
 		return 0;
 }
 
-static int __init ecap_probe(struct platform_device *pdev)
+static int __devinit ecap_probe(struct platform_device *pdev)
 {
 	struct ecap_pwm *ep = NULL;
 	struct resource *r;

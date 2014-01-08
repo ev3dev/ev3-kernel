@@ -21,6 +21,7 @@
 #include <linux/console.h>
 #include <linux/gpio.h>
 #include <linux/legoev3/legoev3_analog.h>
+#include <linux/legoev3/legoev3_bt_clock.h>
 #include <linux/legoev3/legoev3_ports.h>
 #include <linux/power/legoev3_battery.h>
 #include <linux/platform_device.h>
@@ -275,44 +276,23 @@ static __init void legoev3_usb_init(void)
  * ============================
  */
 
-#ifdef CONFIG_MACH_DAVINCI_LEGOEV3
-#warning "Fixup the da850_evm_bt_slow_clock_init "
-/* Bluetooth Slow clock init using ecap 2 */
-static __init void da850_evm_bt_slow_clock_init(void)						// LEGO BT
-{												// LEGO BT		
-//  int PSC1;											// LEGO BT
-												// LEGO BT
-// FIXME: These registers need proper mapping to HW
-//  PSC1 = __raw_readl(DA8XX_PSC1_VIRT(0x294 * 4));  // Old PSC1 is 32bit -> explains "* 4"	// LEGO BT
-//  PSC1 |= 3;											// LEGO BT
-//  __raw_writel(PSC1, DA8XX_PSC1_VIRT(0x294 * 4));						// LEGO BT
-//												// LEGO BT
-//  PSC1 = __raw_readl(DA8XX_PSC1_VIRT(0x48 * 4));						// LEGO BT
-//  PSC1 |= 3;											// LEGO BT
-//  __raw_writel(PSC1, DA8XX_PSC1_VIRT(0x48 * 4));						// LEGO BT
-//
-//  PSC1 = __raw_readl(DA8XX_SYSCFG1_VIRT(0x3 * 4));						// LEGO BT
-//  PSC1 &= ~0x00000004;										// LEGO BT
-//  __raw_writel(PSC1, DA8XX_SYSCFG1_VIRT(0x3 * 4));						// LEGO BT
-//
-//  __raw_writel(0,      DA8XX_ECAP2_VIRT(0 * 2));     // Old ECAP is 16bit -> explains "* 2"     // LEGO BT
-//  __raw_writel(0,      DA8XX_ECAP2_VIRT(2 * 2));     //						// LEGO BT
-//  __raw_writew(0x0690, DA8XX_ECAP2_VIRT(0x15 * 2));  // Setup					// LEGO BT
-//  __raw_writel(2014,   DA8XX_ECAP2_VIRT(0x06 * 2));  // Duty					// LEGO BT
-//  __raw_writel(4028,   DA8XX_ECAP2_VIRT(0x04 * 2));  // Freq					// LEGO BT
-}
-#endif
+static const short legoev3_bt_pins[] __initconst = {
+	EV3_BT_CLK, EV3_BT_ENA,
+	-1
+};
 
-// static const short da850_bt_slow_clock_pins[] __initconst = {
-// 	EV3_ECAP2_OUT, EV3_ECAP2_OUT_ENABLE,
-// 	-1
-// };
+static struct legoev3_bt_clock_platform_data legoev3_bt_clock_pdata = {
+//	.ena_gpio	= EV3_BT_ENA_PIN,
+	.clk_pwm_dev	= "ecap.2",
+};
 
-// static const short da850_bt_shut_down_pins[] __initconst = {
-// 	EV3_GPIO4_1, EV3_GPIO4_9,
-// 	-1
-// };
-
+static struct platform_device legoev3_bt_clock_device = {
+	.name	= "legoev3-bt-clock",
+	.dev	= {
+		.platform_data	= &legoev3_bt_clock_pdata,
+	},
+	.id	= -1,
+};
 
 /*
  * SD card reader configuration:
@@ -981,21 +961,6 @@ static __init void legoev3_init(void)
 			"sound device registration failed: %d\n", ret);
 #endif
 
-	/* Bluetooth support */
-#ifdef CONFIG_MACH_DAVINCI_LEGOEV3
-#warning "Sort out this bluetooth init code! Needed for EV3"
-#else
-	pr_info("da850_evm_gpio_req_BT_EN\n");	
-	
-	ret = gpio_request(DA850_BT_EN, "WL1271_BT_EN");
-	if (ret)
-		pr_warning("legoev3_init: can not open BT GPIO %d\n",
-					DA850_BT_EN);
-	gpio_direction_output(DA850_BT_EN, 1);
-	udelay(1000);
-	gpio_direction_output(DA850_BT_EN, 0);
-#endif
-
 	/* SD card support */
 	ret = davinci_cfg_reg_list(legoev3_sd_pins);
 	if (ret)
@@ -1035,43 +1000,20 @@ static __init void legoev3_init(void)
 	legoev3_usb_init();
 
 	/* Bluetooth support */
-//	if (gpio_request(DA850_BT_SHUT_DOWN, "bt_en")) {			// LEGO BT
-//		printk(KERN_ERR "Failed to request gpio DA850_BT_SHUT_DOWN\n");	// LEGO BT
-//		return;								// LEGO BT
-//	}									// LEGO BT
-
-//	if (gpio_request(DA850_BT_SHUT_DOWN_EP2, "bt_en_EP2")) {		// LEGO BT - EP2
-//		printk(KERN_ERR "Failed to request gpio DA850_BT_SHUT_DOWN\n");	// LEGO BT - EP2
-//		return;								// LEGO BT - EP2
-//	}									// LEGO BT - EP2
-
-//	gpio_set_value(DA850_BT_SHUT_DOWN_EP2, 0);				// LEGO BT - EP2
-//	gpio_direction_output(DA850_BT_SHUT_DOWN_EP2, 0);			// LEGO BT - EP2
-
-//	gpio_set_value(DA850_BT_SHUT_DOWN, 0);					// LEGO BT
-//	gpio_direction_output(DA850_BT_SHUT_DOWN, 0);				// LEGO BT
-
-//	/* Support for Bluetooth shut dw pin */					// LEGO BT
-//	pr_info("Support for Bluetooth shut dw pin\n");	
-//	ret = davinci_cfg_reg_list(da850_bt_shut_down_pins);			// LEGO BT
-//	if (ret)								// LEGO BT
-//		pr_warning("legoev3_init: BT shut down mux setup failed:"	// LEGO BT
-//						" %d\n", ret);			// LEGO BT
-
-//	gpio_set_value(DA850_BT_SHUT_DOWN, 0);					// LEGO BT
-//	gpio_set_value(DA850_BT_SHUT_DOWN_EP2, 0);				// LEGO BT - EP2
-
-//       /* Support for Bluetooth slow clock */					// LEGO BT
-//	ret = davinci_cfg_reg_list(da850_bt_slow_clock_pins);			// LEGO BT
-//	if (ret)								// LEGO BT
-//		pr_warning("legoev3_init: BT slow clock mux setup failed:"	// LEGO BT
-//						" %d\n", ret);			// LEGO BT
-
-//	da850_evm_bt_slow_clock_init();						// LEGO BT
-//	gpio_direction_input(DA850_ECAP2_OUT_ENABLE);				// LEGO BT
-
-//	gpio_set_value(DA850_BT_SHUT_DOWN, 1);					// LEGO BT
-//	gpio_set_value(DA850_BT_SHUT_DOWN_EP2, 1);				// LEGO BT - EP2
+	ret = davinci_cfg_reg_list(legoev3_bt_pins);
+	if (ret)
+		pr_warning("legoev3_init: bluetooth pin mux setup failed:"
+			   " %d\n", ret);
+	gpio_request_one(EV3_BT_ENA_PIN, GPIOF_INIT_LOW, "bluetooth enable"); /* active low */
+	ret = da850_register_ecap(2);
+	if (ret)
+		pr_warning("legoev3_init: registering bluetooth clock ecap device failed:"
+			   " %d\n", ret);
+	ret = platform_device_register(&legoev3_bt_clock_device);
+	if (ret)
+		pr_warning("legoev3_init: registering bluetooth clock device failed:"
+			   " %d\n", ret);
+//	gpio_set_value(EV3_BT_ENA_PIN, 1); /* active low */
 }
 
 #ifdef CONFIG_SERIAL_8250_CONSOLE
