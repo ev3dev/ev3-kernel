@@ -21,7 +21,7 @@
 #include <linux/console.h>
 #include <linux/gpio.h>
 #include <linux/legoev3/legoev3_analog.h>
-#include <linux/legoev3/legoev3_bt_clock.h>
+#include <linux/legoev3/legoev3_bluetooth.h>
 #include <linux/legoev3/legoev3_ports.h>
 #include <linux/power/legoev3_battery.h>
 #include <linux/platform_device.h>
@@ -277,19 +277,22 @@ static __init void legoev3_usb_init(void)
  */
 
 static const short legoev3_bt_pins[] __initconst = {
-	EV3_BT_CLK, EV3_BT_ENA,
+	EV3_BT_ENA, EV3_BT_PIC_ENA, EV3_BT_PIC_RST, EV3_BT_PIC_CTS, EV3_BT_CLK,
 	-1
 };
 
-static struct legoev3_bt_clock_platform_data legoev3_bt_clock_pdata = {
-//	.ena_gpio	= EV3_BT_ENA_PIN,
+static struct legoev3_bluetooth_platform_data legoev3_bt_pdata = {
+	.bt_ena_gpio	= EV3_BT_ENA_PIN,
+	.pic_ena_gpio	= EV3_BT_PIC_ENA_PIN,
+	.pic_rst_gpio	= EV3_BT_PIC_RST_PIN,
+	.pic_cts_gpio	= EV3_BT_PIC_CTS_PIN,
 	.clk_pwm_dev	= "ecap.2",
 };
 
-static struct platform_device legoev3_bt_clock_device = {
-	.name	= "legoev3-bt-clock",
+static struct platform_device legoev3_bt_device = {
+	.name	= "legoev3-bluetooth",
 	.dev	= {
-		.platform_data	= &legoev3_bt_clock_pdata,
+		.platform_data	= &legoev3_bt_pdata,
 	},
 	.id	= -1,
 };
@@ -1004,16 +1007,14 @@ static __init void legoev3_init(void)
 	if (ret)
 		pr_warning("legoev3_init: bluetooth pin mux setup failed:"
 			   " %d\n", ret);
-	gpio_request_one(EV3_BT_ENA_PIN, GPIOF_INIT_LOW, "bluetooth enable"); /* active low */
 	ret = da850_register_ecap(2);
 	if (ret)
 		pr_warning("legoev3_init: registering bluetooth clock ecap device failed:"
 			   " %d\n", ret);
-	ret = platform_device_register(&legoev3_bt_clock_device);
+	ret = platform_device_register(&legoev3_bt_device);
 	if (ret)
-		pr_warning("legoev3_init: registering bluetooth clock device failed:"
+		pr_warning("legoev3_init: registering on-board bluetooth failed:"
 			   " %d\n", ret);
-//	gpio_set_value(EV3_BT_ENA_PIN, 1); /* active low */
 }
 
 #ifdef CONFIG_SERIAL_8250_CONSOLE

@@ -1,5 +1,5 @@
 /*
- * Bluetooth clock for LEGO Mindstorms EV3
+ * On-board bluetooth support for LEGO Mindstorms EV3
  *
  * Copyright (C) 2013 David Lechner <david@lechnology.com>
  *
@@ -13,11 +13,15 @@
  * GNU General Public License for more details.
  */
 
-#ifndef _LINUX_LEGOEV3_BT_CLOCK_H
-#define _LINUX_LEGOEV3_BT_CLOCK_H
+#ifndef _LINUX_LEGOEV3_BLUETOOTH_H
+#define _LINUX_LEGOEV3_BLUETOOTH_H
 
-struct legoev3_bt_clock_platform_data {
+struct legoev3_bluetooth_platform_data {
+	int bt_ena_gpio;
+	int pic_ena_gpio;
+	int pic_rst_gpio;
+	int pic_cts_gpio;
 	const char *clk_pwm_dev;
 };
 
-#endif /* _LINUX_LEGOEV3_BT_CLOCK_H */
+#endif /* _LINUX_LEGOEV3_BLUETOOTH_H */
