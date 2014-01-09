@@ -975,7 +975,7 @@ static __init void legoev3_init(void)
 					" %d\n", ret);
 #endif
 
-#warning "Is da8xx_register_rtc needed?"
+	/* real-time clock support */
 	ret = da8xx_register_rtc();
 	if (ret)
 		pr_warning("legoev3_init: rtc setup failed: %d\n", ret);
