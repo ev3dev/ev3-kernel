@@ -34,7 +34,6 @@
 #include <linux/spi/flash.h>
 #include <linux/delay.h>
 #include <linux/wl12xx.h>
-#include <linux/i2c-gpio.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -362,7 +361,7 @@ static __init int legoev3_init_cpufreq(void) { return 0; }
  * This is the I2C that communicates with other devices on the main board,
  * not the input ports. (Using I2C0)
  * Devices are:
- * - EEPROM (24FC128) to get the hardware version and the bluetooth MAC
+ * - EEPROM (24c128) to get the hardware version and the bluetooth MAC
  *	address for the EV3.
  * - The bluetooth module (PIC_*) for lms2012 Mode 2 communications,
  *	whatever that is.
@@ -375,7 +374,7 @@ static const short legoev3_i2c_board_pins[] __initconst = {
 
 static struct i2c_board_info __initdata legoev3_i2c_board_devices[] = {
 	{
-		I2C_BOARD_INFO("24FC128", 0x50),
+		I2C_BOARD_INFO("24c128", 0x50),
 	},
 	{
 		I2C_BOARD_INFO("PIC_CodedDataTo", 0x54),
