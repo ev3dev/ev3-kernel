@@ -1,7 +1,7 @@
 /*
  * Support for the input and output ports on the LEGO Mindstorms EV3
  *
- * Copyright (C) 2013 David Lechner <david@lechnology.com>
+ * Copyright (C) 2013-2014 David Lechner <david@lechnology.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -19,34 +19,14 @@
 #include <linux/device.h>
 #include <linux/hrtimer.h>
 #include <linux/platform_device.h>
-#include <linux/i2c-gpio.h>
+#include <linux/legoev3/ev3_input_port.h>
+#include <linux/legoev3/ev3_output_port.h>
+
 #include <mach/legoev3.h>
 
-struct legoev3_input_port_platform_data {
-	enum legoev3_input_port_id id;
-	unsigned pin1_gpio;
-	unsigned pin2_gpio;
-	unsigned pin5_gpio;
-	unsigned pin6_gpio;
-	unsigned buf_ena_gpio;
-	unsigned i2c_clk_gpio;
-	unsigned i2c_dev_id;
-	unsigned i2c_pin_mux;
-	unsigned uart_pin_mux;
-};
-
-struct legoev3_output_port_platform_data {
-	enum legoev3_output_port_id id;
-	unsigned pin1_gpio;
-	unsigned pin2_gpio;
-	unsigned pin5_gpio;
-	unsigned pin6_gpio;
-	const char *pwm_dev_name;
-};
-
 struct legoev3_ports_platform_data {
-	struct legoev3_input_port_platform_data input_port_data[LEGOEV3_NUM_PORT_IN];
-	struct legoev3_output_port_platform_data output_port_data[LEGOEV3_NUM_PORT_OUT];
+	struct ev3_input_port_platform_data input_port_data[NUM_EV3_PORT_IN];
+	struct ev3_output_port_platform_data output_port_data[NUM_EV3_PORT_OUT];
 };
 
 struct legoev3_port_driver {

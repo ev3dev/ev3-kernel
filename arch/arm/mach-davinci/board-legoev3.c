@@ -49,6 +49,8 @@
 
 #include <video/st7586fb.h>
 
+#include "board-legoev3.h"
+
 /*
  * LCD configuration:
  * ==================
@@ -570,7 +572,7 @@ static const short legoev3_in_out_pins[] __initconst = {
 static struct legoev3_ports_platform_data legoev3_ports_data = {
 	.input_port_data = {
 		{
-			.id			= LEGOEV3_PORT_IN1,
+			.id			= EV3_PORT_IN1,
 			.pin1_gpio		= EV3_IN1_PIN1_PIN,
 			.pin2_gpio		= EV3_IN1_PIN2_PIN,
 			.pin5_gpio		= EV3_IN1_PIN5_PIN,
@@ -582,7 +584,7 @@ static struct legoev3_ports_platform_data legoev3_ports_data = {
 			.uart_pin_mux		= EV3_IN1_UART,
 		},
 		{
-			.id			= LEGOEV3_PORT_IN2,
+			.id			= EV3_PORT_IN2,
 			.pin1_gpio		= EV3_IN2_PIN1_PIN,
 			.pin2_gpio		= EV3_IN2_PIN2_PIN,
 			.pin5_gpio		= EV3_IN2_PIN5_PIN,
@@ -594,7 +596,7 @@ static struct legoev3_ports_platform_data legoev3_ports_data = {
 			.uart_pin_mux		= EV3_IN2_UART,
 		},
 		{
-			.id			= LEGOEV3_PORT_IN3,
+			.id			= EV3_PORT_IN3,
 			.pin1_gpio		= EV3_IN3_PIN1_PIN,
 			.pin2_gpio		= EV3_IN3_PIN2_PIN,
 			.pin5_gpio		= EV3_IN3_PIN5_PIN,
@@ -606,7 +608,7 @@ static struct legoev3_ports_platform_data legoev3_ports_data = {
 			.uart_pin_mux		= EV3_IN3_UART,
 		},
 		{
-			.id			= LEGOEV3_PORT_IN4,
+			.id			= EV3_PORT_IN4,
 			.pin1_gpio		= EV3_IN4_PIN1_PIN,
 			.pin2_gpio		= EV3_IN4_PIN2_PIN,
 			.pin5_gpio		= EV3_IN4_PIN5_PIN,
@@ -620,7 +622,7 @@ static struct legoev3_ports_platform_data legoev3_ports_data = {
 	},
 	.output_port_data = {
 		{
-			.id			= LEGOEV3_PORT_OUT1,
+			.id			= EV3_PORT_OUT1,
 			.pin1_gpio		= EV3_OUT1_PIN1_PIN,
 			.pin2_gpio		= EV3_OUT1_PIN2_PIN,
 			.pin5_gpio		= EV3_OUT1_PIN5_PIN,
@@ -628,7 +630,7 @@ static struct legoev3_ports_platform_data legoev3_ports_data = {
 			.pwm_dev_name		= "ehrpwm1.1",
 		},
 		{
-			.id			= LEGOEV3_PORT_OUT2,
+			.id			= EV3_PORT_OUT2,
 			.pin1_gpio		= EV3_OUT2_PIN1_PIN,
 			.pin2_gpio		= EV3_OUT2_PIN2_PIN,
 			.pin5_gpio		= EV3_OUT2_PIN5_PIN,
@@ -636,20 +638,20 @@ static struct legoev3_ports_platform_data legoev3_ports_data = {
 			.pwm_dev_name		= "ehrpwm1.0",
 		},
 		{
-			.id			= LEGOEV3_PORT_OUT3,
+			.id			= EV3_PORT_OUT3,
 			.pin1_gpio		= EV3_OUT3_PIN1_PIN,
 			.pin2_gpio		= EV3_OUT3_PIN2_PIN,
 			.pin5_gpio		= EV3_OUT3_PIN5_PIN,
 			.pin6_gpio		= EV3_OUT3_PIN6_PIN,
-			.pwm_dev_name		= "pwm?",
+			.pwm_dev_name		= "ecap1",
 		},
 		{
-			.id			= LEGOEV3_PORT_OUT4,
+			.id			= EV3_PORT_OUT4,
 			.pin1_gpio		= EV3_OUT4_PIN1_PIN,
 			.pin2_gpio		= EV3_OUT4_PIN2_PIN,
 			.pin5_gpio		= EV3_OUT4_PIN5_PIN,
 			.pin6_gpio		= EV3_OUT4_PIN6_PIN,
-			.pwm_dev_name		= "pwm?",
+			.pwm_dev_name		= "ecap0",
 		},
 	},
 };

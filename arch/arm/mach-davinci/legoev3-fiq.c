@@ -1,6 +1,6 @@
 /*
  * FIQ backend for I2C bus driver for LEGO Mindstorms EV3
- * Copyright (C) 2013 David Lechner <david@lechnology.com>
+ * Copyright (C) 2013-2014 David Lechner <david@lechnology.com>
  *
  * Based on davinci_iic.c from lms2012
  * The file does not contain a copyright, but comes from the LEGO Group
@@ -22,6 +22,7 @@
 #include <linux/module.h>
 #include <linux/interrupt.h>
 #include <linux/platform_device.h>
+#include <linux/gpio.h>
 
 #include <asm/fiq.h>
 #include <mach/legoev3-fiq.h>
@@ -83,7 +84,7 @@ struct legoev3_fiq_port_data {
 };
 
 struct legoev3_fiq_data {
-	struct legoev3_fiq_port_data port_data[LEGOEV3_NUM_PORT_IN];
+	struct legoev3_fiq_port_data port_data[NUM_EV3_PORT_IN];
 	struct irq_chip *irq_chip;
 	struct platform_device *pdev;
 	struct fiq_handler fiq_handler;
@@ -354,7 +355,7 @@ void legoev3_fiq_handler(void)
 	int restart_timer = 0;
 	int i;
 
-	for (i = 0; i < LEGOEV3_NUM_PORT_IN; i++) {
+	for (i = 0; i < NUM_EV3_PORT_IN; i++) {
 		if (!(legoev3_fiq_data->port_req_flags & BIT(i)))
 			continue;
 		port_data = &legoev3_fiq_data->port_data[i];
@@ -414,7 +415,7 @@ static irqreturn_t legoev3_fiq_gpio_irq_callback(int irq, void *port_data)
  *
  * Returns 0 if the port is availible or -EBUSY if it has already be requested.
  */
-int legoev3_fiq_request_port(enum legoev3_input_port_id port_id, int sda_pin,
+int legoev3_fiq_request_port(enum ev3_input_port_id port_id, int sda_pin,
 			     int scl_pin)
 {
 	struct legoev3_fiq_port_data *data;
@@ -452,7 +453,7 @@ EXPORT_SYMBOL_GPL(legoev3_fiq_request_port);
  *	specified port.
  * @port_id: The port identifier.
  */
-void legoev3_fiq_release_port(enum legoev3_input_port_id port_id)
+void legoev3_fiq_release_port(enum ev3_input_port_id port_id)
 {
 	struct legoev3_fiq_port_data *data = &legoev3_fiq_data->port_data[port_id];
 
@@ -476,7 +477,7 @@ EXPORT_SYMBOL_GPL(legoev3_fiq_release_port);
  * You should only call this for a port that returned successfully from
  * legoev3_fiq_request_port.
  */
-int legoev3_fiq_start_xfer(enum legoev3_input_port_id port_id,
+int legoev3_fiq_start_xfer(enum ev3_input_port_id port_id,
 			   struct i2c_msg msgs[], int num_msg,
 			   void (*complete)(int, void *), void *context)
 {
@@ -485,7 +486,7 @@ int legoev3_fiq_start_xfer(enum legoev3_input_port_id port_id,
 
 	if (!legoev3_fiq_data)
 		return -ENODEV;
-	if (port_id >= LEGOEV3_NUM_PORT_IN)
+	if (port_id >= NUM_EV3_PORT_IN)
 		return -EINVAL;
 	if (num_msg < 1 || num_msg > 2)
 		return -EINVAL;

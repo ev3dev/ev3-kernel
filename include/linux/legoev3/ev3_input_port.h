@@ -13,12 +13,27 @@
  * GNU General Public License for more details.
  */
 
-#ifndef __LINUX_LEGOEV3_INPUT_PORT_H
-#define __LINUX_LEGOEV3_INPUT_PORT_H
+#ifndef __LINUX_LEGOEV3_EV3_INPUT_PORT_H
+#define __LINUX_LEGOEV3_EV3_INPUT_PORT_H
 
-struct legoev3_input_port_device {
-	int (*pin1_mv)(struct legoev3_input_port_device *ipd);
-	int (*pin6_mv)(struct legoev3_input_port_device *ipd);
+#include <mach/legoev3.h>
+
+struct ev3_input_port_platform_data {
+	enum ev3_input_port_id id;
+	unsigned pin1_gpio;
+	unsigned pin2_gpio;
+	unsigned pin5_gpio;
+	unsigned pin6_gpio;
+	unsigned buf_ena_gpio;
+	unsigned i2c_clk_gpio;
+	unsigned i2c_dev_id;
+	unsigned i2c_pin_mux;
+	unsigned uart_pin_mux;
+};
+
+struct ev3_input_port_device {
+	int (*pin1_mv)(struct ev3_input_port_device *ipd);
+	int (*pin6_mv)(struct ev3_input_port_device *ipd);
 	/* private */
 	struct device dev;
 };
@@ -43,4 +58,4 @@ enum ev3_in_dev_id {
 	EV3_IN_DEV_ID_ERR = -1
 };
 
-#endif /* __LINUX_LEGOEV3_INPUT_PORT_H */
+#endif /* __LINUX_LEGOEV3_EV3_INPUT_PORT_H */

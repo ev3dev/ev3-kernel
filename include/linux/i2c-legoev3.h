@@ -1,7 +1,7 @@
 /*
  * i2c-legoev3 interface to platform code
  *
- * Copyright (C) 2013 David Lechner <david@lechnology.com>
+ * Copyright (C) 2013-2014 David Lechner <david@lechnology.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -25,7 +25,7 @@
 struct i2c_legoev3_platform_data {
 	unsigned int	sda_pin;
 	unsigned int	scl_pin;
-	enum legoev3_input_port_id port_id;
+	enum ev3_input_port_id port_id;
 };
 
 #endif /* _LINUX_I2C_LEGOEV3_H */
