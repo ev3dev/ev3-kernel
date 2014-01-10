@@ -2,7 +2,7 @@
  * LEGO MINDSTORMS EV3 DA850/OMAP-L138
  *
  * Copyright (C) 2013 Ralph Hempel
- * Copyright (C) 2013 David Lechner <david@lechnology.com>
+ * Copyright (C) 2013-2014 David Lechner <david@lechnology.com>
  *
  * Derived from: arch/arm/mach-davinci/board-da850-evm.c
  * Original Copyrights follows:
@@ -276,12 +276,15 @@ static __init void legoev3_usb_init(void)
  */
 
 static const short legoev3_bt_pins[] __initconst = {
-	EV3_BT_ENA, EV3_BT_PIC_ENA, EV3_BT_PIC_RST, EV3_BT_PIC_CTS, EV3_BT_CLK,
+	EV3_BT_ENA, EV3_BT_ENA2, EV3_BT_PIC_ENA, EV3_BT_PIC_RST, EV3_BT_PIC_CTS,
+	EV3_BT_CLK, EV3_BT_UART_CTS, EV3_BT_UART_RTS, EV3_BT_UART_RXD,
+	EV3_BT_UART_TXD,
 	-1
 };
 
 static struct legoev3_bluetooth_platform_data legoev3_bt_pdata = {
 	.bt_ena_gpio	= EV3_BT_ENA_PIN,
+	.bt_ena2_gpio	= EV3_BT_ENA2_PIN,
 	.pic_ena_gpio	= EV3_BT_PIC_ENA_PIN,
 	.pic_rst_gpio	= EV3_BT_PIC_RST_PIN,
 	.pic_cts_gpio	= EV3_BT_PIC_CTS_PIN,
@@ -364,7 +367,7 @@ static __init int legoev3_init_cpufreq(void) { return 0; }
  * - EEPROM (24c128) to get the hardware version and the bluetooth MAC
  *	address for the EV3.
  * - The bluetooth module (PIC_*) for lms2012 Mode 2 communications,
- *	whatever that is.
+ *	whatever that is (see c_i2c.c in lms2012).
  */
 
 static const short legoev3_i2c_board_pins[] __initconst = {
@@ -398,9 +401,13 @@ static struct davinci_i2c_platform_data legoev3_i2c_board_pdata = {
 /*
  * EV3 UART configuration:
  * =======================
+ * UART0 is used for Input Port 1. It is also the debug terminal.
+ * UART1 is used for Input Port 2.
+ * UART2 is used to communicate to the bluetooth chip.
+ * Input Ports 3 and 4 get software UARTs via the PRU.
  */
 
-static struct davinci_uart_config da850_evm_uart_config = {
+static struct davinci_uart_config legoev3_uart_config = {
 	.enabled_uarts = 0x7,
 };
 
@@ -865,22 +872,6 @@ static __init void legoev3_init(void)
 				ARRAY_SIZE(legoev3_i2c_board_devices));
 	da8xx_register_i2c(0, &legoev3_i2c_board_pdata);
 
-#ifdef CONFIG_MACH_DAVINCI_LEGOEV3
-#warning "Let's find out which one of these UARTS we really need to update!"
-#else
-	/* Support for UART 1 */
-	ret = davinci_cfg_reg_list(da850_uart1_pins);
-	if (ret)
-		pr_warning("legoev3_init: UART 1 mux setup failed:"
-						" %d\n", ret);
-#warning "Keep this code and eliminate this warning after copying this file to board-legoev3.c"
-	/* Support for UART 2 */
-	ret = davinci_cfg_reg_list(da850_uart2_pins);
-	if (ret)
-		pr_warning("legoev3_init: UART 2 mux setup failed:"
-						" %d\n", ret);
-#endif
-	davinci_serial_init(&da850_evm_uart_config);
 
 	/* Analog/Digital converter support */
 	ret = davinci_cfg_reg_list(legoev3_adc_pins);
@@ -1014,6 +1005,9 @@ static __init void legoev3_init(void)
 	if (ret)
 		pr_warning("legoev3_init: registering on-board bluetooth failed:"
 			   " %d\n", ret);
+
+	/* UART support - used by input ports and bluetooth */
+	davinci_serial_init(&legoev3_uart_config);
 }
 
 #ifdef CONFIG_SERIAL_8250_CONSOLE

@@ -1,7 +1,7 @@
 /*
  * On-board bluetooth support for LEGO Mindstorms EV3
  *
- * Copyright (C) 2013 David Lechner <david@lechnology.com>
+ * Copyright (C) 2014 David Lechner <david@lechnology.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -18,6 +18,7 @@
 
 struct legoev3_bluetooth_platform_data {
 	int bt_ena_gpio;
+	int bt_ena2_gpio;
 	int pic_ena_gpio;
 	int pic_rst_gpio;
 	int pic_cts_gpio;

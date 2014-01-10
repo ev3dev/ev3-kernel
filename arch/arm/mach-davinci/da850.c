@@ -379,7 +379,6 @@ static struct clk ehrpwm_clk = {
 	.parent		= &pll0_sysclk2,
 	.lpsc		= DA8XX_LPSC1_PWM,
 	.gpsc		= 1,
-	.domain		= 1,
 	.flags		= DA850_CLK_ASYNC3,
 };
 

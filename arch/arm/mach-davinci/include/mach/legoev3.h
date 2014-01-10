@@ -2,7 +2,7 @@
  * Chip specific defines for LEGO MINDSTORMS EV3
  *
  * Copyright (C) 2013 Ralph Hempel
- * Copyright (C) 2013 David Lechner <david@lechnology.com>
+ * Copyright (C) 2013-2014 David Lechner <david@lechnology.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -15,27 +15,6 @@
 #include <linux/gpio.h>
 
 #include <mach/mux.h>
-
-#define PINMUX0			0x00
-#define PINMUX1			0x04
-#define PINMUX2			0x08
-#define PINMUX3			0x0c
-#define PINMUX4			0x10
-#define PINMUX5			0x14
-#define PINMUX6			0x18
-#define PINMUX7			0x1c
-#define PINMUX8			0x20
-#define PINMUX9			0x24
-#define PINMUX10		0x28
-#define PINMUX11		0x2c
-#define PINMUX12		0x30
-#define PINMUX13		0x34
-#define PINMUX14		0x38
-#define PINMUX15		0x3c
-#define PINMUX16		0x40
-#define PINMUX17		0x44
-#define PINMUX18		0x48
-#define PINMUX19		0x4c
 
 enum legoev3_input_port_id {
 	LEGOEV3_PORT_IN1,
@@ -95,11 +74,16 @@ enum legoev3_pin_map {
 	PIN(I2C_BOARD_SCL, I2C0_SCL)
 
 	/* Bluetooth pins */
-	GPIO_PIN(BT_ENA, 4, 9)
+	GPIO_PIN(BT_ENA, 4, 1)
+	GPIO_PIN(BT_ENA2, 4, 9)
 	GPIO_PIN(BT_PIC_ENA, 3, 3)
 	GPIO_PIN(BT_PIC_RST, 4, 14)
 	GPIO_PIN(BT_PIC_CTS, 5, 7)
 	PIN(BT_CLK, ECAP2_APWM2)
+	PIN(BT_UART_CTS, NUART2_CTS)
+	PIN(BT_UART_RTS, NUART2_RTS)
+	PIN(BT_UART_RXD, UART2_RXD)
+	PIN(BT_UART_TXD, UART2_TXD)
 
 	/* analog/digital converter pins */
 	PIN(ADC_DATA_IN, SPI0_SOMI)
