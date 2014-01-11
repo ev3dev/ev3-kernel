@@ -20,14 +20,14 @@
 
 
 struct touch_sensor_device {
-	bool (*pressed)(struct touch_sensor_device *ts);
+	bool (*pressed)(struct touch_sensor_device *);
 	/* private */
 	struct device dev;
 };
 
-extern int register_touch_sensor(struct touch_sensor_device *ts,
-				 struct device *parent);
-extern void unregister_touch_sensor(struct touch_sensor_device *ts);
+extern int register_touch_sensor(struct touch_sensor_device *,
+				 struct device *);
+extern void unregister_touch_sensor(struct touch_sensor_device *);
 
 extern struct class touch_sensor_class;
 

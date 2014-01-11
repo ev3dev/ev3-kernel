@@ -21,11 +21,13 @@
  *	We can use the other pin 5 gpio on the input port since we know
  *	it is not being used as long as we are using I2C.
  * @port_id: The input port identifier.
+ * @in_port: Pointer to the legoev3 port device that represents the input port.
  */
 struct i2c_legoev3_platform_data {
 	unsigned int	sda_pin;
 	unsigned int	scl_pin;
 	enum ev3_input_port_id port_id;
+	struct legoev3_port_device *in_port;
 };
 
 #endif /* _LINUX_I2C_LEGOEV3_H */

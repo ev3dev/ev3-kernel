@@ -31,31 +31,14 @@ struct ev3_input_port_platform_data {
 	unsigned uart_pin_mux;
 };
 
-struct ev3_input_port_device {
-	int (*pin1_mv)(struct ev3_input_port_device *ipd);
-	int (*pin6_mv)(struct ev3_input_port_device *ipd);
-	/* private */
-	struct device dev;
+struct ev3_sensor_platform_data {
+	struct legoev3_port_device *in_port;
 };
 
-/* resistor ids for EV3 dumb sensor devices */
-enum ev3_in_dev_id {
-	EV3_IN_DEV_ID_01,
-	EV3_IN_DEV_ID_02,
-	EV3_IN_DEV_ID_03,
-	EV3_IN_DEV_ID_04,
-	EV3_IN_DEV_ID_05,
-	EV3_IN_DEV_ID_06,
-	EV3_IN_DEV_ID_07,
-	EV3_IN_DEV_ID_08,
-	EV3_IN_DEV_ID_09,
-	EV3_IN_DEV_ID_10,
-	EV3_IN_DEV_ID_11,
-	EV3_IN_DEV_ID_12,
-	EV3_IN_DEV_ID_13,
-	EV3_IN_DEV_ID_14,
-	NUM_EV3_IN_DEV_ID,
-	EV3_IN_DEV_ID_ERR = -1
-};
+extern int ev3_input_port_get_pin1_mv(struct legoev3_port_device *);
+extern int ev3_input_port_get_pin6_mv(struct legoev3_port_device *);
+extern void ev3_input_port_set_pin1_out(struct legoev3_port_device *, int);
+extern int ev3_input_port_register_i2c(struct legoev3_port_device *, struct device *);
+extern void ev3_input_port_unregister_i2c(struct legoev3_port_device *);
 
 #endif /* __LINUX_LEGOEV3_EV3_INPUT_PORT_H */
