@@ -37,6 +37,11 @@ static inline int nxt_i2c_read_byte(struct i2c_client *client, unsigned reg)
 	return i2c_smbus_read_byte_data(client, reg);
 }
 
+static inline int nxt_i2c_read_word(struct i2c_client *client, unsigned reg)
+{
+	return i2c_smbus_read_word_data(client, reg);
+}
+
 static inline int nxt_i2c_read_string(struct i2c_client *client, unsigned reg,
 				      char *buf, unsigned len)
 {

@@ -24,7 +24,11 @@
  * @dp: The number of decimal places in the scaled value.
  *
  * The scaled value is calculated as:
- * raw_value * (scaled_max - scaled_min) / (raw_max - raw_min) / (10E scaled_dp)
+ * scaled_value = cal_value * (scaled_max - scaled_min) / (cal_max - cal_min)
+ *
+ * The actual scaled value in units is scaled_value / pow(10, dp), but
+ * kernel code doesn't do floating point, so it is up to the user to do
+ * this last part of the conversion if they want to use the actual value.
  */
 struct measure_sensor_scale_info {
 	const char *units;
@@ -35,9 +39,14 @@ struct measure_sensor_scale_info {
 
 /**
  * struct measure_sensor_device - Measurement sensor device
- * @raw_value: Function that returns the current raw value of the sensor.
- * @raw_min: The minimum (calibrated) raw value of the sensor.
- * @raw_max: The maximum (calibrated) raw value of the sensor.
+ * @raw_value: Function that returns the current uncalibrated raw value
+ *	of the sensor.
+ * @raw_min: The minimum uncalibrated raw value of the sensor.
+ * @raw_max: The maximum uncalibrated raw value of the sensor.
+ * @cal_value: Function that returns the current calibrated raw value
+ *	of the sensor.
+ * @cal_min: The minimum calibrated raw value of the sensor.
+ * @cal_max: The maximum calibrated raw value of the sensor.
  * @scale_info: Pointer to an array of scaling information for the sensor.
  *	Array must be terminated with END_SCALE_INFO.
  * @scale_idx: The index of the currently selected scaling.
@@ -49,6 +58,9 @@ struct measure_sensor_device {
 	int (*raw_value)(struct measure_sensor_device *);
 	int raw_min;
 	int raw_max;
+	int (*cal_value)(struct measure_sensor_device *);
+	int cal_min;
+	int cal_max;
 	struct measure_sensor_scale_info *scale_info;
 	unsigned scale_idx;
 	/* private */
