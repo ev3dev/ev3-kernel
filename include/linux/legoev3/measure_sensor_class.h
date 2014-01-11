@@ -16,11 +16,46 @@
 #ifndef _LINUX_LEGOEV3_MEASURE_SENSOR_CLASS_H
 #define _LINUX_LEGOEV3_MEASURE_SENSOR_CLASS_H
 
+/**
+ * struct measure_sensor_scale_info
+ * @units: The name of the units of the scaled value.
+ * @min: The minimum scaled value.
+ * @max: The maximum scaled value.
+ * @dp: The number of decimal places in the scaled value.
+ *
+ * The scaled value is calculated as:
+ * raw_value * (scaled_max - scaled_min) / (raw_max - raw_min) / (10E scaled_dp)
+ */
+struct measure_sensor_scale_info {
+	const char *units;
+	int min;
+	int max;
+	unsigned dp;
+};
+
+/**
+ * struct measure_sensor_device - Measurement sensor device
+ * @raw_value: Function that returns the current raw value of the sensor.
+ * @raw_min: The minimum (calibrated) raw value of the sensor.
+ * @raw_max: The maximum (calibrated) raw value of the sensor.
+ * @scale_info: Pointer to an array of scaling information for the sensor.
+ *	Array must be terminated with END_SCALE_INFO.
+ * @scale_idx: The index of the currently selected scaling.
+ * @dev: The sysfs device.
+ */
 struct measure_sensor_device {
+	const char *name;
+	int id;
 	int (*raw_value)(struct measure_sensor_device *);
+	int raw_min;
+	int raw_max;
+	struct measure_sensor_scale_info *scale_info;
+	unsigned scale_idx;
 	/* private */
 	struct device dev;
 };
+
+#define END_SCALE_INFO { .units = NULL }
 
 extern int register_measure_sensor(struct measure_sensor_device *,
 				   struct device *);
