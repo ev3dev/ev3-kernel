@@ -546,19 +546,21 @@ static struct spi_board_info legoev3_spi0_board_info[] = {
 /*
  * EV3 input and output port configuration:
  * ========================================
- * These are the input and output ports on the EV3 brick that connect to sensors
- * and motors.
+ * These are the input and output ports on the EV3 brick that connect to
+ * sensors and motors.
  *
- * Note: The i2c clock and uart functions of the input port share the same
- * physical pin on the chip, so instead of including them in the board pin mux,
- * they are passed to input port driver which performs the mux as necessary when
- * devices are added and removed. I2C device ids start at 3 because the SoC
- * I2Cs use 1 and 2.
+ * Note: The i2c clock and uart transmit functions of the input port share
+ * the same physical pin on the chip, so instead of including them in the
+ * board pin mux, they are passed to input port driver which performs the
+ * mux as necessary when devices are added and removed. I2C device ids start
+ * at 3 because the SoC I2Cs use 1 and 2.
  */
 
 static const short legoev3_in_out_pins[] __initconst = {
 	EV3_IN1_PIN1, EV3_IN1_PIN2, EV3_IN1_PIN5, EV3_IN1_PIN6, EV3_IN1_BUF_ENA,
+	EV3_IN1_UART_TXD, EV3_IN1_UART_RXD,
 	EV3_IN2_PIN1, EV3_IN2_PIN2, EV3_IN2_PIN5, EV3_IN2_PIN6, EV3_IN2_BUF_ENA,
+	EV3_IN2_UART_TXD, EV3_IN2_UART_RXD,
 	EV3_IN3_PIN1, EV3_IN3_PIN2, EV3_IN3_PIN5, EV3_IN3_PIN6, EV3_IN3_BUF_ENA,
 	EV3_IN4_PIN1, EV3_IN4_PIN2, EV3_IN4_PIN5, EV3_IN4_PIN6, EV3_IN4_BUF_ENA,
 	EV3_OUT1_PIN1, EV3_OUT1_PIN2, EV3_OUT1_PIN5, EV3_OUT1_PIN6,
@@ -581,7 +583,7 @@ static struct legoev3_ports_platform_data legoev3_ports_data = {
 			.i2c_clk_gpio		= EV3_IN1_I2C_CLK_PIN,
 			.i2c_dev_id		= 3,
 			.i2c_pin_mux		= EV3_IN1_I2C_CLK,
-			.uart_pin_mux		= EV3_IN1_UART,
+			.uart_pin_mux		= EV3_IN1_UART_TXD,
 		},
 		{
 			.id			= EV3_PORT_IN2,
@@ -593,7 +595,7 @@ static struct legoev3_ports_platform_data legoev3_ports_data = {
 			.i2c_clk_gpio		= EV3_IN2_I2C_CLK_PIN,
 			.i2c_dev_id		= 4,
 			.i2c_pin_mux		= EV3_IN2_I2C_CLK,
-			.uart_pin_mux		= EV3_IN2_UART,
+			.uart_pin_mux		= EV3_IN2_UART_TXD,
 		},
 		{
 			.id			= EV3_PORT_IN3,
@@ -605,7 +607,7 @@ static struct legoev3_ports_platform_data legoev3_ports_data = {
 			.i2c_clk_gpio		= EV3_IN3_I2C_CLK_PIN,
 			.i2c_dev_id		= 5,
 			.i2c_pin_mux		= EV3_IN3_I2C_CLK,
-			.uart_pin_mux		= EV3_IN3_UART,
+			.uart_pin_mux		= EV3_IN3_UART_TXD,
 		},
 		{
 			.id			= EV3_PORT_IN4,
@@ -617,7 +619,7 @@ static struct legoev3_ports_platform_data legoev3_ports_data = {
 			.i2c_clk_gpio		= EV3_IN4_I2C_CLK_PIN,
 			.i2c_dev_id		= 6,
 			.i2c_pin_mux		= EV3_IN4_I2C_CLK,
-			.uart_pin_mux		= EV3_IN4_UART,
+			.uart_pin_mux		= EV3_IN4_UART_TXD,
 		},
 	},
 	.output_port_data = {
