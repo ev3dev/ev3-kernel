@@ -40,5 +40,7 @@ extern int ev3_input_port_get_pin6_mv(struct legoev3_port_device *);
 extern void ev3_input_port_set_pin1_out(struct legoev3_port_device *, int);
 extern int ev3_input_port_register_i2c(struct legoev3_port_device *, struct device *);
 extern void ev3_input_port_unregister_i2c(struct legoev3_port_device *);
+extern int ev3_input_port_enable_uart(struct legoev3_port_device *in_port);
+extern void ev3_input_port_disable_uart(struct legoev3_port_device *in_port);
 
 #endif /* __LINUX_LEGOEV3_EV3_INPUT_PORT_H */
