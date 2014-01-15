@@ -11,11 +11,11 @@
  */
 
 /*
- * In order to acheive realtime I2C performance on the input ports, we use
- * a FIQ (fast interrupt). These interrupts can interrupt any regular IRQ,
- * which is what makes it possible to get the near-realtime performance,
- * but this also makes them dangerous, so be sure you know what you are
- * doing before making changes here.
+ * In order to achieve realtime performance for sound playback and I2C
+ * on the input ports, we use FIQs (fast interrupts). These interrupts
+ * can interrupt any regular IRQ, which is what makes it possible to get
+ * the near-realtime performance, but this also makes them dangerous,
+ * so be sure you know what you are doing before making changes here.
  */
 
 #include <linux/init.h>
@@ -65,7 +65,7 @@ struct legoev3_fiq_gpio {
 	int reg_mask;
 };
 
-struct legoev3_fiq_port_data {
+struct legoev3_fiq_port_i2c_data {
 	struct legoev3_fiq_gpio gpio[NUM_FIQ_I2C_PIN];
 	void (*complete)(int, void *);
 	void *context;
@@ -83,15 +83,32 @@ struct legoev3_fiq_port_data {
 	unsigned nacked:1;
 };
 
+struct legoev3_fiq_ehrpwm_data {
+	u8 *dma_area;
+	int volume;
+	unsigned playback_ptr;
+	unsigned period_ticks;
+	unsigned frame_bytes;
+	unsigned buffer_bytes;
+	unsigned period_size;
+	unsigned callback_count;
+	void (*period_elapsed)(void *);
+	void *period_elapsed_data;
+	unsigned period_elapsed_flag:1;
+};
+
 struct legoev3_fiq_data {
-	struct legoev3_fiq_port_data port_data[NUM_EV3_PORT_IN];
+	struct legoev3_fiq_port_i2c_data port_data[NUM_EV3_PORT_IN];
+	struct legoev3_fiq_ehrpwm_data ehrpwm_data;
 	struct irq_chip *irq_chip;
 	struct platform_device *pdev;
 	struct fiq_handler fiq_handler;
 	struct legoev3_fiq_gpio status_gpio;
 	void __iomem *gpio_base;
 	void __iomem *intc_base;
+	void __iomem *ehrpwm_base;
 	int timer_irq;
+	int ehrpwm_irq;
 	int status_gpio_irq;
 	int port_req_flags;
 };
@@ -164,8 +181,32 @@ static inline void legoev3_fiq_disable(int irq)
 	__raw_writel(irq, legoev3_fiq_data->intc_base + EICR);
 }
 
+#define GPIR 0x80 /* Global Prioritized Index Register */
+static inline int legoev3_fiq_get_irq(void)
+{
+	return __raw_readl(legoev3_fiq_data->intc_base + GPIR);
+}
+
+#define CMPB 0x14 /* Counter-Compare B Register */
+static inline void fiq_ehrpwm_set_duty_ticks(unsigned ticks)
+{
+	__raw_writew(ticks, legoev3_fiq_data->ehrpwm_base + CMPB);
+}
+
+#define ETFLG 0x36 /* Event-Trigger Flag Register */
+static inline int fiq_ehrpwm_test_irq(void)
+{
+	return __raw_readw(legoev3_fiq_data->ehrpwm_base + ETFLG) & 0x1;
+}
+
+#define ETCLR 0x38 /* Event-Trigger Clear Register */
+static inline void fiq_ehrpwm_clear_irq(void)
+{
+	__raw_writew(0x1, legoev3_fiq_data->ehrpwm_base + ETCLR);
+}
+
 static enum fiq_timer_restart
-legoev3_fiq_timer_callback(struct legoev3_fiq_port_data *data)
+legoev3_fiq_timer_callback(struct legoev3_fiq_port_i2c_data *data)
 {
 	struct i2c_msg *msg = &data->msgs[data->cur_msg];
 
@@ -349,25 +390,71 @@ legoev3_fiq_timer_callback(struct legoev3_fiq_port_data *data)
 	return FIQ_TIMER_RESTART;
 }
 
-void legoev3_fiq_handler(void)
+static void legoev3_fiq_ehrpwm_callback(struct legoev3_fiq_ehrpwm_data *data)
 {
-	struct legoev3_fiq_port_data *port_data;
-	int restart_timer = 0;
-	int i;
+	int sample;
+	unsigned long duty_ticks;
 
-	for (i = 0; i < NUM_EV3_PORT_IN; i++) {
-		if (!(legoev3_fiq_data->port_req_flags & BIT(i)))
-			continue;
-		port_data = &legoev3_fiq_data->port_data[i];
-		if (port_data != TRANSFER_IDLE)
-			restart_timer |= legoev3_fiq_timer_callback(port_data);
+	if (unlikely(!data->dma_area))
+		return;
+
+	sample = *(short *)(data->dma_area + data->playback_ptr);
+	sample = (sample * data->volume) >> 8;
+	duty_ticks = ((sample + 0x7FFF) * data->period_ticks) >> 16;
+
+	fiq_ehrpwm_set_duty_ticks(duty_ticks);
+
+	data->playback_ptr += data->frame_bytes;
+	data->playback_ptr %= data->buffer_bytes;
+
+	if (++data->callback_count >= data->period_size)
+	{
+		data->callback_count %= data->period_size;
+		data->period_elapsed_flag = 1;
 	}
 
-	if (!restart_timer)
-		legoev3_fiq_disable(legoev3_fiq_data->timer_irq);
-
-	legoev3_fiq_ack(legoev3_fiq_data->timer_irq);
+	/* toggle gpio to trigger callback */
+	if (data->period_elapsed_flag)
+		fiq_gpio_set_value(&legoev3_fiq_data->status_gpio,
+			!fiq_gpio_get_value(&legoev3_fiq_data->status_gpio));
 }
+
+void legoev3_fiq_handler(void)
+{
+	int irq = legoev3_fiq_get_irq();
+
+	/*
+	 * When debugging, the ehrpwm_event_irq_handler clears interrupts,
+	 * so we have to detect the EHRWPM interrupt another way.
+	 */
+	if(unlikely(irq & BIT(31)) && fiq_ehrpwm_test_irq())
+		irq = legoev3_fiq_data->ehrpwm_irq;
+
+	if (irq == legoev3_fiq_data->timer_irq) {
+		struct legoev3_fiq_port_i2c_data *port_data;
+		int restart_timer = 0;
+		int i;
+
+		for (i = 0; i < NUM_EV3_PORT_IN; i++) {
+			if (!(legoev3_fiq_data->port_req_flags & BIT(i)))
+				continue;
+			port_data = &legoev3_fiq_data->port_data[i];
+			if (port_data != TRANSFER_IDLE)
+				restart_timer |= legoev3_fiq_timer_callback(port_data);
+		}
+
+		if (!restart_timer)
+			legoev3_fiq_disable(legoev3_fiq_data->timer_irq);
+
+		legoev3_fiq_ack(legoev3_fiq_data->timer_irq);
+	} else if (irq == legoev3_fiq_data->ehrpwm_irq) {
+		legoev3_fiq_ehrpwm_callback(&legoev3_fiq_data->ehrpwm_data);
+		fiq_ehrpwm_clear_irq();
+		legoev3_fiq_ack(legoev3_fiq_data->ehrpwm_irq);
+	}
+}
+
+/* --------------- END OF CODE THAT IS CALLED IN FIQ CONTEXT -----------------*/
 
 void legoev3_fiq_set_gpio(int gpio_pin, struct legoev3_fiq_gpio *gpio)
 {
@@ -382,9 +469,9 @@ void legoev3_fiq_set_gpio(int gpio_pin, struct legoev3_fiq_gpio *gpio)
 	gpio->reg_mask	= BIT(index + (bank & 1) * 16);
 }
 
-static irqreturn_t legoev3_fiq_gpio_irq_callback(int irq, void *port_data)
+static irqreturn_t legoev3_fiq_gpio_irq_i2c_port_callback(int irq, void *port_data)
 {
-	struct legoev3_fiq_port_data *data = port_data;
+	struct legoev3_fiq_port_i2c_data *data = port_data;
 	int i;
 
 	local_fiq_disable();
@@ -418,7 +505,7 @@ static irqreturn_t legoev3_fiq_gpio_irq_callback(int irq, void *port_data)
 int legoev3_fiq_request_port(enum ev3_input_port_id port_id, int sda_pin,
 			     int scl_pin)
 {
-	struct legoev3_fiq_port_data *data;
+	struct legoev3_fiq_port_i2c_data *data;
 	int ret;
 
 	if (!legoev3_fiq_data)
@@ -431,7 +518,7 @@ int legoev3_fiq_request_port(enum ev3_input_port_id port_id, int sda_pin,
 	legoev3_fiq_set_gpio(scl_pin, &data->gpio[FIQ_I2C_PIN_SCL]);
 
 	ret = request_irq(legoev3_fiq_data->status_gpio_irq,
-			  legoev3_fiq_gpio_irq_callback,
+			  legoev3_fiq_gpio_irq_i2c_port_callback,
 			  IRQF_TRIGGER_RISING | IRQF_SHARED,
 			  legoev3_fiq_data->pdev->name, data);
 	if (ret < 0) {
@@ -455,7 +542,7 @@ EXPORT_SYMBOL_GPL(legoev3_fiq_request_port);
  */
 void legoev3_fiq_release_port(enum ev3_input_port_id port_id)
 {
-	struct legoev3_fiq_port_data *data = &legoev3_fiq_data->port_data[port_id];
+	struct legoev3_fiq_port_i2c_data *data = &legoev3_fiq_data->port_data[port_id];
 
 	if (!legoev3_fiq_data)
 		return;
@@ -481,7 +568,7 @@ int legoev3_fiq_start_xfer(enum ev3_input_port_id port_id,
 			   struct i2c_msg msgs[], int num_msg,
 			   void (*complete)(int, void *), void *context)
 {
-	struct legoev3_fiq_port_data *data;
+	struct legoev3_fiq_port_i2c_data *data;
 	int i;
 
 	if (!legoev3_fiq_data)
@@ -501,7 +588,7 @@ int legoev3_fiq_start_xfer(enum ev3_input_port_id port_id,
 	for (i = 0; i < num_msg; i++)
 		memcpy(&data->msgs[i], &msgs[i], sizeof(struct i2c_msg));
 	/*
-	 * we also have to hand on to the real messages so that we can
+	 * we also have to hang on to the real messages so that we can
 	 * copy any data read back to them when the transfer is complete.
 	 */
 	data->xfer_msgs = msgs;
@@ -515,12 +602,111 @@ int legoev3_fiq_start_xfer(enum ev3_input_port_id port_id,
 }
 EXPORT_SYMBOL_GPL(legoev3_fiq_start_xfer);
 
+static irqreturn_t
+legoev3_fiq_gpio_irq_period_elapsed_callback(int irq, void *ehrpwm_data)
+{
+	struct legoev3_fiq_ehrpwm_data *data = ehrpwm_data;
+printk("%s\n", __func__);
+	local_fiq_disable();
+	if (data->period_elapsed) {
+		data->period_elapsed(data->period_elapsed_data);
+		data->period_elapsed_flag = 0;
+		fiq_gpio_set_value(&legoev3_fiq_data->status_gpio, 0);
+	}
+	local_fiq_enable();
+
+	return IRQ_HANDLED;
+}
+
+int legoev3_fiq_ehrpwm_request(struct snd_pcm_substream *substream)
+{
+	int err;
+
+	if (!legoev3_fiq_data)
+		return -ENODEV;
+
+	if (legoev3_fiq_data->ehrpwm_data.dma_area)
+		return -EBUSY;
+
+	err = request_irq(legoev3_fiq_data->status_gpio_irq,
+			  legoev3_fiq_gpio_irq_period_elapsed_callback,
+			  IRQF_TRIGGER_RISING | IRQF_SHARED,
+			  legoev3_fiq_data->pdev->name,
+			  &legoev3_fiq_data->ehrpwm_data);
+	if (err) {
+		dev_err(&legoev3_fiq_data->pdev->dev,
+			"Unable to claim irq %d; error %d\n",
+			legoev3_fiq_data->status_gpio_irq, err);
+		return err;
+	}
+
+	legoev3_fiq_data->ehrpwm_data.dma_area = substream->runtime->dma_area;
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(legoev3_fiq_ehrpwm_request);
+
+void legoev3_fiq_ehrpwm_release(void)
+{
+	if (!legoev3_fiq_data)
+		return;
+
+	local_fiq_disable();
+	free_irq(legoev3_fiq_data->status_gpio_irq,
+		 &legoev3_fiq_data->ehrpwm_data);
+	legoev3_fiq_data->ehrpwm_data.period_elapsed_flag = 0;
+	legoev3_fiq_data->ehrpwm_data.dma_area = NULL;
+	local_fiq_enable();
+}
+EXPORT_SYMBOL_GPL(legoev3_fiq_ehrpwm_release);
+
+int legoev3_fiq_ehrpwm_prepare(struct snd_pcm_substream *substream,
+			       unsigned period_ticks, int volume,
+			       void (*period_elapsed)(void *), void *context)
+{
+	struct legoev3_fiq_ehrpwm_data *data;
+	int err;
+
+	if (!legoev3_fiq_data)
+		return -ENODEV;
+
+	data = &legoev3_fiq_data->ehrpwm_data;
+
+	local_fiq_disable();
+
+	data->playback_ptr		= 0;
+	data->volume			= volume;
+	data->period_ticks		= period_ticks;
+	data->frame_bytes		= frames_to_bytes(substream->runtime, 1);
+	data->buffer_bytes		= snd_pcm_lib_buffer_bytes(substream);
+	data->period_size		= substream->runtime->period_size;
+	data->callback_count		= 0;
+	data->period_elapsed		= period_elapsed;
+	data->period_elapsed_data	= context;
+	data->period_elapsed_flag	= 0;
+
+	local_fiq_enable();
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(legoev3_fiq_ehrpwm_prepare);
+
+unsigned legoev3_fiq_ehrpwm_get_playback_ptr(void)
+{
+	unsigned ptr;
+
+	local_fiq_disable();
+	ptr = legoev3_fiq_data->ehrpwm_data.playback_ptr;
+	local_fiq_enable();
+
+	return ptr;
+}
+EXPORT_SYMBOL_GPL(legoev3_fiq_ehrpwm_get_playback_ptr);
 
 static int __devinit legoev3_fiq_probe(struct platform_device *pdev)
 {
 	struct legoev3_fiq_data *fiq_data;
 	struct legoev3_fiq_platform_data *pdata;
-	struct resource *res;
 	int ret;
 
 	if (legoev3_fiq_data)
@@ -534,30 +720,23 @@ static int __devinit legoev3_fiq_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "gpio-mem");
-	if (!res) {
-		dev_err(&pdev->dev, "Missing gpio-mem resource.\n");
-		return -EINVAL;
-	}
-	fiq_data->gpio_base = devm_request_and_ioremap(&pdev->dev, res);
+	fiq_data->gpio_base = devm_ioremap(&pdev->dev, pdata->gpio_mem_base,
+					   pdata->gpio_mem_size);
 	if (WARN_ON(!fiq_data->gpio_base))
 		return -EADDRNOTAVAIL;
 
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "intc-mem");
-	if (!res) {
-		dev_err(&pdev->dev, "Missing intc-mem resource.\n");
-		return -EINVAL;
-	}
-	fiq_data->intc_base = devm_request_and_ioremap(&pdev->dev, res);
+	fiq_data->intc_base = devm_ioremap(&pdev->dev, pdata->intc_mem_base,
+					   pdata->intc_mem_size);
 	if (WARN_ON(!fiq_data->intc_base))
 		return -EADDRNOTAVAIL;
 
-	ret = platform_get_irq_byname(pdev, "timer-irq");
-	if (ret < 0) {
-		dev_err(&pdev->dev, "Missing timer-irq resource.\n");
-		return -EINVAL;
-	}
-	fiq_data->timer_irq = ret;
+	fiq_data->ehrpwm_base = devm_ioremap(&pdev->dev, pdata->ehrpwm_mem_base,
+					     pdata->ehrpwm_mem_size);
+	if (WARN_ON(!fiq_data->ehrpwm_base))
+		return -EADDRNOTAVAIL;
+
+	fiq_data->timer_irq = pdata->timer_irq;
+	fiq_data->ehrpwm_irq = pdata->ehrpwm_irq;
 
 	ret = gpio_request_one(pdata->status_gpio, GPIOF_INIT_LOW, "fiq status");
 	if (ret < 0) {

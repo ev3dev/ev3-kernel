@@ -667,29 +667,38 @@ static struct platform_device legoev3_ports_device = {
 };
 
 /*
- * EV3 input port I2C configuration:
- * =================================
+ * EV3 FIQ (fast interrupt) configuration:
+ * =======================================
+ * The EV3 uses FIQs to get near-realtime performance for software emulated
+ * devices.
+ *
  * The input ports each can communicate via I2C. The AM1808 processor only has
  * two I2C ports and the NXT ultrasonic sensor requires a non-standard hack
  * to make it work, so we implement our own I2C using GPIO. In order to get
  * the required performance, we use a system timer and an FIQ interrupt.
+ *
+ * PCM playback on the EV3 speaker suffers from aliasing due to latency in
+ * handling interrups.
+ *
+ * We can't use the platform device resource infrastructure here because we
+ * are sneaking behind the back of the kernel with the FIQs.
  */
 
-static struct resource legoev3_in_port_i2c_resources[] = {
-	DEFINE_RES_MEM_NAMED(DA8XX_GPIO_BASE, 0xD8, "gpio-mem"),
-	DEFINE_RES_MEM_NAMED(DA8XX_CP_INTC_BASE, 0x608, "intc-mem"),
-	DEFINE_RES_IRQ_NAMED(IRQ_DA8XX_TINT34_1, "timer-irq"),
-};
-
 static struct legoev3_fiq_platform_data legoev3_in_port_i2c_platform_data = {
-	.status_gpio	= EV3_FIQ_STAT_PIN,
+	.intc_mem_base		= DA8XX_CP_INTC_BASE,
+	.intc_mem_size		= 0x608,
+	.gpio_mem_base		= DA8XX_GPIO_BASE,
+	.gpio_mem_size		= 0xD8,
+	.ehrpwm_mem_base	= DA8XX_EHRPWM0_BASE,
+	.ehrpwm_mem_size	= 0x1FFF,
+	.timer_irq		= IRQ_DA8XX_TINT34_1,
+	.ehrpwm_irq		= IRQ_DA8XX_EHRPWM0,
+	.status_gpio		= EV3_FIQ_STAT_PIN,
 };
 
 static struct platform_device legoev3_in_port_i2c_fiq = {
 	.name		= "legoev3-fiq",
 	.id		= -1,
-	.resource	= legoev3_in_port_i2c_resources,
-	.num_resources	= ARRAY_SIZE(legoev3_in_port_i2c_resources),
 	.dev		= {
 		.platform_data	= &legoev3_in_port_i2c_platform_data,
 	},
@@ -927,15 +936,6 @@ static __init void legoev3_init(void)
 			"FIQ I2C backend registration failed: %d\n", ret);
 #endif
 
-	/* eHRPWM support */
-#if defined(CONFIG_DAVINCI_EHRPWM) || defined(CONFIG_DAVINCI_EHRPWM_MODULE)
-#if defined(CONFIG_SND_LEGOEV3) || defined(CONFIG_SND_LEGOEV3_MODULE)
-	/* eHRPWM0B is used to drive the EV3 speaker */
-	ehrpwm_mask |= 0x2;
-#endif
-	da850_register_ehrpwm(ehrpwm_mask);
-#endif
-
 	/* Sound support */
 	ret = davinci_cfg_reg_list(legoev3_sound_pins);
 	if (ret)
@@ -956,6 +956,15 @@ static __init void legoev3_init(void)
 	if (ret)
 		pr_warning("legoev3_init: "
 			"sound device registration failed: %d\n", ret);
+
+	/* eHRPWM0B is used to drive the EV3 speaker */
+	ehrpwm_mask |= 0x2;
+#endif
+
+	/* eHRPWM support */
+	/* pin mux is set in output port and sound support */
+#if defined(CONFIG_DAVINCI_EHRPWM) || defined(CONFIG_DAVINCI_EHRPWM_MODULE)
+	da850_register_ehrpwm(ehrpwm_mask);
 #endif
 
 	/* SD card support */

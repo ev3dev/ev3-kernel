@@ -935,7 +935,7 @@ static u8 da850_default_priorities[DA850_N_CP_INTC_IRQ] = {
 	[IRQ_DA8XX_TINT12_0]		= 7,
 	[IRQ_DA8XX_TINT34_0]		= 7,
 	[IRQ_DA8XX_TINT12_1]		= 7,
-	[IRQ_DA8XX_TINT34_1]		= 0, /* Uses FIQ for EV3 input port i2c */
+	[IRQ_DA8XX_TINT34_1]		= 1, /* Uses FIQ for EV3 input port i2c */
 	[IRQ_DA8XX_UARTINT0]		= 7,
 	[IRQ_DA8XX_KEYMGRINT]		= 7,
 	[IRQ_DA8XX_SECINT]		= 7,
@@ -979,8 +979,8 @@ static u8 da850_default_priorities[DA850_N_CP_INTC_IRQ] = {
 	[IRQ_DA8XX_GPIO2]		= 7,
 	[IRQ_DA8XX_GPIO3]		= 7,
 	[IRQ_DA8XX_GPIO4]		= 7,
-	[IRQ_DA8XX_GPIO5]		= 2,
-	[IRQ_DA8XX_GPIO6]		= 2,
+	[IRQ_DA8XX_GPIO5]		= 7,
+	[IRQ_DA8XX_GPIO6]		= 7,
 	[IRQ_DA8XX_GPIO7]		= 7,
 	[IRQ_DA8XX_GPIO8]		= 7,
 	[IRQ_DA8XX_I2CINT1]		= 7,
@@ -995,7 +995,7 @@ static u8 da850_default_priorities[DA850_N_CP_INTC_IRQ] = {
 	[IRQ_DA8XX_RWAKEUP]		= 7,
 	[IRQ_DA8XX_UARTINT2]		= 7,
 	[IRQ_DA8XX_DFTSSINT]		= 7,
-	[IRQ_DA8XX_EHRPWM0]		= 7,
+	[IRQ_DA8XX_EHRPWM0]		= 0, /* Uses FIQ for EV3 sound playback */
 	[IRQ_DA8XX_EHRPWM0TZ]		= 7,
 	[IRQ_DA8XX_EHRPWM1]		= 7,
 	[IRQ_DA8XX_EHRPWM1TZ]		= 7,
@@ -1417,8 +1417,6 @@ static int da850_round_armrate(struct clk *clk, unsigned long rate)
 }
 #endif
 
-#define DA8XX_EHRPWM0_BASE	0x01F00000
-
 static struct resource da850_ehrpwm0_resource[] = {
 	{
 		.start	= DA8XX_EHRPWM0_BASE,
@@ -1448,8 +1446,6 @@ static struct platform_device da850_ehrpwm0_dev = {
 	.resource	= da850_ehrpwm0_resource,
 	.num_resources	= ARRAY_SIZE(da850_ehrpwm0_resource),
 };
-
-#define DA8XX_EHRPWM1_BASE	0x01F02000
 
 static struct resource da850_ehrpwm1_resource[] = {
 	{
