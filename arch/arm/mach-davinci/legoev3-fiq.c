@@ -700,6 +700,14 @@ unsigned legoev3_fiq_ehrpwm_get_playback_ptr(void)
 }
 EXPORT_SYMBOL_GPL(legoev3_fiq_ehrpwm_get_playback_ptr);
 
+void legoev3_fiq_ehrpwm_set_volume(int volume)
+{
+	local_fiq_disable();
+	legoev3_fiq_data->ehrpwm_data.volume = volume;
+	local_fiq_enable();
+}
+EXPORT_SYMBOL_GPL(legoev3_fiq_ehrpwm_set_volume);
+
 static int __devinit legoev3_fiq_probe(struct platform_device *pdev)
 {
 	struct legoev3_fiq_data *fiq_data;
