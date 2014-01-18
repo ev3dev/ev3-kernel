@@ -88,12 +88,13 @@ struct legoev3_fiq_ehrpwm_data {
 	int volume;
 	unsigned playback_ptr;
 	unsigned period_ticks;
-	unsigned frame_bytes;
-	unsigned buffer_bytes;
-	unsigned period_size;
+	size_t frame_bytes;
+	size_t buffer_bytes;
+	snd_pcm_uframes_t period_size;
 	unsigned callback_count;
 	void (*period_elapsed)(void *);
 	void *period_elapsed_data;
+	unsigned requested_flag:1;
 	unsigned period_elapsed_flag:1;
 };
 
@@ -395,7 +396,7 @@ static void legoev3_fiq_ehrpwm_callback(struct legoev3_fiq_ehrpwm_data *data)
 	int sample;
 	unsigned long duty_ticks;
 
-	if (unlikely(!data->dma_area))
+	if (unlikely(!data->requested_flag || !data->dma_area))
 		return;
 
 	sample = *(short *)(data->dma_area + data->playback_ptr);
@@ -405,11 +406,12 @@ static void legoev3_fiq_ehrpwm_callback(struct legoev3_fiq_ehrpwm_data *data)
 	fiq_ehrpwm_set_duty_ticks(duty_ticks);
 
 	data->playback_ptr += data->frame_bytes;
-	data->playback_ptr %= data->buffer_bytes;
+	if (data->playback_ptr >= data->buffer_bytes)
+		data->playback_ptr = 0;
 
 	if (++data->callback_count >= data->period_size)
 	{
-		data->callback_count %= data->period_size;
+		data->callback_count =  0;
 		data->period_elapsed_flag = 1;
 	}
 
@@ -422,13 +424,6 @@ static void legoev3_fiq_ehrpwm_callback(struct legoev3_fiq_ehrpwm_data *data)
 void legoev3_fiq_handler(void)
 {
 	int irq = legoev3_fiq_get_irq();
-
-	/*
-	 * When debugging, the ehrpwm_event_irq_handler clears interrupts,
-	 * so we have to detect the EHRWPM interrupt another way.
-	 */
-	if(unlikely(irq & BIT(31)) && fiq_ehrpwm_test_irq())
-		irq = legoev3_fiq_data->ehrpwm_irq;
 
 	if (irq == legoev3_fiq_data->timer_irq) {
 		struct legoev3_fiq_port_i2c_data *port_data;
@@ -447,10 +442,11 @@ void legoev3_fiq_handler(void)
 			legoev3_fiq_disable(legoev3_fiq_data->timer_irq);
 
 		legoev3_fiq_ack(legoev3_fiq_data->timer_irq);
-	} else if (irq == legoev3_fiq_data->ehrpwm_irq) {
+	}
+	if (fiq_ehrpwm_test_irq()) {
 		legoev3_fiq_ehrpwm_callback(&legoev3_fiq_data->ehrpwm_data);
-		fiq_ehrpwm_clear_irq();
 		legoev3_fiq_ack(legoev3_fiq_data->ehrpwm_irq);
+		fiq_ehrpwm_clear_irq();
 	}
 }
 
@@ -606,7 +602,7 @@ static irqreturn_t
 legoev3_fiq_gpio_irq_period_elapsed_callback(int irq, void *ehrpwm_data)
 {
 	struct legoev3_fiq_ehrpwm_data *data = ehrpwm_data;
-printk("%s\n", __func__);
+
 	local_fiq_disable();
 	if (data->period_elapsed) {
 		data->period_elapsed(data->period_elapsed_data);
@@ -625,8 +621,9 @@ int legoev3_fiq_ehrpwm_request(struct snd_pcm_substream *substream)
 	if (!legoev3_fiq_data)
 		return -ENODEV;
 
-	if (legoev3_fiq_data->ehrpwm_data.dma_area)
+	if (legoev3_fiq_data->ehrpwm_data.requested_flag)
 		return -EBUSY;
+	legoev3_fiq_data->ehrpwm_data.requested_flag = 1;
 
 	err = request_irq(legoev3_fiq_data->status_gpio_irq,
 			  legoev3_fiq_gpio_irq_period_elapsed_callback,
@@ -637,10 +634,9 @@ int legoev3_fiq_ehrpwm_request(struct snd_pcm_substream *substream)
 		dev_err(&legoev3_fiq_data->pdev->dev,
 			"Unable to claim irq %d; error %d\n",
 			legoev3_fiq_data->status_gpio_irq, err);
+		legoev3_fiq_data->ehrpwm_data.requested_flag = 0;
 		return err;
 	}
-
-	legoev3_fiq_data->ehrpwm_data.dma_area = substream->runtime->dma_area;
 
 	return 0;
 }
@@ -655,7 +651,7 @@ void legoev3_fiq_ehrpwm_release(void)
 	free_irq(legoev3_fiq_data->status_gpio_irq,
 		 &legoev3_fiq_data->ehrpwm_data);
 	legoev3_fiq_data->ehrpwm_data.period_elapsed_flag = 0;
-	legoev3_fiq_data->ehrpwm_data.dma_area = NULL;
+	legoev3_fiq_data->ehrpwm_data.requested_flag = 0;
 	local_fiq_enable();
 }
 EXPORT_SYMBOL_GPL(legoev3_fiq_ehrpwm_release);
@@ -674,6 +670,7 @@ int legoev3_fiq_ehrpwm_prepare(struct snd_pcm_substream *substream,
 
 	local_fiq_disable();
 
+	data->dma_area			= substream->runtime->dma_area;
 	data->playback_ptr		= 0;
 	data->volume			= volume;
 	data->period_ticks		= period_ticks;
