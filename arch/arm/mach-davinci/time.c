@@ -213,7 +213,7 @@ static struct timer_s timers[] = {
 	},
 	[TID_FIQSOURCE] = {
 		.name       = "fiq interrupt source counter",
-		.period     = 50*24, /* 10kHz - clock is 25MHz */
+		.period     = 50*24, /* 10kHz - clock is 24MHz */
 		.opts       = TIMER_OPTS_PERIODIC,
 		.irqaction = {
 			.flags   = IRQF_DISABLED | IRQF_TIMER,
