@@ -1078,6 +1078,17 @@ config SENSORS_ADS7871
 	  This driver can also be built as a module.  If so, the module
 	  will be called ads7871.
 
+config SENSORS_ADS79XX
+	tristate "Texas Instruments ADS79xx A/D converter"
+	depends on SPI
+	help
+	  If you say yes here you get support for TI ADS7950, ADS7951,
+	  ADS7952, ADS7953 ADS7954, ADS7955, ADS7956, ADS7957 ADS7958,
+	  ADS7959, ADS7960 & ADS7961 A/D convertors
+
+	  This driver can also be built as a module.  If so, the module
+	  will be called ads79xx.
+
 config SENSORS_AMC6821
 	tristate "Texas Instruments AMC6821"
 	depends on I2C  && EXPERIMENTAL

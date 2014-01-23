@@ -108,8 +108,7 @@ int __init davinci_serial_init(struct davinci_uart_config *info)
 				pr_err("uart regs ioremap failed\n");
 		}
 
-		if (p->membase && p->type != PORT_AR7)
-			davinci_serial_reset(p);
+		davinci_serial_reset(p);
 	}
 
 	return platform_device_register(soc_info->serial_dev);

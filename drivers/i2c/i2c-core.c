@@ -1477,20 +1477,23 @@ static int i2c_detect_address(struct i2c_client *temp_client,
 	int addr = temp_client->addr;
 	int err;
 
-	/* Make sure the address is valid */
-	err = i2c_check_addr_validity(addr);
-	if (err) {
-		dev_warn(&adapter->dev, "Invalid probe address 0x%02x\n",
-			 addr);
-		return err;
+	/* Make sure the address is valid - LEGO devices can break the rules */
+	if (!(driver->class & I2C_CLASS_LEGOEV3)) {
+		err = i2c_check_addr_validity(addr);
+		if (err) {
+			dev_warn(&adapter->dev, "Invalid probe address 0x%02x\n",
+				 addr);
+			return err;
+		}
 	}
 
 	/* Skip if already in use */
 	if (i2c_check_addr_busy(adapter, addr))
 		return 0;
 
-	/* Make sure there is something at this address */
-	if (!i2c_default_probe(adapter, addr))
+	/* Make sure there is something at this address - skip for LEGO drivers */
+	if (!(driver->class & I2C_CLASS_LEGOEV3)
+	 && !i2c_default_probe(adapter, addr))
 		return 0;
 
 	/* Finally call the custom detection function */

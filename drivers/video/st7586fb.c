@@ -463,7 +463,7 @@ static int __devinit st7586fb_probe (struct spi_device *spi)
 	struct st7586fb_par *par;
 	int retval = -ENOMEM;
 
-	if (chip != ST7586_DISPLAY_LMS2012_LCD) {
+	if (chip != ST7586_DISPLAY_LEGO_EV3) {
 		pr_err("%s: only the %s device is supported\n", DRVNAME,
 			to_spi_driver(spi->dev.driver)->id_table->name);
 		return -EINVAL;
@@ -570,7 +570,7 @@ static int __devexit st7586fb_remove(struct spi_device *spi)
 }
 
 static const struct spi_device_id st7586fb_ids[] = {
-	{ "lms2012_lcd", ST7586_DISPLAY_LMS2012_LCD },
+	{ "st7586fb-legoev3", ST7586_DISPLAY_LEGO_EV3 },
 	{ },
 };
 

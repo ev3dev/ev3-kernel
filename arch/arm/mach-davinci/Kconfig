@@ -236,6 +236,14 @@ config MACH_DAVINCI_LEGOEV3
 	  Information on this board may be found at
 	  http://mindstorms.lego.com/
 
+config LEGOEV3_FIQ
+	bool "FIQ backend for LEGO Mindstorms EV3 input ports"
+	depends on MACH_DAVINCI_LEGOEV3
+	select FIQ
+	help
+	  Say Y here to enable the FIQ (fast interrupt) backend for the I2C
+	  implementation used by the input ports on the LEGO Mindstorms EV3.
+
 config DA850_FIX_PLL0_SYSCLK3RATE
 	int "PLL0_SYSCLK3 rate"
 	depends on ARCH_DAVINCI_DA850

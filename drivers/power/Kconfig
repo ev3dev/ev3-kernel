@@ -14,6 +14,12 @@ config POWER_SUPPLY_DEBUG
 	  Say Y here to enable debugging messages for power supply class
 	  and drivers.
 
+config BATTERY_LEGOEV3
+	tristate "LEGO Mindstorms EV3 battery driver"
+	depends on LEGOEV3_ANALOG
+	help
+	  Say Y here to enable the driver for the LEGO Mindstroms EV3 battery.
+
 config PDA_POWER
 	tristate "Generic PDA/phone power driver"
 	depends on !S390

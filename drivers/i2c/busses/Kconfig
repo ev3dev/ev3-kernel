@@ -349,6 +349,13 @@ config I2C_DAVINCI
 	  devices such as DaVinci NIC.
 	  For details please see http://www.ti.com/davinci
 
+config I2C_LEGOEV3
+	tristate "I2C driver for LEGO Mindstorms EV3"
+	depends on GENERIC_GPIO
+	help
+	  This is a GPIO bit-banging driver for connecting to LEGO Mindstorms
+	  I2C sensors. It is not quite standard I2C.
+
 config I2C_DESIGNWARE_PLATFORM
 	tristate "Synopsys DesignWare Platfrom"
 	depends on HAVE_CLK
