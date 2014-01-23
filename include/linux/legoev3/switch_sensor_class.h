@@ -1,5 +1,5 @@
 /*
- * Touch sensor device class for LEGO Mindstorms EV3
+ * Switch sensor device class for LEGO Mindstorms EV3
  *
  * Copyright (C) 2013-2014 David Lechner <david@lechnology.com>
  *
@@ -13,22 +13,22 @@
  * GNU General Public License for more details.
  */
 
-#ifndef __LINUX_LEGOEV3_TOUCH_SENSOR_CLASS_H
-#define __LINUX_LEGOEV3_TOUCH_SENSOR_CLASS_H
+#ifndef __LINUX_LEGOEV3_SWITCH_SENSOR_CLASS_H
+#define __LINUX_LEGOEV3_SWITCH_SENSOR_CLASS_H
 
 #include <linux/device.h>
 
 
-struct touch_sensor_device {
-	bool (*pressed)(struct touch_sensor_device *);
+struct switch_sensor_device {
+	bool (*get_value)(struct switch_sensor_device *);
 	/* private */
 	struct device dev;
 };
 
-extern int register_touch_sensor(struct touch_sensor_device *,
+extern int register_switch_sensor(struct switch_sensor_device *,
 				 struct device *);
-extern void unregister_touch_sensor(struct touch_sensor_device *);
+extern void unregister_switch_sensor(struct switch_sensor_device *);
 
-extern struct class touch_sensor_class;
+extern struct class switch_sensor_class;
 
-#endif /* __LINUX_LEGOEV3_TOUCH_SENSOR_CLASS_H */
+#endif /* __LINUX_LEGOEV3_SWITCH_SENSOR_CLASS_H */
