@@ -1,7 +1,3 @@
-#ifdef CONFIG_MACH_DAVINCI_LEGOEV3
-#warning "This is still really fragile test code"
-#endif
-
 /*
  * TI DA850/OMAP-L138 chip specific setup
  *
@@ -383,8 +379,7 @@ static struct clk ehrpwm_clk = {
 	.parent		= &pll0_sysclk2,
 	.lpsc		= DA8XX_LPSC1_PWM,
 	.gpsc		= 1,
-	.domain		= 1,
-	.flags          = DA850_CLK_ASYNC3,
+	.flags		= DA850_CLK_ASYNC3,
 };
 
 static struct clk ecap_clk = {
@@ -392,7 +387,7 @@ static struct clk ecap_clk = {
 	.parent		= &pll0_sysclk2,
 	.lpsc		= DA8XX_LPSC1_ECAP,
 	.gpsc		= 1,
-	.flags          = DA850_CLK_ASYNC3,
+	.flags		= DA850_CLK_ASYNC3,
 };
 
 static struct clk_lookup da850_clks[] = {
@@ -440,7 +435,7 @@ static struct clk_lookup da850_clks[] = {
 	CLK("spi_davinci.1",	NULL,		&spi1_clk),
 	CLK(NULL,		"vpif",		&vpif_clk),
 	CLK("ahci",		NULL,		&sata_clk),
-	CLK(NULL,               "ehrpwm",       &ehrpwm_clk),
+	CLK(NULL,		"ehrpwm",	&ehrpwm_clk),
 	CLK(NULL,		"ecap",		&ecap_clk),
 	CLK(NULL,		NULL,		NULL),
 };
@@ -464,14 +459,16 @@ static const struct mux_config da850_pins[] = {
 	MUX_CFG(DA850, UART1_RXD,	4,	24,	15,	2,	false)
 	MUX_CFG(DA850, UART1_TXD,	4,	28,	15,	2,	false)
 	/* UART2 function */
+	MUX_CFG(DA850, NUART2_CTS,	0,	28,	15,	4,	false)
+	MUX_CFG(DA850, NUART2_RTS,	0,	24,	15,	4,	false)
 	MUX_CFG(DA850, UART2_RXD,	4,	16,	15,	2,	false)
 	MUX_CFG(DA850, UART2_TXD,	4,	20,	15,	2,	false)
-	/* I2C1 function */
-	MUX_CFG(DA850, I2C1_SCL,	4,	16,	15,	4,	false)
-	MUX_CFG(DA850, I2C1_SDA,	4,	20,	15,	4,	false)
 	/* I2C0 function */
 	MUX_CFG(DA850, I2C0_SDA,	4,	12,	15,	2,	false)
 	MUX_CFG(DA850, I2C0_SCL,	4,	8,	15,	2,	false)
+	/* I2C1 function */
+	MUX_CFG(DA850, I2C1_SCL,	4,	16,	15,	4,	false)
+	MUX_CFG(DA850, I2C1_SDA,	4,	20,	15,	4,	false)
 	/* EMAC function */
 	MUX_CFG(DA850, MII_TXEN,	2,	4,	15,	8,	false)
 	MUX_CFG(DA850, MII_TXCLK,	2,	8,	15,	8,	false)
@@ -607,22 +604,152 @@ static const struct mux_config da850_pins[] = {
 	MUX_CFG(DA850, EMA_WAIT_1,	6,	24,	15,	1,	false)
 	MUX_CFG(DA850, NEMA_CS_2,	7,	0,	15,	1,	false)
 	/* GPIO function */
-	MUX_CFG(DA850, GPIO2_4,		6,	12,	15,	8,	false)
-	MUX_CFG(DA850, GPIO2_6,		6,	4,	15,	8,	false)
-	MUX_CFG(DA850, GPIO2_8,		5,	28,	15,	8,	false)
-	MUX_CFG(DA850, GPIO2_15,	5,	0,	15,	8,	false)
-	MUX_CFG(DA850, GPIO3_12,	7,	12,	15,	8,	false)
-	MUX_CFG(DA850, GPIO3_13,	7,	8,	15,	8,	false)
-	MUX_CFG(DA850, GPIO4_0,		10,	28,	15,	8,	false)
-	MUX_CFG(DA850, GPIO4_1,		10,	24,	15,	8,	false)
-	MUX_CFG(DA850, GPIO6_9,		13,	24,	15,	8,	false)
-	MUX_CFG(DA850, GPIO6_10,	13,	20,	15,	8,	false)
-	MUX_CFG(DA850, GPIO6_13,	13,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_0,		1,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_1,		1,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_2,		1,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_3,		1,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_4,		1,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_5,		1,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_6,		1,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_7,		1,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_8,		0,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_9,		0,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_10,	0,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_11,	0,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_12,	0,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_13,	0,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_14,	0,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_15,	0,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO1_0,		4,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO1_1,		4,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO1_2,		4,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO1_3,		4,	16,	15,	8,	false)
 	MUX_CFG(DA850, GPIO1_4,		4,	12,	15,	8,	false)
 	MUX_CFG(DA850, GPIO1_5,		4,	8,	15,	8,	false)
-	MUX_CFG(DA850, GPIO0_11,	0,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO1_6,		4,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO1_7,		4,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO1_8,		3,	0,	15,	4,	false)
+	MUX_CFG(DA850, GPIO1_9,		2,	24,	15,	4,	false)
+	MUX_CFG(DA850, GPIO1_10,	2,	20,	15,	4,	false)
+	MUX_CFG(DA850, GPIO1_11,	2,	16,	15,	4,	false)
+	MUX_CFG(DA850, GPIO1_12,	2,	12,	15,	4,	false)
+	MUX_CFG(DA850, GPIO1_13,	2,	8,	15,	4,	false)
+	MUX_CFG(DA850, GPIO1_14,	2,	4,	15,	4,	false)
+	MUX_CFG(DA850, GPIO1_15,	2,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_0,		6,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_1,		6,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_2,		6,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_3,		6,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_4,		6,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_5,		6,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_6,		6,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_7,		6,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_8,		5,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_9,		5,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_10,	5,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_11,	5,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_12,	5,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_13,	5,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_14,	5,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_15,	5,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_0,		8,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_1,		8,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_2,		8,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_3,		8,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_4,		8,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_5,		8,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_6,		8,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_7,		8,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_8,		7,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_9,		7,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_10,	7,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_11,	7,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_12,	7,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_13,	7,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_14,	7,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_15,	7,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_0,		10,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_1,		10,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_2,		10,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_3,		10,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_4,		10,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_5,		10,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_6,		10,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_7,		10,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_8,		9,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_9,		9,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_10,	9,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_11,	9,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_12,	9,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_13,	9,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_14,	9,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_15,	9,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_0,		12,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_1,		12,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_2,		12,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_3,		12,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_4,		12,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_5,		12,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_6,		12,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_7,		12,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_8,		11,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_9,		11,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_10,	11,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_11,	11,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_12,	11,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_13,	11,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_14,	11,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_15,	11,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_0,		19,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_1,		19,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_2,		19,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_3,		19,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_4,		19,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_5,		16,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_6,		14,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_7,		14,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_8,		13,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_9,		13,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_10,	13,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_11,	13,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_12,	13,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_13,	13,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_14,	13,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_15,	13,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_0,		18,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_1,		18,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_2,		17,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_3,		17,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_4,		17,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_5,		17,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_6,		17,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_7,		17,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_8,		17,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_9,		17,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_10,	16,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_11,	16,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_12,	16,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_13,	16,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_14,	16,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_15,	16,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO8_0,		19,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO8_1,		3,	28,	15,	4,	false)
+	MUX_CFG(DA850, GPIO8_2,		3,	24,	15,	4,	false)
+	MUX_CFG(DA850, GPIO8_3,		3,	20,	15,	4,	false)
+	MUX_CFG(DA850, GPIO8_4,		3,	16,	15,	4,	false)
+	MUX_CFG(DA850, GPIO8_5,		3,	12,	15,	4,	false)
+	MUX_CFG(DA850, GPIO8_6,		3,	8,	15,	4,	false)
+	MUX_CFG(DA850, GPIO8_7,		2,	28,	15,	4,	false)
+	MUX_CFG(DA850, GPIO8_8,		19,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO8_9,		19,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO8_10,	18,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO8_11,	18,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO8_12,	18,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO8_13,	18,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO8_14,	18,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO8_15,	18,	8,	15,	8,	false)
+	/* RTC function */
 	MUX_CFG(DA850, RTC_ALARM,	0,	28,	15,	2,	false)
-	MUX_CFG(DA850, GPIO7_4,         17,     20,     15,     8,      false)
 	/* eHRPWM0 function */
 	MUX_CFG(DA850,	EHRPWM0_A,	3,	0,	15,	2,	false)
 	MUX_CFG(DA850,	EHRPWM0_B,	3,	4,	15,	2,	false)
@@ -654,9 +781,8 @@ static const struct mux_config da850_pins[] = {
 	MUX_CFG(DA850, VPIF_DIN13,	15,	16,	15,	1,	false)
 	MUX_CFG(DA850, VPIF_DIN14,	15,	12,	15,	1,	false)
 	MUX_CFG(DA850, VPIF_DIN15,	15,	8,	15,	1,	false)
-        MUX_CFG(DA850, VPIF_CLKIN0,	14,	0,	15,	1,	false)
-//      MUX_CFG(DA850, VPIF_CLKIN1,	14,	4,	15,	1,	false)
-	MUX_CFG(DA850, VPIF_CLKIN1,	14,	4,	15,	8,	false)
+	MUX_CFG(DA850, VPIF_CLKIN0,	14,	0,	15,	1,	false)
+	MUX_CFG(DA850, VPIF_CLKIN1,	14,	4,	15,	1,	false)
 	MUX_CFG(DA850, VPIF_CLKIN2,	19,	8,	15,	1,	false)
 	MUX_CFG(DA850, VPIF_CLKIN3,	19,	16,	15,	1,	false)
 	/* VPIF Display */
@@ -678,387 +804,60 @@ static const struct mux_config da850_pins[] = {
 	MUX_CFG(DA850, VPIF_DOUT15,	17,	8,	15,	1,	false)
 	MUX_CFG(DA850, VPIF_CLKO2,	19,	12,	15,	1,	false)
 	MUX_CFG(DA850, VPIF_CLKO3,	19,	20,	15,	1,	false)
-#ifdef CONFIG_MACH_DAVINCI_LEGOEV3
-#warning "We're compiling for CONFIG_MACH_DAVINCI_LEGOEV3"
-        // NOTE: Because of the way array initializers work, if any SOC_DESCRIPTION
-        //       index that's configured below here overlaps the previous mux
-        //       configuration entry, it will override the previous entry! The
-        //       overrides are marked with "OVERRIDES PREVIOUS!"
-        //
-        // To OVERRIDE and DISABLE the pinmux setting of a pin that was set higher
-        // up in this routine, use MUX_CFG() as usual but make the mask field 0
-        // 
-	MUX_CFG(EV3, NUART2_CTS,	0,	28,	15,	4,	false) // LEGO BT UART CTRL
-	MUX_CFG(EV3, NUART2_RTS,	0,	24,	15,	4,	false) // LEGO BT UART CTRL
-
-	MUX_CFG(EV3, AHCLKR,		0,	16,	15,	1,	false)
-
 	/* PRU functions for soft can */
-//	MUX_CFG(DA850, PRU0_R31_0,	7,	28,	15,	0,	false)
-//	MUX_CFG(DA850, PRU1_R30_15,	12,	0,	15,	4,	false)
-//	MUX_CFG(DA850, PRU1_R31_18,	11,	20,	15,	0,	false)
-
+	MUX_CFG(DA850, PRU0_R31_0,	7,	28,	15,	0,	false)
+	MUX_CFG(DA850, PRU1_R30_15,	12,	0,	15,	4,	false)
+	MUX_CFG(DA850, PRU1_R31_18,	11,	20,	15,	0,	false)
 	/* SPI0 function */
-	MUX_CFG(EV3, SPI0_CS_0,	4,	4,	15,	1,	false)
-//	MUX_CFG(DA850, SPI0_CLK,	3,	0,	15,	1,	false)
-//	MUX_CFG(DA850, SPI0_SOMI,	3,	8,	15,	1,	false)
-//	MUX_CFG(DA850, SPI0_SIMO,	3,	12,	15,	1,	false)
+	MUX_CFG(DA850, SPI0_SCS_0,	4,	4,	15,	1,	false)
+	MUX_CFG(DA850, SPI0_SCS_1,	4,	0,	15,	1,	false)
+	MUX_CFG(DA850, SPI0_SCS_2,	3,	28,	15,	1,	false)
+	MUX_CFG(DA850, SPI0_SCS_3,	3,	24,	15,	1,	false)
+	MUX_CFG(DA850, SPI0_SCS_4,	3,	20,	15,	1,	false)
+	MUX_CFG(DA850, SPI0_SCS_5,	3,	16,	15,	1,	false)
+	MUX_CFG(DA850, SPI0_CLK,	3,	0,	15,	1,	false)
+	MUX_CFG(DA850, SPI0_ENA,	3,	4,	15,	1,	false)
+	MUX_CFG(DA850, SPI0_SOMI,	3,	8,	15,	1,	false)
+	MUX_CFG(DA850, SPI0_SIMO,	3,	12,	15,	1,	false)
 	/* SPI1 function */
-	MUX_CFG(EV3, SPI1_CS_0,	5,	4,	15,	1,	false)
-//	MUX_CFG(DA850, SPI1_CLK,	5,	8,	15,	1,	false)
-//	MUX_CFG(DA850, SPI1_SOMI,	5,	16,	15,	1,	false)
-//	MUX_CFG(DA850, SPI1_SIMO,	5,	20,	15,	1,	false)
-	/* MMC/SD1 function */
-	/* GPIO function */
-//  	MUX_CFG(DA850, GPIO2_0,		6,	28,	15,	8,	false)
-//	MUX_CFG(DA850, GPIO2_11,	5,	16,	15,	8,	false)
-//	MUX_CFG(DA850, GPIO2_12,	5,	12,	15,	8,	false)
-//	MUX_CFG(DA850, GPIO4_2,		10,	20,	15,	8,	false)
-//	MUX_CFG(DA850, GPIO4_9,		9,	24,	15,	8,	false) // LEGO BT Shutdown - EP2
-//	MUX_CFG(DA850, GPIO5_0,		12,	28,	15,	8,	false)
-//	MUX_CFG(DA850, GPIO7_9,		17,	0,	15,	8,	false)
-//	MUX_CFG(DA850, GPIO7_10,	16,	28,	15,	8,	false)
-//	MUX_CFG(DA850, GPIO6_3,		19,	12,	15,	8,	false)
-//	MUX_CFG(DA850, GPIO6_11,	13,	16,	15,	8,	false)
-//	MUX_CFG(DA850, GPIO6_14,	13,	4,	15,	8,	false)
-//	MUX_CFG(DA850, GPIO6_15,	13,	0,	15,	8,	false) // LEGO BT ENABLE	
-	/* MMC/SD1 function */
-//	MUX_CFG(DA850, MMCSD1_DAT_0,	0,	0,	0,	0,	false) // Force no init
-//	MUX_CFG(DA850, MMCSD1_DAT_1,	0,	0,	0,	0,	false)
-//	MUX_CFG(DA850, MMCSD1_DAT_2,	0,	0,	0,	0,	false)
-//	MUX_CFG(DA850, MMCSD1_DAT_3,	0,	0,	0,	0,	false)
-//	MUX_CFG(DA850, MMCSD1_CLK,	0,	0,	0,	0,	false)
-//	MUX_CFG(DA850, MMCSD1_CMD,	0,	0,	0,	0,	false)
+	MUX_CFG(DA850, SPI1_SCS_0,	5,	4,	15,	1,	false)
+	MUX_CFG(DA850, SPI1_SCS_1,	5,	0,	15,	1,	false)
+	MUX_CFG(DA850, SPI1_SCS_2,	4,	28,	15,	1,	false)
+	MUX_CFG(DA850, SPI1_SCS_3,	4,	24,	15,	1,	false)
+	MUX_CFG(DA850, SPI1_SCS_4,	4,	20,	15,	1,	false)
+	MUX_CFG(DA850, SPI1_SCS_5,	4,	16,	15,	1,	false)
+	MUX_CFG(DA850, SPI1_SCS_6,	4,	12,	15,	1,	false)
+	MUX_CFG(DA850, SPI1_SCS_7,	4,	8,	15,	1,	false)
+	MUX_CFG(DA850, SPI1_CLK,	5,	4,	15,	1,	false)
+	MUX_CFG(DA850, SPI1_ENA,	5,	8,	15,	1,	false)
+	MUX_CFG(DA850, SPI1_SOMI,	5,	16,	15,	1,	false)
+	MUX_CFG(DA850, SPI1_SIMO,	5,	20,	15,	1,	false)
 	/* McBSP0 function */
-//	MUX_CFG(DA850, MCBSP0_CLKR,	2,	4,	15,	2,	false)
-//	MUX_CFG(DA850, MCBSP0_CLKX,	2,	8,	15,	2,	false)
-//	MUX_CFG(DA850, MCBSP0_FSR,	2,	12,	15,	2,	false)
-//	MUX_CFG(DA850, MCBSP0_FSX,	2,	16,	15,	2,	false)
-//	MUX_CFG(DA850, MCBSP0_DR,	2,	20,	15,	2,	false)
-//	MUX_CFG(DA850, MCBSP0_DX,	2,	24,	15,	2,	false)
-//	MUX_CFG(DA850, MCBSP0_CLKS,	2,	28,	15,	0,	false)
+	MUX_CFG(DA850, MCBSP0_CLKR,	2,	4,	15,	2,	false)
+	MUX_CFG(DA850, MCBSP0_CLKX,	2,	8,	15,	2,	false)
+	MUX_CFG(DA850, MCBSP0_FSR,	2,	12,	15,	2,	false)
+	MUX_CFG(DA850, MCBSP0_FSX,	2,	16,	15,	2,	false)
+	MUX_CFG(DA850, MCBSP0_DR,	2,	20,	15,	2,	false)
+	MUX_CFG(DA850, MCBSP0_DX,	2,	24,	15,	2,	false)
+	MUX_CFG(DA850, MCBSP0_CLKS,	2,	28,	15,	0,	false)
 	/* McBSP1 function */
-//	MUX_CFG(DA850, MCBSP1_CLKR,	1,	4,	15,	2,	false)
-//	MUX_CFG(DA850, MCBSP1_CLKX,	1,	8,	15,	2,	false)
- //	MUX_CFG(DA850, MCBSP1_FSR,	1,	12,	15,	2,	false)
- //	MUX_CFG(DA850, MCBSP1_FSX,	1,	16,	15,	2,	false)
- //	MUX_CFG(DA850, MCBSP1_DR,	1,	20,	15,	2,	false)
- //	MUX_CFG(DA850, MCBSP1_DX,	1,	24,	15,	2,	false)
- //	MUX_CFG(DA850, MCBSP1_CLKS,	1,	28,	15,	2,	false)
-	/* Bluetooth slow clock */						// LEGO BT
-	MUX_CFG(EV3, ECAP2_OUT,		1,	0,	15,	4,	false)  // LEGO BT
-	MUX_CFG(EV3, ECAP2_OUT_ENABLE,	0,	12,	15,	8,	false)  // LEGO BT
-        /* LEGO EV3 LED PINS */
-//      MUX_CFG(EV3,   DIODE_0,        13,      12,     15,     8,      false)  // GPIO6_12
-//      MUX_CFG(EV3,   DIODE_1,        13,       4,     15,     8,      false)  // GPIO6_14
-//      MUX_CFG(EV3,   DIODE_2,        13,       8,     15,     8,      false)  // GPIO6_13
-//      MUX_CFG(EV3,   DIODE_3,        14,       0,     15,     8,      false)  // GPIO6_7
-        /* LEGO EV3 BUTTON PINS */
-//      MUX_CFG(EV3,   BUTTON_0,       16,       8,     15,     8,      false)  // GPIO7_15
-//      MUX_CFG(EV3,   BUTTON_1,        2,       8,     15,     4,      false)  // GPIO1_13
-//      MUX_CFG(EV3,   BUTTON_2,       16,      12,     15,     8,      false)  // GPIO7_14
-//      MUX_CFG(EV3,   BUTTON_3,       16,      20,     15,     8,      false)  // GPIO7_12
-//      MUX_CFG(EV3,   BUTTON_4,       14,       4,     15,     8,      false)  // GPIO6_6
-//      MUX_CFG(EV3,   BUTTON_5,       13,      20,     15,     8,      false)  // GPIO6_10
-        /* LEGO EV3 MOTOR PINS */
-//      MUX_CFG(EV3,   OUTPUTA_PWM,     5,       4,     15,     2,      false)  // GPIO_TO_PIN(2, 14 ) - EPWM1B
-//      MUX_CFG(EV3,   OUTPUTA_DIR0,    7,       0,     15,     8,      false)  // GPIO_TO_PIN(3, 15 )
-//      MUX_CFG(EV3,   OUTPUTA_DIR1,    8,       4,     15,     8,      false)  // GPIO_TO_PIN(3,  6 )
-//      MUX_CFG(EV3,   OUTPUTA_INT,    11,      16,     15,     8,      false)  // GPIO_TO_PIN(5, 11 )
-//      MUX_CFG(EV3,   OUTPUTA_DIRA,    1,      12,     15,     8,      false)  // GPIO_TO_PIN(0,  4 )
-
-//      MUX_CFG(EV3,   OUTPUTB_PWM,     5,       0,     15,     2,      false)  // GPIO_TO_PIN(2, 15 ) - EPWM1A
-//      MUX_CFG(EV3,   OUTPUTB_DIR0,    6,      24,     15,     8,      false)  // GPIO_TO_PIN(2,  1 )
-//      MUX_CFG(EV3,   OUTPUTB_DIR1,    1,      16,     15,     8,      false)  // GPIO_TO_PIN(0,  3 )
-//      MUX_CFG(EV3,   OUTPUTB_INT,    11,      28,     15,     8,      false)  // GPIO_TO_PIN(5,  8 )
-//      MUX_CFG(EV3,   OUTPUTB_DIRA,    5,      24,     15,     8,      false)  // GPIO_TO_PIN(2,  9 )
-
-//      MUX_CFG(EV3,   OUTPUTC_PWM,     2,      28,     15,     2,      false)  // GPIO_TO_PIN(8,  7 ) - APWM0
-//      MUX_CFG(EV3,   OUTPUTC_DIR0,   13,      28,     15,     8,      false)  // GPIO_TO_PIN(6,  8 )
-//      MUX_CFG(EV3,   OUTPUTC_DIR1,   11,      24,     15,     8,      false)  // GPIO_TO_PIN(5,  9 )
-//      MUX_CFG(EV3,   OUTPUTC_INT,    11,       8,     15,     8,      false)  // GPIO_TO_PIN(5, 13 )
-//      MUX_CFG(EV3,   OUTPUTC_DIRA,    7,       4,     15,     8,      false)  // GPIO_TO_PIN(3, 14 )
-
-// #warning "Should the pin mode for this pin actually be 4 instead of 2?????"
-//      MUX_CFG(EV3,   OUTPUTD_PWM,     1,      28,     15,     4,      false)  // GPIO_TO_PIN(0,  0 ) - APWM1
-//      MUX_CFG(EV3,   OUTPUTD_DIR0,   12,      16,     15,     8,      false)  // GPIO_TO_PIN(5,  3 )
-//      MUX_CFG(EV3,   OUTPUTD_DIR1,   11,      20,     15,     8,      false)  // GPIO_TO_PIN(5, 10 )
-//      MUX_CFG(EV3,   OUTPUTD_INT,    13,      24,     15,     8,      false)  // GPIO_TO_PIN(6,  9 )
-//      MUX_CFG(EV3,   OUTPUTD_DIRA,    5,      28,     15,     8,      false)  // GPIO_TO_PIN(2,  8 )
-
-// New GPIO MUX definitions from LEGO AM1808.h file including where-used description
-//
-// Notes:
-//
-// Input UART 3 - RXD is not connected to any IO
-// Input UART 4 - RXD is not connected to any IO
-// Test Pin     - Depends on ENABLE_TEST_ON_PORT4 ? GP1_15 : GP2_7
-// Sound Pins   - Assuming HARDWARE = ONE2ONE
-// PWM Pins     - None of the ports have the sleep or fault pins enabled
-// 
-// CONFLICT!    - 5VONIGEN         & DIODE2  (GPIO6_14) - Turns out 5VONIGEN is not used in the code!
-//                ECAP2_OUT        & GPIO0_7            - Bluetooth clock?
-//                ECAP2_OUT_ENABLE & GPIO0_12           - Bluetooth clock?
-//
-// Double check the SPI0/1 CS pins!
-//
-// Investigate macros to enable/disable internal pullups
-
-        MUX_CFG(EV3,   GPIO0_1,         1,      24,     15,     8,      false) // Input UART 4  - DIGID0
-                                                                              // Analog Port 4 - Pin 5 - DIGID0 - Digital input/output
-        MUX_CFG(EV3,   GPIO0_2,         1,      20,     15,     8,      false) // Input UART 1  - DIGIA0
-                                                                              // Analog Port 1 - Pin 5 - DIGIA0 - Digital input/output
-        MUX_CFG(EV3,   GPIO0_3,         1,      16,     15,     8,      false) // PWM Port B    - DIR1 B
-                                                                              // Analog Port 2 - MAIN0
-        MUX_CFG(EV3,   GPIO0_4,         1,      12,     15,     8,      false) // PWM Port A    - DIR A 
-                                                                              // Analog Port 1 - DIRA
-        MUX_CFG(EV3,   GPIO0_5,         1,       8,     15,     8,      false) // Unused - GPIO_TO_PIN(0,  5)
-        MUX_CFG(EV3,   GPIO0_6,         1,       4,     15,     8,      false) // ADC Power     - ADCBATEN
-        MUX_CFG(EV3,   GPIO0_7,         1,       0,     15,     8,      false) // Bluetooth ECAP2OUT - GPIO_TO_PIN(0,  7)
-        MUX_CFG(EV3,   GPIO0_11,        0,      16,     15,     8,      false) // Unused - GPIO_TO_PIN(0, 11)
-        MUX_CFG(EV3,   GPIO0_12,        0,      12,     15,     8,      false) // Input UART 3 - DIGIC0
-                                                                              // Analog Port 3 - Pin 5 - DIGIC0 - Digital input/output
-                                                                              // Bluetooth ECAP2_OUT_ENABLE
-        MUX_CFG(EV3,   GPIO0_13,        0,       8,     15,     8,      false) // Input UART 2 - DIGIB1
-                                                                              // I2C Port 2   - DATA
-                                                                              // Analog Port 2 - Pin 5 - DIGIB1 - Digital input/output
-        MUX_CFG(EV3,   GPIO0_14,        0,       4,     15,     8,      false) // Input UART 2 - DIGIB0
-                                                                              // Analog Port 2 - Pin 5 - DIGIB0 - Digital input/output
-        MUX_CFG(EV3,   GPIO0_15,        0,       0,     15,     8,      false) // I2C Port 1 - DATA
-                                                                              // Analog Port 1 - Pin 6 - DIGIA1 - Digital input/output
-	MUX_CFG(EV3,   GPIO1_4,		4,	12,	15,	8,	false) // ON_BD_USB_DRV - GPIO_TO_PIN(1,  4) 
-        MUX_CFG(EV3,   GPIO1_0,         4,      28,     15,     8,      false) // I2C Port 1 - CLOCK
-        MUX_CFG(EV3,   GPIO1_8,         3,       0,     15,     4,      false) // ADC SPI ???  - ADCCLK
-        MUX_CFG(EV3,   GPIO1_9,         2,      24,     15,     4,      false) // Unused - GPIO_TO_PIN(1,  9)
-        MUX_CFG(EV3,   GPIO1_10,        2,      20,     15,     4,      false) // Unused - GPIO_TO_PIN(1, 10)
-        MUX_CFG(EV3,   GPIO1_11,        2,      16,     15,     4,      false) // I2C Port 4 - CLOCK
-        MUX_CFG(EV3,   GPIO1_12,        2,      12,     15,     4,      false) // I2C Port 3 - CLOCK
-        MUX_CFG(EV3,   GPIO1_13,        2,       8,     15,     4,      false) // UI BUTTONS - BUT1
-        MUX_CFG(EV3,   GPIO1_14,        2,       4,     15,     4,      false) // Input UART 3 - DIGIC1
-                                                                              // I2C Port 3   - DATA
-                                                                              // Analog Port 3 - Pin 5 - DIGIC1 - Digital input/output
-        MUX_CFG(EV3,   GPIO1_15,        2,       0,     15,     8,      false) // Input UART 4 - DIGID1
-                                                                              // I2C Port 4   - DATA
-                                                                              // Analog Port 4 - Pin 5 - DIGID1 - Digital input/output
-        MUX_CFG(EV3,   GPIO2_0,         6,      28,     15,     8,      false) // Unused - GPIO_TO_PIN(2,  0) - Was PWM AB Fault pre-EP2
-        MUX_CFG(EV3,   GPIO2_1,         6,      24,     15,     8,      false) // PWM Port B   - DIR0 B
-                                                                              // Analog Port 2 - MAIN1
-        MUX_CFG(EV3,   GPIO2_2,         6,      20,     15,     8,      false) // Analog Port 1 - Pin 2 - LEGDETA - Digital input pulled up
-                                         
-        MUX_CFG(EV3,   GPIO2_4,         6,      12,     15,     8,      false) // Unused GPIO_TO_PIN(2,  4)
-        MUX_CFG(EV3,   GPIO2_5,         6,       8,     15,     8,      false) // Analog Port 2 - DETB0 TP19
-        MUX_CFG(EV3,   GPIO2_6,         6,       4,     15,     8,      false) // Unused - GPIO_TO_PIN(2,  6)
-        MUX_CFG(EV3,   GPIO2_7,         6,       0,     15,     8,      false) // Unused - GPIO_TO_PIN(2,  7) - Test Pin
-        MUX_CFG(EV3,   GPIO2_8,         5,      28,     15,     8,      false) // PWM Port D   - DIR  D
-                                                                              // Analog Port 4 - DIRD
-        MUX_CFG(EV3,   GPIO2_9,         5,      24,     15,     8,      false) // PWM Port B   - DIR  B
-                                                                              // Analog Port 2 - DIRB
-        MUX_CFG(EV3,   GPIO2_10,        5,      20,     15,     8,      false) // Unused - GPIO_TO_PIN(2, 10)
-//      MUX_CFG(EV3,   GPIO2_11,        5,      16,     15,     8,      false) // Unused - GPIO_TO_PIN(2, 11)
-//      MUX_CFG(EV3,   GPIO2_12,        5,      12,     15,     8,      false) // Unused - GPIO_TO_PIN(2, 12)
-        MUX_CFG(EV3,   GPIO2_13,        5,       8,     15,     8,      false) // Unused - GPIO_TO_PIN(2, 13)
-        MUX_CFG(EV3,   GPIO3_0,         8,      28,     15,     8,      false) // Unused - GPIO_TO_PIN(3,  0)
-        MUX_CFG(EV3,   GPIO3_1,         8,      24,     15,     8,      false) // Unused - GPIO_TO_PIN(3,  1)
-        MUX_CFG(EV3,   GPIO3_2,         8,      20,     15,     8,      false) // Unused - GPIO_TO_PIN(3,  2) - Was DETC0 TP20 pre-EP2
-        MUX_CFG(EV3,   GPIO3_3,         8,      16,     15,     8,      false) // Bluetooth  - PIC_EN
-        MUX_CFG(EV3,   GPIO3_4,         8,      12,     15,     8,      false) // Unused - GPIO_TO_PIN(3,  4)
-        MUX_CFG(EV3,   GPIO3_5,         8,       8,     15,     8,      false) // Unused - GPIO_TO_PIN(3,  5)
-        MUX_CFG(EV3,   GPIO3_6,         8,       4,     15,     8,      false) // PWM Port A - DIR1 A
-                                                                              // Analog Port 1 - MAIN1
-        MUX_CFG(EV3,   GPIO3_7,         8,       0,     15,     8,      false) // Unused - GPIO_TO_PIN(3,  7)
-        MUX_CFG(EV3,   GPIO3_8,         7,      28,     15,     8,      false) // Analog Port 3 - DETC0 TP20
-        MUX_CFG(EV3,   GPIO3_9,         7,      24,     15,     8,      false) // Unused - GPIO_TO_PIN(3,  9)
-        MUX_CFG(EV3,   GPIO3_10,        7,      20,     15,     8,      false) // Unused - GPIO_TO_PIN(3, 10) - Was PWM AB Sleep pre-EP2
-        MUX_CFG(EV3,   GPIO3_11,        7,      16,     15,     8,      false) // Unused - GPIO_TO_PIN(3, 11)
-        MUX_CFG(EV3,   GPIO3_12,        7,      12,     15,     8,      false) // Unused - GPIO_TO_PIN(3, 12)
-        MUX_CFG(EV3,   GPIO3_13,        7,       8,     15,     8,      false) // Unused - GPIO_TO_PIN(3, 13)
-        MUX_CFG(EV3,   GPIO3_14,        7,       4,     15,     8,      false) // PWM Port C - DIR  C
-                                                                              // Analog Port 3 - DIRC
-        MUX_CFG(EV3,   GPIO3_15,        7,       0,     15,     8,      false) // PWM Port A - DIR0 A
-                                                                              // Analog Port 1 - MAIN0
-        MUX_CFG(EV3,   GPIO4_1,        10,      24,     15,     8,      false) // Bluetooth BT_SHUT_DOWN - GPIO_TO_PIN(4,  1)
-        MUX_CFG(EV3,   GPIO4_8,         9,      28,     15,     8,      false) // Unused - GPIO_TO_PIN(4,  8)
-        MUX_CFG(EV3,   GPIO4_9,         9,      24,     15,     8,      false) // Bluetooth BT_SHUTDOWN_EP2  - GPIO_TO_PIN(4,  9)
-        MUX_CFG(EV3,   GPIO4_10,        9,      20,     15,     8,      false) // Unused - GPIO_TO_PIN(4, 10)
-        MUX_CFG(EV3,   GPIO4_12,        9,      12,     15,     8,      false) // Unused - GPIO_TO_PIN(4, 12) - Was PWM DIR1A pre-EP2
-        MUX_CFG(EV3,   GPIO4_14,        9,       4,     15,     8,      false) // Bluetooth  - PIC_RST
-        MUX_CFG(EV3,   GPIO5_0,        12,      28,     15,     8,      false) // LCD SPI - ??? - GPIO_TO_PIN(5,  0)
-        MUX_CFG(EV3,   GPIO5_1,        12,      24,     15,     8,      false) // Unused - GPIO_TO_PIN(5,  1)
-        MUX_CFG(EV3,   GPIO5_2,        12,      20,     15,     8,      false) // Unused - GPIO_TO_PIN(5,  2)
-        MUX_CFG(EV3,   GPIO5_3,        12,      16,     15,     8,      false) // PWM Port D - DIR0 D
-                                                                              // Analog Port 4 - MAIN1
-        MUX_CFG(EV3,   GPIO5_4,        12,      12,     15,     8,      false) // Analog Port 1 - DETA0 TP18
-        MUX_CFG(EV3,   GPIO5_5,        12,       8,     15,     8,      false) // Unused - GPIO_TO_PIN(5,  5)
-        MUX_CFG(EV3,   GPIO5_6,        12,       4,     15,     8,      false) // Unused - GPIO_TO_PIN(5,  6)
-        MUX_CFG(EV3,   GPIO5_7,        12,       0,     15,     8,      false) // Bluetooth  - CTS_PIC
-        MUX_CFG(EV3,   GPIO5_8,        11,      28,     15,     8,      false) // PWM Port B   - INT B
-                                                                              // Analog Port 2 - INTB
-        MUX_CFG(EV3,   GPIO5_9,        11,      24,     15,     8,      false) // PWM Port C - DIR1 C
-                                                                              // Analog Port 3 - MAIN1
-        MUX_CFG(EV3,   GPIO5_10,       11,      20,     15,     8,      false) // PWM Port D - DIR1 D
-                                                                              // Analog Port 4 - MAIN0
-        MUX_CFG(EV3,   GPIO5_11,       11,      16,     15,     8,      false) // PWM Port A - INT A
-                                                                              // Analog Port 1 - INTA
-        MUX_CFG(EV3,   GPIO5_12,       11,      12,     15,     8,      false) // Unused - GPIO_TO_PIN(5, 12)
-        MUX_CFG(EV3,   GPIO5_13,       11,       8,     15,     8,      false) // PWM Port C - INT C
-                                                                              // Analog Port 3 - INTC
-        MUX_CFG(EV3,   GPIO5_14,       11,       4,     15,     8,      false) // Unused - GPIO_TO_PIN(5, 14)
-        MUX_CFG(EV3,   GPIO5_15,       11,       0,     15,     8,      false) // Analog Port 4 - DETD0 TP21
-        MUX_CFG(EV3,   GPIO6_0,        19,      24,     15,     8,      false) // Unused - GPIO_TO_PIN(6,  0) - Was PWM CD Fault pre-EP2
-        MUX_CFG(EV3,   GPIO6_1,        19,      20,     15,     8,      false) // Unused - GPIO_TO_PIN(6,  1)
-        MUX_CFG(EV3,   GPIO6_2,        19,      16,     15,     8,      false) // POWER      - ADCACK
-        MUX_CFG(EV3,   GPIO6_3,        19,      12,     15,     8,      false) // ON_BD_USB_OVC - GPIO_TO_PIN(6,  3)
-        MUX_CFG(EV3,   GPIO6_4,        19,       8,     15,     8,      false) // Analog Port 4 - Pin 1 - I_OND - 9V Enable (high)
-        MUX_CFG(EV3,   GPIO6_5,        16,       4,     15,     8,      false) // POWER      - P_EN
-        MUX_CFG(EV3,   GPIO6_6,        14,       4,     15,     8,      false) // UI BUTTONS - BUT4
-        MUX_CFG(EV3,   GPIO6_7,        14,       0,     15,     8,      false) // UI LEDS    - DIODE 0
-        MUX_CFG(EV3,   GPIO6_8,        13,      28,     15,     8,      false) // PWM Port C - DIR0 C
-                                                                              // Analog Port 3 - MAIN0
-        MUX_CFG(EV3,   GPIO6_9,        13,      24,     15,     8,      false) // PWM Port D - INT  D
-                                                                              // Analog Port 4 - INTD
-        MUX_CFG(EV3,   GPIO6_10,       13,      20,     15,     8,      false) // UI BUTTONS - BUT5
-        MUX_CFG(EV3,   GPIO6_11,       13,      16,     15,     8,      false) // POWER      - 5VPENON
-        MUX_CFG(EV3,   GPIO6_12,       13,      12,     15,     8,      false) // UI LEDS    - DIODE 1
-        MUX_CFG(EV3,   GPIO6_13,       13,       8,     15,     8,      false) // UI LEDS    - DIODE 3
-        MUX_CFG(EV3,   GPIO6_14,       13,       4,     15,     8,      false) // UI LEDS    - DIODE 2
-                                                                              // ADC Power  - 5VONIGEN
-        MUX_CFG(EV3,   GPIO6_15,       13,       0,     15,     8,      false) // Sound - SOUNDEN
-        MUX_CFG(EV3,   GPIO7_4,        17,      20,     15,     8,      false) // Unused - GPIO_TO_PIN(7,  4) - Was SOUNDEN pre-EP2
-        MUX_CFG(EV3,   GPIO7_8,        17,       4,     15,     8,      false) // Analog Port 4 - Pin 2 - LEGDETD - Digital input pulled up
-        MUX_CFG(EV3,   GPIO7_9,        17,       0,     15,     8,      false) // Input UART 3 - Buffer disable
-                                                                              // I2C Port 3   - Buffer disabble
-                                                                              // Analog Port 3 - Buffer disable
-        MUX_CFG(EV3,   GPIO7_10,       16,      28,     15,     8,      false) // Input UART 4 - Buffer disable
-                                                                              // I2C Port 4   - Buffer disabble
-                                                                              // Analog Port 4 - Buffer disable
-        MUX_CFG(EV3,   GPIO7_11,       16,      24,     15,     8,      false) // Analog Port 3 - Pin 2 - LEGDETC - Digital input pulled up
-        MUX_CFG(EV3,   GPIO7_12,       16,      20,     15,     8,      false) // UI BUTTONS - BUT3
-        MUX_CFG(EV3,   GPIO7_13,       16,      16,     15,     8,      false) // Unused - GPIO_TO_PIN(7, 13)
-        MUX_CFG(EV3,   GPIO7_14,       16,      12,     15,     8,      false) // UI BUTTONS - BUT2
-        MUX_CFG(EV3,   GPIO7_15,       16,       8,     15,     8,      false) // UI BUTTONS - BUT0
-        MUX_CFG(EV3,   GPIO8_2,         3,      24,     15,     4,      false) // ADC SPI ???  - ADCCS
-        MUX_CFG(EV3,   GPIO8_3,         3,      20,     15,     4,      false) // I2C Port 2 - CLOCK
-        MUX_CFG(EV3,   GPIO8_5,         3,      12,     15,     4,      false) // ADC SPI ???  - ADCMOSI
-        MUX_CFG(EV3,   GPIO8_6,         3,       8,     15,     4,      false) // ADC SPI ???  - ADCMISO
-        MUX_CFG(EV3,   GPIO8_8,        19,       4,     15,     8,      false) // POWER        - SW_RECHARGE
-        MUX_CFG(EV3,   GPIO8_9,        19,       0,     15,     8,      false) // Analog Port 3 - Pin 1 - I_ONC - 9V Enable (high)
-        MUX_CFG(EV3,   GPIO8_10,       18,      28,     15,     8,      false) // Analog Port 1 - Pin 1 - I_ONA - 9V Enable (high)
-        MUX_CFG(EV3,   GPIO8_11,       18,      24,     15,     8,      false) // Input UART 1 - Buffer disable
-                                                                              // I2C Port 1   - Buffer disabble
-                                                                              // Analog Port 1 - Buffer disable
-        MUX_CFG(EV3,   GPIO8_12,       18,      20,     15,     8,      false) // Analog Port 2 - Pin 1 - I_ONB - 9V Enable (high)
-        MUX_CFG(EV3,   GPIO8_13,       18,      16,     15,     8,      false) // Unused - GPIO_TO_PIN(8, 13)
-        MUX_CFG(EV3,   GPIO8_14,       18,      12,     15,     8,      false) // Input UART 2 - Buffer disable
-                                                                              // I2C Port 2   - Buffer disabble
-                                                                              // Analog Port 2 - Buffer disable
-        MUX_CFG(EV3,   GPIO8_15,       18,       8,     15,     8,      false) // Analog Port 2 - Pin 2 - LEGDETB - Digital input pulled up
-
-        MUX_CFG(EV3,   UART0_TXD,       3,      20,     15,     2,      false) // Input UART 2 - TXD
-        MUX_CFG(EV3,   UART0_RXD,       3,      16,     15,     2,      false) // Input UART 2 - XXD
-        MUX_CFG(EV3,   UART1_TXD,       4,      28,     15,     2,      false) // Input UART 1 - TXD
-        MUX_CFG(EV3,   UART1_RXD,       4,      24,     15,     2,      false) // Input UART 1 - RXD
-        MUX_CFG(EV3,   SPI0_MOSI,       3,      12,     15,     1,      false) // ADC SPI      - ADCMOSI
-        MUX_CFG(EV3,   SPI0_MISO,       3,       8,     15,     1,      false) // ADC SPI      - ADCMISO
-        MUX_CFG(EV3,   SPI0_SCL,        3,       0,     15,     1,      false) // ADC SPI      - ADCCLK
-        MUX_CFG(EV3,   SPI0_CS,         3,      24,     15,     1,      false) // ADC SPI      - ADCCS
-        MUX_CFG(EV3,   SPI1_MOSI,       5,      20,     15,     1,      false) // 
-        MUX_CFG(EV3,   SPI1_MISO,       5,      16,     15,     8,      false) // LCD SPI - Yes, was also GPIO2_11
-        MUX_CFG(EV3,   SPI1_SCL,        5,       8,     15,     1,      false) // 
-        MUX_CFG(EV3,   SPI1_CS,         5,      12,     15,     8,      false) // LCD SPI - Yes, was also GPIO2_12
-        MUX_CFG(EV3,   EPWM1A,          5,       0,     15,     2,      false) // PWM Port B - PWM Motor B
-        MUX_CFG(EV3,   EPWM1B,          5,       4,     15,     2,      false) // PWM Port A - PWM Motor A
-        MUX_CFG(EV3,   APWM0,           2,      28,     15,     2,      false) // PWM Port C - PWM Motor C
-        MUX_CFG(EV3,   APWM1,           1,      28,     15,     4,      false) // PWM Port D - PWM Motor D
-        MUX_CFG(EV3,   EPWM0B,          3,       4,     15,     2,      false) // SOUND - SOUND_ARMA
-        MUX_CFG(EV3,   AXR3,            2,      16,     15,     1,      false) // Input UART 4 - TXD
-        MUX_CFG(EV3,   AXR4,            2,      12,     15,     1,      false) // Input UART 3 - TXD
-#endif
+	MUX_CFG(DA850, MCBSP1_CLKR,	1,	4,	15,	2,	false)
+	MUX_CFG(DA850, MCBSP1_CLKX,	1,	8,	15,	2,	false)
+	MUX_CFG(DA850, MCBSP1_FSR,	1,	12,	15,	2,	false)
+	MUX_CFG(DA850, MCBSP1_FSX,	1,	16,	15,	2,	false)
+	MUX_CFG(DA850, MCBSP1_DR,	1,	20,	15,	2,	false)
+	MUX_CFG(DA850, MCBSP1_DX,	1,	24,	15,	2,	false)
+	MUX_CFG(DA850, MCBSP1_CLKS,	1,	28,	15,	2,	false)
 #endif
 };
-
-/* ev3dev not needed
-const short da850_pru_can_pins[] __initdata = {
-	DA850_GPIO7_9,DA850_GPIO7_10,DA850_GPIO2_0, DA850_PRU0_R31_0, DA850_PRU1_R30_15,
-	DA850_PRU1_R31_18,
-	-1
-};
-
-const short da850_pru_suart_pins[] __initdata = {
-	DA850_AHCLKX, DA850_ACLKX, DA850_AFSX,
-    DA850_AHCLKR, DA850_ACLKR, DA850_AFSR,
-    DA850_AXR_1, DA850_AXR_2, DA850_AXR_3,
-	DA850_AXR_4, 
-	-1
-};
-*/
-
-/* TI
-const short da850_pru_suart_pins[] __initdata = {
-	DA850_AHCLKX, DA850_ACLKX, DA850_AFSX,
-    DA850_AHCLKR, DA850_ACLKR, DA850_AFSR,
-    DA850_AXR_13, DA850_AXR_9, DA850_AXR_7,
-	DA850_AXR_14, DA850_AXR_10, DA850_AXR_8,
-	-1
-};
-*/
-
-/* ev3dev not needed
-const short da850_uart1_pins[] __initdata = {
-	DA850_UART1_RXD, DA850_UART1_TXD,
-	DA850_NUART1_CTS,DA850_NUART1_RTS,
-	-1
-};
-*/
-
-//const short da850_uart2_pins[] __initdata = {
-//	DA850_UART2_RXD, DA850_UART2_TXD,
-//	-1
-//};
-
-/* ev3dev not needed
-const short da850_uart2_pins[] __initdata = {
-	DA850_UART2_RXD, DA850_UART2_TXD,
-	DA850_NUART2_CTS, DA850_NUART2_RTS,     // LEGO BT
-//#ifdef CONFIG_WIFI_CONTROL_FUNC                 // LEGO BT
-        DA850_GPIO0_15,                         // LEGO BT
-//#endif                                          // LEGO BT
-
-	-1
-};
-
 
 const short da850_i2c0_pins[] __initdata = {
-//	DA850_GPIO1_4, DA850_GPIO1_5,
-	DA850_I2C0_SCL, DA850_I2C0_SDA,
+	DA850_GPIO1_4, DA850_GPIO1_5,
 	-1
 };
 
 const short da850_i2c1_pins[] __initdata = {
 	DA850_I2C1_SCL, DA850_I2C1_SDA,
-	-1
-};
-
-const short da850_cpgmac_pins[] __initdata = {
-	DA850_MII_TXEN, DA850_MII_TXCLK, DA850_MII_COL, DA850_MII_TXD_3,
-	DA850_MII_TXD_2, DA850_MII_TXD_1, DA850_MII_TXD_0, DA850_MII_RXER,
-	DA850_MII_CRS, DA850_MII_RXCLK, DA850_MII_RXDV, DA850_MII_RXD_3,
-	DA850_MII_RXD_2, DA850_MII_RXD_1, DA850_MII_RXD_0, DA850_MDIO_CLK,
-	DA850_MDIO_D,
-	-1
-};
-
-const short da850_rmii_pins[] __initdata = {
-	DA850_RMII_TXD_0, DA850_RMII_TXD_1, DA850_RMII_TXEN,
-	DA850_RMII_CRS_DV, DA850_RMII_RXD_0, DA850_RMII_RXD_1,
-	DA850_RMII_RXER, DA850_RMII_MHZ_50_CLK, DA850_MDIO_CLK,
-	DA850_MDIO_D,
-	-1
-};
-
-const short da850_mcasp_pins[] __initdata = {
-	DA850_AHCLKX, DA850_ACLKX, DA850_AFSX,
-	DA850_AHCLKR, DA850_ACLKR, DA850_AFSR, DA850_AMUTE,
-	DA850_AXR_11, DA850_AXR_12,
 	-1
 };
 
@@ -1072,94 +871,24 @@ const short da850_lcdcntl_pins[] __initdata = {
 	-1
 };
 
-const short da850_mmcsd0_pins[] __initdata = {
-	DA850_MMCSD0_DAT_0, DA850_MMCSD0_DAT_1, DA850_MMCSD0_DAT_2,
-	DA850_MMCSD0_DAT_3, DA850_MMCSD0_CLK, DA850_MMCSD0_CMD,
-	DA850_GPIO4_0, DA850_GPIO4_1,
-	-1
-};
-*/
-
-//Lego - DAT3 is CD ..DAT3 is Muxed with GPIO_$_2
-
-/*const short da850_mmcsd0_pins[] __initdata = {
-	DA850_MMCSD0_DAT_0, DA850_MMCSD0_DAT_1, DA850_MMCSD0_DAT_2,
-	DA850_MMCSD0_CLK, DA850_MMCSD0_CMD,
-	DA850_GPIO4_2, DA850_GPIO4_1,
-	-1
-};*/
-
-/* ev3dev not needed
-const short da850_nand_pins[] __initdata = {
-	DA850_EMA_D_7, DA850_EMA_D_6, DA850_EMA_D_5, DA850_EMA_D_4,
-	DA850_EMA_D_3, DA850_EMA_D_2, DA850_EMA_D_1, DA850_EMA_D_0,
-	DA850_EMA_A_1, DA850_EMA_A_2, DA850_NEMA_CS_3, DA850_NEMA_CS_4,
-	DA850_NEMA_WE, DA850_NEMA_OE,
-	-1
-};
-
-const short da850_nor_pins[] __initdata = {
-	DA850_EMA_BA_1, DA850_EMA_CLK, DA850_EMA_WAIT_1, DA850_NEMA_CS_2,
-	DA850_NEMA_WE, DA850_NEMA_OE, DA850_EMA_D_0, DA850_EMA_D_1,
-	DA850_EMA_D_2, DA850_EMA_D_3, DA850_EMA_D_4, DA850_EMA_D_5,
-	DA850_EMA_D_6, DA850_EMA_D_7, DA850_EMA_D_8, DA850_EMA_D_9,
-	DA850_EMA_D_10, DA850_EMA_D_11, DA850_EMA_D_12, DA850_EMA_D_13,
-	DA850_EMA_D_14, DA850_EMA_D_15, DA850_EMA_A_0, DA850_EMA_A_1,
-	DA850_EMA_A_2, DA850_EMA_A_3, DA850_EMA_A_4, DA850_EMA_A_5,
-	DA850_EMA_A_6, DA850_EMA_A_7, DA850_EMA_A_8, DA850_EMA_A_9,
-//	DA850_EMA_A_10,
-        DA850_EMA_A_11, DA850_EMA_A_12, DA850_EMA_A_13,
-	DA850_EMA_A_14, DA850_EMA_A_15, DA850_EMA_A_16, DA850_EMA_A_17,
-	DA850_EMA_A_18, DA850_EMA_A_19, DA850_EMA_A_20, DA850_EMA_A_21,
-	DA850_EMA_A_22, DA850_EMA_A_23,
-	-1
-};
-*/
-
-/* ev3dev not needed
-
-const short da850_spi0_pins[] __initdata = {
-	DA850_SPI0_CS_0, DA850_SPI0_CLK, DA850_SPI0_SOMI, DA850_SPI0_SIMO,
-	-1
-};
-
-const short da850_spi1_pins[] __initdata = {
-	DA850_SPI1_CS_0, DA850_SPI1_CLK, DA850_SPI1_SOMI, DA850_SPI1_SIMO,
-	-1
-};
-
-const short da850_mcbsp0_pins[] __initdata = {
-	DA850_MCBSP0_CLKR, DA850_MCBSP0_CLKX, DA850_MCBSP0_FSR,
-	DA850_MCBSP0_FSX, DA850_MCBSP0_DR, DA850_MCBSP0_DX, DA850_MCBSP0_CLKS,
-	-1
-};
-
-const short da850_mcbsp1_pins[] __initdata = {
-	DA850_MCBSP1_CLKR, DA850_MCBSP1_CLKX, DA850_MCBSP1_FSR,
-	DA850_MCBSP1_FSX, DA850_MCBSP1_DR, DA850_MCBSP1_DX, DA850_MCBSP1_CLKS,
-	-1
-};
-*/
-
 const short da850_ehrpwm0_pins[] __initdata = {
 	DA850_EHRPWM0_A, DA850_EHRPWM0_B, DA850_EHRPWM0_TZ,
 	-1
 };
 
-// const short da850_ehrpwm1_pins[] __initdata = {
-// 	DA850_EHRPWM1_A, DA850_EHRPWM1_TZ,
-// 	-1
-// };
-// 
-// const short da850_uart1_pins[] __initdata = {
-// 	DA850_UART1_RXD, DA850_UART1_TXD,
-// #ifdef CONFIG_DAVINCI_UART1_AFE
-// 	DA850_NUART1_CTS, DA850_NUART1_RTS,
-// #endif
-// 	-1
-// };
+const short da850_ehrpwm1_pins[] __initdata = {
+	DA850_EHRPWM1_A, DA850_EHRPWM1_TZ,
+	-1
+};
 
-/* ev3dev - not needed
+const short da850_uart1_pins[] __initdata = {
+	DA850_UART1_RXD, DA850_UART1_TXD,
+#ifdef CONFIG_DAVINCI_UART1_AFE
+	DA850_NUART1_CTS, DA850_NUART1_RTS,
+#endif
+	-1
+};
+
 const short da850_vpif_capture_pins[] __initdata = {
 	DA850_VPIF_DIN0, DA850_VPIF_DIN1, DA850_VPIF_DIN2, DA850_VPIF_DIN3,
 	DA850_VPIF_DIN4, DA850_VPIF_DIN5, DA850_VPIF_DIN6, DA850_VPIF_DIN7,
@@ -1180,16 +909,6 @@ const short da850_vpif_display_pins[] __initdata = {
 	-1
 };
 
-const short da850_evm_usb11_pins[] __initdata = {
-//	DA850_GPIO6_11, DA850_GPIO6_14, -1
-	DA850_GPIO6_3, -1
-};
-
-const short da850_sata_pins[] __initdata = {
-	-1
-};
-*/
-
 /* FIQ are pri 0-1; otherwise 2-7, with 7 lowest priority */
 static u8 da850_default_priorities[DA850_N_CP_INTC_IRQ] = {
 	[IRQ_DA8XX_COMMTX]		= 7,
@@ -1201,7 +920,6 @@ static u8 da850_default_priorities[DA850_N_CP_INTC_IRQ] = {
 	[IRQ_DA8XX_EVTOUT3]		= 7,
 	[IRQ_DA8XX_EVTOUT4]		= 7,
 	[IRQ_DA8XX_EVTOUT5]		= 7,
-	[IRQ_DA8XX_EVTOUT6]		= 7,
 	[IRQ_DA8XX_EVTOUT6]		= 7,
 	[IRQ_DA8XX_EVTOUT7]		= 7,
 	[IRQ_DA8XX_CCINT0]		= 7,
@@ -1217,7 +935,7 @@ static u8 da850_default_priorities[DA850_N_CP_INTC_IRQ] = {
 	[IRQ_DA8XX_TINT12_0]		= 7,
 	[IRQ_DA8XX_TINT34_0]		= 7,
 	[IRQ_DA8XX_TINT12_1]		= 7,
-	[IRQ_DA8XX_TINT34_1]		= 0,
+	[IRQ_DA8XX_TINT34_1]		= 1, /* Uses FIQ for EV3 input port i2c */
 	[IRQ_DA8XX_UARTINT0]		= 7,
 	[IRQ_DA8XX_KEYMGRINT]		= 7,
 	[IRQ_DA8XX_SECINT]		= 7,
@@ -1261,8 +979,8 @@ static u8 da850_default_priorities[DA850_N_CP_INTC_IRQ] = {
 	[IRQ_DA8XX_GPIO2]		= 7,
 	[IRQ_DA8XX_GPIO3]		= 7,
 	[IRQ_DA8XX_GPIO4]		= 7,
-	[IRQ_DA8XX_GPIO5]		= 2,
-	[IRQ_DA8XX_GPIO6]		= 2,
+	[IRQ_DA8XX_GPIO5]		= 7,
+	[IRQ_DA8XX_GPIO6]		= 7,
 	[IRQ_DA8XX_GPIO7]		= 7,
 	[IRQ_DA8XX_GPIO8]		= 7,
 	[IRQ_DA8XX_I2CINT1]		= 7,
@@ -1277,7 +995,7 @@ static u8 da850_default_priorities[DA850_N_CP_INTC_IRQ] = {
 	[IRQ_DA8XX_RWAKEUP]		= 7,
 	[IRQ_DA8XX_UARTINT2]		= 7,
 	[IRQ_DA8XX_DFTSSINT]		= 7,
-	[IRQ_DA8XX_EHRPWM0]		= 7,
+	[IRQ_DA8XX_EHRPWM0]		= 0, /* Uses FIQ for EV3 sound playback */
 	[IRQ_DA8XX_EHRPWM0TZ]		= 7,
 	[IRQ_DA8XX_EHRPWM1]		= 7,
 	[IRQ_DA8XX_EHRPWM1TZ]		= 7,
@@ -1388,12 +1106,14 @@ static struct davinci_timer_instance da850_timer_instance[4] = {
 /*
  * T0_BOT: Timer 0, bottom		: Used for clock_event
  * T0_TOP: Timer 0, top			: Used for clocksource
- * T1_BOT, T1_TOP: Timer 1, bottom & top: Used for watchdog timer
+ * T1_TOP: Timer 1, bottom		: Used for fiqsource - see legoev3-fiq.c
+ * T1_BOT and T1_TOP are also used for watchdog
  */
 static struct davinci_timer_info da850_timer_info = {
 	.timers		= da850_timer_instance,
 	.clockevent_id	= T0_BOT,
 	.clocksource_id	= T0_TOP,
+	.fiqsource_id	= T1_TOP,
 };
 
 static void da850_set_async3_src(int pllnum)
@@ -1697,8 +1417,6 @@ static int da850_round_armrate(struct clk *clk, unsigned long rate)
 }
 #endif
 
-#define DA8XX_EHRPWM0_BASE	0x01F00000
-
 static struct resource da850_ehrpwm0_resource[] = {
 	{
 		.start	= DA8XX_EHRPWM0_BASE,
@@ -1728,8 +1446,6 @@ static struct platform_device da850_ehrpwm0_dev = {
 	.resource	= da850_ehrpwm0_resource,
 	.num_resources	= ARRAY_SIZE(da850_ehrpwm0_resource),
 };
-
-#define DA8XX_EHRPWM1_BASE	0x01F02000
 
 static struct resource da850_ehrpwm1_resource[] = {
 	{
@@ -1792,9 +1508,9 @@ static struct resource da850_ecap0_resource[] = {
 	.flags		= IORESOURCE_MEM,
 	},
 	{
-	.start          = IRQ_DA8XX_ECAP0,
-	.end            = IRQ_DA8XX_ECAP0,
-	.flags          = IORESOURCE_IRQ,
+	.start		= IRQ_DA8XX_ECAP0,
+	.end 		= IRQ_DA8XX_ECAP0,
+	.flags		= IORESOURCE_IRQ,
 	},
 };
 
@@ -1808,8 +1524,8 @@ static struct platform_device da850_ecap0_dev = {
 static struct platform_device da850_ecap0_cap_dev = {
 	.name		= "ecap_cap",
 	.id		= 0,
-	.resource       = da850_ecap0_resource,
-	.num_resources  = ARRAY_SIZE(da850_ecap0_resource),
+	.resource	= da850_ecap0_resource,
+	.num_resources	= ARRAY_SIZE(da850_ecap0_resource),
 };
 
 #define DA8XX_ECAP1_BASE        0x01F07000
@@ -2069,23 +1785,6 @@ void __init da850_init(void)
 	da8xx_syscfg1_base = ioremap(DA8XX_SYSCFG1_BASE, SZ_4K);
 	if (WARN(!da8xx_syscfg1_base, "Unable to map syscfg1 module"))
 		return;
-
-
-// FIXME: Add support for these two items if we need it
-//	da8xx_psc1_base = ioremap(DA8XX_PSC1_BASE, SZ_4K);		// LEGO BT slow clock
-//	if (WARN(!da8xx_psc1_base, "Unable to map psc1 module"))	// LEGO BT slow clock
-//		return;							// LEGO BT slow clock
-//
-//	da8xx_ecap2_base = ioremap(DA8XX_ECAP2_BASE, SZ_4K);		// LEGO BT slow clock
-//	if (WARN(!da8xx_ecap2_base, "Unable to map ecap2 module"))	// LEGO BT slow clock
-//		return;							// LEGO BT slow clock
-//
-
-
-//	davinci_soc_info_da850.jtag_id_base =
-//					DA8XX_SYSCFG0_VIRT(DA8XX_JTAG_ID_REG);
-//	davinci_soc_info_da850.pinmux_base = DA8XX_SYSCFG0_VIRT(0x120);
-
 
 	/*
 	 * Move the clock source of Async3 domain to PLL1 SYSCLK2.

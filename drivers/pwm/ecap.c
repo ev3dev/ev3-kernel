@@ -3,6 +3,9 @@
  *
  * Copyright (C) 2010 Texas Instruments Incorporated - http://www.ti.com/
  *
+ * Modifications for ev3dev:
+ * Copyright (C) 2014 David Lechner <david@lechnology.com>
+ *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
  * published by the Free Software Foundation version 2.
@@ -21,28 +24,25 @@
 #include <linux/pwm/pwm.h>
 #include <linux/slab.h>
 
-#define TIMER_CTR_REG			0x0
-#define CAPTURE_2_REG			0x0c
+#define TIMER_CTR_REG			0x00
+#define PHASE_CTR_REG			0x04
+#define CAPTURE_1_REG			0x08
+#define CAPTURE_2_REG			0x0C
 #define CAPTURE_3_REG			0x10
 #define CAPTURE_4_REG			0x14
 #define CAPTURE_CTRL2_REG		0x2A
 
-#define ECTRL2_SYNCOSEL_MASK		(0x03 << 6)
-
-#define ECTRL2_MDSL_ECAP		BIT(9)
-#define ECTRL2_CTRSTP_FREERUN		BIT(4)
-#define ECTRL2_PLSL_LOW			BIT(10)
-#define ECTRL2_SYNC_EN			BIT(5)
-
-#define CLK_DISABLE			0
-#define CLK_ENABLE			1
+#define ECTRL2_APWMPOL			BIT(10)
+#define ECTRL2_APWM			BIT(9)
+#define ECTRL2_SYNCO_SEL		(0x03 << 6)
+#define ECTRL2_SYNCI_EN			BIT(5)
+#define ECTRL2_TSCTRSTOP		BIT(4)
 
 struct ecap_pwm {
 	struct pwm_device pwm;
 	struct pwm_device_ops ops;
 	spinlock_t	lock;
 	struct clk	*clk;
-	int	clk_enabled;
 	void __iomem	*mmio_base;
 };
 
@@ -56,16 +56,14 @@ static int ecap_pwm_stop(struct pwm_device *p)
 	unsigned long flags;
 	struct ecap_pwm *ep = to_ecap_pwm(p);
 
-	if (ep->clk_enabled == CLK_DISABLE)
+	if (p->flags & FLAG_RUNNING)
 		return 0;
 
 	spin_lock_irqsave(&ep->lock, flags);
 	__raw_writew(__raw_readw(ep->mmio_base + CAPTURE_CTRL2_REG) &
-		~BIT(4), ep->mmio_base + CAPTURE_CTRL2_REG);
+		~ECTRL2_TSCTRSTOP, ep->mmio_base + CAPTURE_CTRL2_REG);
 	spin_unlock_irqrestore(&ep->lock, flags);
 
-	ep->clk_enabled = CLK_DISABLE;
-	clk_disable(ep->clk);
 	clear_bit(FLAG_RUNNING, &p->flags);
 
 	return 0;
@@ -77,14 +75,12 @@ static int ecap_pwm_start(struct pwm_device *p)
 	unsigned long flags;
 	struct ecap_pwm *ep = to_ecap_pwm(p);
 
-	if (ep->clk_enabled == CLK_ENABLE)
+	if (!(p->flags & FLAG_RUNNING))
 		return 0;
 
-	clk_enable(ep->clk);
-	ep->clk_enabled = CLK_ENABLE;
 	spin_lock_irqsave(&ep->lock, flags);
 	__raw_writew(__raw_readw(ep->mmio_base + CAPTURE_CTRL2_REG) |
-		BIT(4), ep->mmio_base + CAPTURE_CTRL2_REG);
+		ECTRL2_TSCTRSTOP, ep->mmio_base + CAPTURE_CTRL2_REG);
 	spin_unlock_irqrestore(&ep->lock, flags);
 	set_bit(FLAG_RUNNING, &p->flags);
 
@@ -96,14 +92,11 @@ static int ecap_pwm_set_polarity(struct pwm_device *p, char pol)
 	unsigned long flags;
 	struct ecap_pwm *ep = to_ecap_pwm(p);
 
-	clk_enable(ep->clk);
-
 	spin_lock_irqsave(&ep->lock, flags);
 	 __raw_writew((__raw_readw(ep->mmio_base + CAPTURE_CTRL2_REG) &
-		 ~BIT(10)) | (!pol << 10), ep->mmio_base + CAPTURE_CTRL2_REG);
+		 ~ECTRL2_APWMPOL) | (!pol << 10), ep->mmio_base + CAPTURE_CTRL2_REG);
 	spin_unlock_irqrestore(&ep->lock, flags);
 
-	clk_disable(ep->clk);
 	return 0;
 }
 
@@ -112,15 +105,10 @@ static int ecap_pwm_config_period(struct pwm_device *p)
 	unsigned long flags;
 	struct ecap_pwm *ep = to_ecap_pwm(p);
 
-	 clk_enable(ep->clk);
-
 	spin_lock_irqsave(&ep->lock, flags);
 	__raw_writel((p->period_ticks) - 1, ep->mmio_base + CAPTURE_3_REG);
-	__raw_writew(ECTRL2_MDSL_ECAP | ECTRL2_SYNCOSEL_MASK |
-		 ECTRL2_CTRSTP_FREERUN, ep->mmio_base + CAPTURE_CTRL2_REG);
 	spin_unlock_irqrestore(&ep->lock, flags);
 
-	clk_disable(ep->clk);
 	return 0;
 }
 
@@ -129,20 +117,15 @@ static int ecap_pwm_config_duty(struct pwm_device *p)
 	unsigned long flags;
 	struct ecap_pwm *ep = to_ecap_pwm(p);
 
-	clk_enable(ep->clk);
-
 	spin_lock_irqsave(&ep->lock, flags);
-	__raw_writew(ECTRL2_MDSL_ECAP | ECTRL2_SYNCOSEL_MASK |
-	 ECTRL2_CTRSTP_FREERUN, ep->mmio_base + CAPTURE_CTRL2_REG);
-	if (p->duty_ticks > 0) {
+	if (p->duty_ticks > 0)
 		__raw_writel(p->duty_ticks, ep->mmio_base + CAPTURE_4_REG);
-	} else {
-	__raw_writel(p->duty_ticks, ep->mmio_base + CAPTURE_2_REG);
-	__raw_writel(0, ep->mmio_base + TIMER_CTR_REG);
+	else {
+		__raw_writel(p->duty_ticks, ep->mmio_base + CAPTURE_2_REG);
+		__raw_writel(0, ep->mmio_base + TIMER_CTR_REG);
 	}
 	spin_unlock_irqrestore(&ep->lock, flags);
 
-	clk_disable(ep->clk);
 	return 0;
 }
 
@@ -207,7 +190,7 @@ static int ecap_frequency_transition_cb(struct pwm_device *p)
 		return 0;
 }
 
-static int __init ecap_probe(struct platform_device *pdev)
+static int __devinit ecap_probe(struct platform_device *pdev)
 {
 	struct ecap_pwm *ep = NULL;
 	struct resource *r;
@@ -251,6 +234,13 @@ static int __init ecap_probe(struct platform_device *pdev)
 		goto err_free_mem;
 	}
 
+	__raw_writew(ECTRL2_APWM | ECTRL2_SYNCO_SEL,
+		     ep->mmio_base + CAPTURE_CTRL2_REG);
+	__raw_writel(0, ep->mmio_base + TIMER_CTR_REG);
+	__raw_writel(0, ep->mmio_base + PHASE_CTR_REG);
+	__raw_writel(~0, ep->mmio_base + CAPTURE_1_REG); /* period */
+	__raw_writel(0, ep->mmio_base + CAPTURE_2_REG); /* duty */
+
 	ep->pwm.ops = &ep->ops;
 	pwm_set_drvdata(&ep->pwm, ep);
 	ret =  pwm_register(&ep->pwm, &pdev->dev, -1);
@@ -272,8 +262,7 @@ static int ecap_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	struct ecap_pwm *ep = platform_get_drvdata(pdev);
 
-	if (ep->clk_enabled == CLK_ENABLE)
-		clk_disable(ep->clk);
+	clk_disable(ep->clk);
 
 	return 0;
 }
@@ -282,8 +271,7 @@ static int ecap_resume(struct platform_device *pdev)
 {
 	struct ecap_pwm *ep = platform_get_drvdata(pdev);
 
-	if (ep->clk_enabled == CLK_ENABLE)
-		clk_enable(ep->clk);
+	clk_enable(ep->clk);
 
 	return 0;
 }
