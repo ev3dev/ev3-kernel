@@ -34,6 +34,7 @@ struct legoev3_ports_platform_data {
 struct legoev3_port_device {
 	char name[LEGOEV3_PORT_NAME_SIZE];
 	int id;
+	int type_id;
 	struct device dev;
 };
 
@@ -44,15 +45,27 @@ static inline struct legoev3_port_device
 }
 
 extern struct legoev3_port_device
-*legoev3_port_device_register(const char *, int, struct device_type *,
+*legoev3_port_device_register(const char *, int, struct device_type *, int,
 			      void *, size_t, struct device *);
 extern void legoev3_port_device_unregister(struct legoev3_port_device *);
+
+struct legoev3_port_device_id {
+	char name[LEGOEV3_PORT_NAME_SIZE];
+	int type_id __attribute__((aligned(sizeof(int))));
+};
+
+#define LEGOEV3_PORT_DEVICE_ID(_type_name, _type_id)	\
+	{						\
+		.name = _type_name,			\
+		.type_id = _type_id,			\
+	}
 
 struct legoev3_port_driver {
 	int (*probe)(struct legoev3_port_device *);
 	int (*remove)(struct legoev3_port_device *);
 	void (*shutdown)(struct legoev3_port_device *);
 	struct device_driver driver;
+	const struct legoev3_port_device_id *id_table;
 };
 
 static inline struct legoev3_port_driver

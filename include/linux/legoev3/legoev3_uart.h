@@ -18,6 +18,7 @@
 
 #define LEGOEV3_UART_NAME_SIZE	11
 #define LEGOEV3_UART_UNITS_SIZE	4
+#define LEGOEV3_UART_TYPE_MAX	101
 #define LEGOEV3_UART_MODE_MAX	7
 
 enum legoev3_uart_data_type {
