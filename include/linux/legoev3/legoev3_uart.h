@@ -83,4 +83,75 @@ struct legoev3_uart_sensor_platform_data {
 extern int legoev3_uart_get_mode(struct tty_struct *tty);
 extern int legoev3_uart_set_mode(struct tty_struct *tty, const u8 mode);
 
+/*
+ * UART Sensors send floating point numbers so we need to convert them to
+ * integers to be able to handle them in the kernel.
+ */
+
+/**
+ * legoev3_uart_ftoi - convert 32-bit IEEE 754 float to fixed point integer
+ * @f: The floating point number.
+ * @dp: The number of decimal places in the fixed-point integer.
+ */
+static inline int legoev3_uart_ftoi(uint f, unsigned dp)
+{
+	int s = (f & 0x80000000) ? -1 : 1;
+	unsigned char e = (f & 0x7F800000) >> 23;
+	unsigned long i = f & 0x007FFFFFL;
+	unsigned long m;
+
+	/* handle special cases for zero, +/- infinity and NaN */
+	if (!e)
+		return 0;
+	if (e == 255)
+		return s == 1 ? INT_MAX : INT_MIN;
+
+	i += 1 << 23;
+	while (dp--)
+		i *= 10;
+	if (e < 150) {
+		m = i % (1L << (150 - e));
+		i += m >> 1;
+		i >>= 150 - e;
+	}
+	else
+		i <<= e - 150;
+
+	return s * i;
+}
+
+/**
+ * legoev3_uart_itof - convert fixed point integer to 32-bit IEEE 754 float
+ * @i: The fixed-point integer.
+ * @dp: The number of decimal places in the fixed-point integer.
+ */
+static inline uint legoev3_uart_itof(int i, unsigned dp)
+{
+	int s = i < 0 ? -1 : 1;
+	unsigned char e = 127;
+	unsigned long f = i * s;
+
+	/* special case for zero */
+	if (i == 0)
+		return 0;
+
+	f <<= 23;
+	while (dp-- > 0)
+		f /= 10;
+
+	while (f >= (1 << 24)) {
+		f >>= 1;
+		e++;
+	}
+	while (f < (1 << 23)) {
+		f <<= 1;
+		e--;
+	}
+	f -= 1 << 23;
+	if (s == -1)
+		f |= 0x80000000;
+
+	return f | e << 23;
+}
+
 #endif /* _LINUX_LEGOEV3_UART_H_ */
