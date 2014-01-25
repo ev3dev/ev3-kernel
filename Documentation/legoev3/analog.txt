@@ -1,6 +1,0 @@
-Analog framework for LEGO Mindstorms EV3
-========================================
-
-TODO: Write the documentation. In particular, a sequence diagram for the analog
-polling cycle.
-
