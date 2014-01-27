@@ -109,6 +109,7 @@ enum legoev3_pin_map {
 	GPIO_PIN(IN3_BUF_ENA, 7, 9)
 	GPIO_PIN(IN3_I2C_CLK, 1, 12) /* physical pin is shared with IN3_UART */
 	PIN(IN3_UART_TXD, AXR_4) /* physical pin is shared with IN3_I2C_CLK */
+	PIN(IN3_UART_RXD, AXR_2)
 	GPIO_PIN(IN4_PIN1, 6, 4)
 	GPIO_PIN(IN4_PIN2, 7, 8)
 	GPIO_PIN(IN4_PIN5, 0, 1)
@@ -116,6 +117,7 @@ enum legoev3_pin_map {
 	GPIO_PIN(IN4_BUF_ENA, 7, 10)
 	GPIO_PIN(IN4_I2C_CLK, 1, 11) /* physical pin is shared with IN4_UART */
 	PIN(IN4_UART_TXD, AXR_3) /* physical pin is shared with IN4_I2C_CLK */
+	PIN(IN4_UART_RXD, AXR_1)
 	GPIO_PIN(OUT1_PIN1, 3, 15)
 	GPIO_PIN(OUT1_PIN2, 3, 6)
 	GPIO_PIN(OUT1_PIN5, 5, 4)

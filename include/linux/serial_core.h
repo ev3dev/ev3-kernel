@@ -210,6 +210,8 @@
 /* Atheros AR933X SoC */
 #define PORT_AR933X	99
 
+/* OMAPL PRU UART Emulation */
+#define OMAPL_PRU_SUART	100
 
 #ifdef __KERNEL__
 

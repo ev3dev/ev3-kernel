@@ -110,6 +110,7 @@ void __init da8xx_board_usb_init(const short pins[],
 int da8xx_register_usb20(unsigned mA, unsigned potpgt);
 int da8xx_register_usb11(struct da8xx_ohci_root_hub *pdata);
 int da8xx_register_emac(void);
+int da8xx_register_pru_suart(void);
 int da8xx_register_pruss_uio(struct uio_pruss_pdata *config);
 int da8xx_register_lcdc(struct da8xx_lcdc_platform_data *pdata);
 int da8xx_register_mmcsd0(struct davinci_mmc_config *config);

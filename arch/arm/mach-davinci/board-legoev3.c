@@ -312,6 +312,8 @@ static const short legoev3_sd_pins[] __initconst = {
 	EV3_SD_DAT_3, EV3_SD_CLK, EV3_SD_CMD,
 	-1
 };
+
+#warning Figure out what is the deal with the MMCSD card GPIO pins.
 /*
 static int legoev3_mmc_get_ro(int index)
 {
@@ -406,36 +408,28 @@ static struct davinci_i2c_platform_data legoev3_i2c_board_pdata = {
  * UART0 is used for Input Port 1. It is also the debug terminal.
  * UART1 is used for Input Port 2.
  * UART2 is used to communicate to the bluetooth chip.
- * Input Ports 3 and 4 get software UARTs via the PRU.
+ * PRU_SUART1 is used for Input Port 4.
+ * PRU_SUART2 is used for Input Port 3.
+ *
+ * Pin muxes are defined in the I/O port and bluetooth sections.
  */
 
 static struct davinci_uart_config legoev3_uart_config = {
 	.enabled_uarts = 0x7,
 };
 
-#warning "Fix up the pru_suart code here so it works"
-static int __init da850_evm_config_pru_suart(void)
-{
-	int ret;
+/*
+ * The actual PRU Soft-UART board configuration is in the following files:
+ * drivers/tty/serial/omapl_uart/pru/hal/uart/include/omapl_suart_board.h
+ * drivers/tty/serial/omapl_uart/pru/hal/uart/include/suart_api.h
+ */
 
-	pr_info("da850_evm_config_pru_suart configuration\n");
-	if (!machine_is_davinci_da850_evm())
-		return 0;
+/*
+ * EV3 EDMA configuration:
+ * =======================
+ */
 
-// FIXME: Add pru suart setup
-//    ret = da8xx_pinmux_setup(da850_pru_suart_pins);
-//    if (ret)
-//        pr_warning("legoev3_init: da850_pru_suart_pins mux setup failed: %d\n",
-//                ret);
-//
-//    ret = da8xx_register_pru_suart();
-//    if (ret)
-//        pr_warning("legoev3_init: pru suart registration failed: %d\n", ret);
-      return ret;
-}
-device_initcall(da850_evm_config_pru_suart);
-
-#warning "Are these EDMA initializers really needed?"
+#warning "Are these EDMA initializers really needed? Yes, but needs review."
 /*
  * The following EDMA channels/slots are not being used by drivers (for
  * example: Timer, GPIO, UART events etc) on da850/omap-l138 EVM, hence
@@ -558,11 +552,10 @@ static struct spi_board_info legoev3_spi0_board_info[] = {
 
 static const short legoev3_in_out_pins[] __initconst = {
 	EV3_IN1_PIN1, EV3_IN1_PIN2, EV3_IN1_PIN5, EV3_IN1_PIN6, EV3_IN1_BUF_ENA,
-	EV3_IN1_UART_TXD, EV3_IN1_UART_RXD,
 	EV3_IN2_PIN1, EV3_IN2_PIN2, EV3_IN2_PIN5, EV3_IN2_PIN6, EV3_IN2_BUF_ENA,
-	EV3_IN2_UART_TXD, EV3_IN2_UART_RXD,
 	EV3_IN3_PIN1, EV3_IN3_PIN2, EV3_IN3_PIN5, EV3_IN3_PIN6, EV3_IN3_BUF_ENA,
 	EV3_IN4_PIN1, EV3_IN4_PIN2, EV3_IN4_PIN5, EV3_IN4_PIN6, EV3_IN4_BUF_ENA,
+	EV3_IN1_UART_RXD, EV3_IN2_UART_RXD, EV3_IN3_UART_RXD, EV3_IN4_UART_RXD,
 	EV3_OUT1_PIN1, EV3_OUT1_PIN2, EV3_OUT1_PIN5, EV3_OUT1_PIN6,
 	EV3_OUT2_PIN1, EV3_OUT2_PIN2, EV3_OUT2_PIN5, EV3_OUT2_PIN6,
 	EV3_OUT3_PIN1, EV3_OUT3_PIN2, EV3_OUT3_PIN5, EV3_OUT3_PIN6,
@@ -1021,6 +1014,10 @@ static __init void legoev3_init(void)
 
 	/* UART support - used by input ports and bluetooth */
 	davinci_serial_init(&legoev3_uart_config);
+
+	ret = da8xx_register_pru_suart();
+	if (ret)
+		pr_warning("legoev3_init: pru suart registration failed: %d\n", ret);
 }
 
 #ifdef CONFIG_SERIAL_8250_CONSOLE

@@ -1347,4 +1347,6 @@ config SERIAL_AR933X_NR_UARTS
 	  Set this to the number of serial ports you want the driver
 	  to support.
 
+source "drivers/tty/serial/omapl_pru/Kconfig"
+
 endmenu
