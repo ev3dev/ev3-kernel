@@ -1074,3 +1074,4 @@ module_exit(omapl_pru_suart_exit);
 MODULE_AUTHOR("Subhasish Ghosh <subhasish@mistralsolutions.com>");
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION(DRV_DESC);
+MODULE_ALIAS("platform:"DRV_NAME);
