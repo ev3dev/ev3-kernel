@@ -96,6 +96,8 @@ struct legoev3_fiq_ehrpwm_data {
 	void *period_elapsed_data;
 	unsigned requested_flag:1;
 	unsigned period_elapsed_flag:1;
+	int ramp_step;
+	int ramp_value;
 };
 
 struct legoev3_fiq_data {
@@ -399,6 +401,24 @@ static void legoev3_fiq_ehrpwm_callback(struct legoev3_fiq_ehrpwm_data *data)
 	if (unlikely(!data->requested_flag || !data->dma_area))
 		return;
 
+	if (unlikely(data->ramp_step))
+	{
+		duty_ticks = (data->ramp_value * data->period_ticks) >> 16;
+		fiq_ehrpwm_set_duty_ticks(duty_ticks);
+
+		data->ramp_value += data->ramp_step;
+		if (data->ramp_value >= 0x8000)
+		{ // end of ramp up
+			data->ramp_step = 0;
+		}
+		else if (data->ramp_value < 0)
+		{ // end of ramp down
+			data->ramp_value = 0;
+		}
+
+		return;
+	}
+
 	sample = *(short *)(data->dma_area + data->playback_ptr);
 	sample = (sample * data->volume) >> 8;
 	duty_ticks = ((sample + 0x7FFF) * data->period_ticks) >> 16;
@@ -661,7 +681,6 @@ int legoev3_fiq_ehrpwm_prepare(struct snd_pcm_substream *substream,
 			       void (*period_elapsed)(void *), void *context)
 {
 	struct legoev3_fiq_ehrpwm_data *data;
-	int err;
 
 	if (!legoev3_fiq_data)
 		return -ENODEV;
@@ -681,12 +700,47 @@ int legoev3_fiq_ehrpwm_prepare(struct snd_pcm_substream *substream,
 	data->period_elapsed		= period_elapsed;
 	data->period_elapsed_data	= context;
 	data->period_elapsed_flag	= 0;
+	data->ramp_step                 = 0;
+	data->ramp_value                = 0;
 
 	local_fiq_enable();
 
 	return 0;
 }
 EXPORT_SYMBOL_GPL(legoev3_fiq_ehrpwm_prepare);
+
+void legoev3_fiq_ehrpwm_ramp(struct snd_pcm_substream *substream,
+                             int iDirection, unsigned rampMS)
+{
+	struct legoev3_fiq_ehrpwm_data *data;
+	int rampSamples = substream->runtime->rate * rampMS / 1000;
+	if (rampSamples<2)
+		return;
+
+	if (!legoev3_fiq_data)
+		return;
+
+	if (iDirection==0)
+		return;
+
+	data = &legoev3_fiq_data->ehrpwm_data;
+
+	local_fiq_disable();
+
+	if (iDirection > 0)
+	{ // ramp up
+		data->ramp_step  = 0x8000 / rampSamples;
+		data->ramp_value = 0;
+	}
+	else
+	{ // ramp down
+		data->ramp_step  = 0x8000 / -rampSamples;
+		data->ramp_value = 0x8000;
+	}
+
+	local_fiq_enable();
+}
+EXPORT_SYMBOL_GPL(legoev3_fiq_ehrpwm_ramp);
 
 unsigned legoev3_fiq_ehrpwm_get_playback_ptr(void)
 {
