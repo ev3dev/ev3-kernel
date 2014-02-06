@@ -33,6 +33,10 @@ struct ev3_output_port_device {
 	struct device dev;
 };
 
+struct ev3_motor_platform_data {
+	struct legoev3_port_device *out_port;
+};
+
 /* resistor ids for EV3 output devices */
 enum ev3_out_dev_id {
 	EV3_OUT_DEV_ID_01,
