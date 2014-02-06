@@ -21,16 +21,17 @@
 #define MSENSOR_MODE_MAX	7
 #define MSENSOR_RAW_DATA_SIZE	32
 
-enum legoev3_uart_data_type {
+enum legoev3_msensor_data_type {
 	MSENSOR_DATA_8		= 0,
 	MSENSOR_DATA_16		= 1,
 	MSENSOR_DATA_32		= 2,
 	MSENSOR_DATA_FLOAT	= 3,
 };
 
+extern size_t legoev3_msensor_data_size[];
+
 /**
  * struct msensor_mode_info
- * @mode: The id of this mode. (0-7)
  * @name: The name of this mode
  * @raw_min: The minimum raw value of the data read.
  * @raw_min: The maximum raw value of the data read.
@@ -49,7 +50,6 @@ enum legoev3_uart_data_type {
  * but kernel drivers don't do floating point, so we use unsigned instead.
  */
 struct msensor_mode_info {
-	u8 mode;
 	char name[MSENSOR_NAME_SIZE + 1];
 	unsigned raw_min;
 	unsigned raw_max;
@@ -59,7 +59,7 @@ struct msensor_mode_info {
 	unsigned si_max;
 	char units[MSENSOR_UNITS_SIZE + 1];
 	u8 data_sets;
-	enum legoev3_uart_data_type format;
+	enum legoev3_msensor_data_type format;
 	u8 figures;
 	u8 decimals;
 	u8 raw_data[MSENSOR_RAW_DATA_SIZE];
