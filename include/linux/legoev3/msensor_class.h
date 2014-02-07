@@ -21,14 +21,22 @@
 #define MSENSOR_MODE_MAX	7
 #define MSENSOR_RAW_DATA_SIZE	32
 
-enum legoev3_msensor_data_type {
-	MSENSOR_DATA_8		= 0,
-	MSENSOR_DATA_16		= 1,
-	MSENSOR_DATA_32		= 2,
-	MSENSOR_DATA_FLOAT	= 3,
+/*
+ * Be sure to add the size to msensor_data_size[] when adding values
+ * to msensor_data_type.
+ */
+enum msensor_data_type {
+	MSENSOR_DATA_U8,
+	MSENSOR_DATA_S8,
+	MSENSOR_DATA_U16,
+	MSENSOR_DATA_S16,
+	MSENSOR_DATA_U32,
+	MSENSOR_DATA_S32,
+	MSENSOR_DATA_FLOAT,
+	NUM_MSENSOR_DATA_TYPE
 };
 
-extern size_t legoev3_msensor_data_size[];
+extern size_t msensor_data_size[];
 
 /**
  * struct msensor_mode_info
@@ -40,26 +48,23 @@ extern size_t legoev3_msensor_data_size[];
  * @si_min: The minimum scaled value of the data read.
  * @si_min: The maximum scaled value of the data read.
  * @units: Units of the scaled value.
- * @data_sets: Number of data points in DATA message.
- * @format: Format of data in DATA message.
+ * @data_sets: Number of data points in raw data.
+ * @data_type: Data type of raw data.
  * @figures: Number of digits that should be displayed, including decimal point.
  * @decimals: Decimal point position.
  * @raw_data: Raw data read from the sensor.
- *
- * All of the min an max values are actually 32-bit float data type,
- * but kernel drivers don't do floating point, so we use unsigned instead.
  */
 struct msensor_mode_info {
 	char name[MSENSOR_NAME_SIZE + 1];
-	unsigned raw_min;
-	unsigned raw_max;
-	unsigned pct_min;
-	unsigned pct_max;
-	unsigned si_min;
-	unsigned si_max;
+	int raw_min;
+	int raw_max;
+	int pct_min;
+	int pct_max;
+	int si_min;
+	int si_max;
 	char units[MSENSOR_UNITS_SIZE + 1];
 	u8 data_sets;
-	enum legoev3_msensor_data_type format;
+	enum msensor_data_type data_type;
 	u8 figures;
 	u8 decimals;
 	u8 raw_data[MSENSOR_RAW_DATA_SIZE];
@@ -89,6 +94,9 @@ struct msensor_device {
 	/* private */
 	struct device dev;
 };
+
+extern int msensor_ftoi(u32 f, unsigned dp);
+extern u32 msensor_itof(int i, unsigned dp);
 
 extern int register_msensor(struct msensor_device *, struct device *);
 extern void unregister_msensor(struct msensor_device *);
