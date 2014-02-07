@@ -16,6 +16,9 @@
 #ifndef _LINUX_LEGOEV3_MSENSOR_CLASS_H
 #define _LINUX_LEGOEV3_MSENSOR_CLASS_H
 
+#include <linux/device.h>
+#include <linux/types.h>
+
 #define MSENSOR_NAME_SIZE	11
 #define MSENSOR_UNITS_SIZE	4
 #define MSENSOR_MODE_MAX	7
