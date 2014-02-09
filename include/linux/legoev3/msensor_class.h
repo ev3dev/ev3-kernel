@@ -94,6 +94,8 @@ struct msensor_device {
 	u8 (* get_mode)(void *context);
 	int (* set_mode)(void *context, u8 mode);
 	ssize_t (* write_data)(void *context, char *data, loff_t off, size_t count);
+	int (* get_poll_ms)(void *context);
+	int (* set_poll_ms)(void *context, unsigned value);
 	void *context;
 	/* private */
 	struct device dev;
