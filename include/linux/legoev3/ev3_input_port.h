@@ -29,6 +29,7 @@ struct ev3_input_port_platform_data {
 	unsigned i2c_dev_id;
 	unsigned i2c_pin_mux;
 	unsigned uart_pin_mux;
+	const char *uart_tty;
 };
 
 struct ev3_sensor_platform_data {

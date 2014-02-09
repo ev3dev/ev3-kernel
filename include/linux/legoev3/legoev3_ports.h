@@ -32,7 +32,7 @@ struct legoev3_ports_platform_data {
 };
 
 struct legoev3_port_device {
-	char name[LEGOEV3_PORT_NAME_SIZE];
+	char name[LEGOEV3_PORT_NAME_SIZE + 1];
 	int id;
 	int type_id;
 	struct device dev;
