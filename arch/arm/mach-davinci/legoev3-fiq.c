@@ -710,31 +710,30 @@ int legoev3_fiq_ehrpwm_prepare(struct snd_pcm_substream *substream,
 EXPORT_SYMBOL_GPL(legoev3_fiq_ehrpwm_prepare);
 
 void legoev3_fiq_ehrpwm_ramp(struct snd_pcm_substream *substream,
-                             int iDirection, unsigned rampMS)
+                             int direction, unsigned ramp_ms)
 {
 	struct legoev3_fiq_ehrpwm_data *data;
-	int rampSamples = substream->runtime->rate * rampMS / 1000;
-	if (rampSamples<2)
+	int ramp_samples = substream->runtime->rate * ramp_ms / 1000;
+	if (ramp_samples < 2)
 		return;
 
 	if (!legoev3_fiq_data)
 		return;
 
-	if (iDirection==0)
+	if (direction==0)
 		return;
 
 	data = &legoev3_fiq_data->ehrpwm_data;
 
 	local_fiq_disable();
 
-	if (iDirection > 0)
+	if (direction > 0)
 	{ // ramp up
-		data->ramp_step  = 0x8000 / rampSamples;
-		data->ramp_value = 0;
+		data->ramp_step  = 0x8000 / ramp_samples;
 	}
 	else
 	{ // ramp down
-		data->ramp_step  = 0x8000 / -rampSamples;
+		data->ramp_step  = 0x8000 / -ramp_samples;
 		data->ramp_value = 0x8000;
 	}
 

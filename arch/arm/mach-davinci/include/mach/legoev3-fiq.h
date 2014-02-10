@@ -55,7 +55,7 @@ extern int legoev3_fiq_ehrpwm_prepare(struct snd_pcm_substream *substream,
 				      unsigned period_ticks, int volume,
 				      void (*period_elapsed)(void *), void *);
 extern void legoev3_fiq_ehrpwm_ramp(struct snd_pcm_substream *substream,
-                                    int iDirection, unsigned rampMS);
+                                    int direction, unsigned ramp_ms);
 extern unsigned legoev3_fiq_ehrpwm_get_playback_ptr(void);
 extern void legoev3_fiq_ehrpwm_set_volume(int volume);
 
