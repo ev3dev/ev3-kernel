@@ -19,7 +19,7 @@
 #include <linux/device.h>
 #include <linux/types.h>
 
-#define MSENSOR_NAME_SIZE	30
+#define MSENSOR_PORT_NAME_SIZE	30
 #define MSENSOR_MODE_NAME_SIZE	11
 /* Do not change these 3 values without replacing them in legoev3_uart.c first */
 #define MSENSOR_UNITS_SIZE	4
@@ -78,8 +78,8 @@ struct msensor_mode_info {
 
 /**
  * struct msensor_device
- * @name: The name for the class device node.
  * @type_id: The type id of the sensor.
+ * @port_name: The name of the port that this sensor is connected to.
  * @num_modes: The number of valid modes.
  * @num_view_modes: The number of valid modes for data logging.
  * @mode_info: Array of mode information for the sensor.
@@ -90,8 +90,8 @@ struct msensor_mode_info {
  * @dev: The device data structure.
  */
 struct msensor_device {
-	char name[MSENSOR_NAME_SIZE + 1];
 	u8 type_id;
+	char port_name[MSENSOR_PORT_NAME_SIZE + 1];
 	u8 num_modes;
 	u8 num_view_modes;
 	struct msensor_mode_info *mode_info;
