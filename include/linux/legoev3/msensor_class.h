@@ -20,6 +20,7 @@
 #include <linux/types.h>
 
 #define MSENSOR_PORT_NAME_SIZE	30
+#define MSENSOR_FW_VERSION_SIZE	8
 #define MSENSOR_MODE_NAME_SIZE	11
 /* Do not change these 3 values without replacing them in legoev3_uart.c first */
 #define MSENSOR_UNITS_SIZE	4
@@ -86,7 +87,11 @@ struct msensor_mode_info {
  * @get_mode: Callback to get the current sensor mode.
  * @set_mode: Callback to set the sensor mode.
  * @write_data: Write data to sensor.
+ * @get_poll_ms: Get the polling period in milliseconds (optional).
+ * @set_poll_ms: Set the polling period in milliseconds (optional).
  * @context: Pointer to data structure used by callbacks.
+ * @fw_version: Firmware version of sensor (optional).
+ * @i2c_addr: I2C address if this is an I2C sensor (optional).
  * @dev: The device data structure.
  */
 struct msensor_device {
@@ -101,6 +106,8 @@ struct msensor_device {
 	int (* get_poll_ms)(void *context);
 	int (* set_poll_ms)(void *context, unsigned value);
 	void *context;
+	char fw_version[MSENSOR_FW_VERSION_SIZE + 1];
+	unsigned i2c_addr;
 	/* private */
 	struct device dev;
 };
