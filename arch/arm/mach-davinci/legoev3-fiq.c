@@ -404,6 +404,8 @@ static void legoev3_fiq_ehrpwm_callback(struct legoev3_fiq_ehrpwm_data *data)
 	if (unlikely(data->ramp_step))
 	{
 		duty_ticks = (data->ramp_value * data->period_ticks) >> 16;
+		if (duty_ticks==0)
+			duty_ticks = 1;
 		fiq_ehrpwm_set_duty_ticks(duty_ticks);
 
 		data->ramp_value += data->ramp_step;
@@ -413,7 +415,9 @@ static void legoev3_fiq_ehrpwm_callback(struct legoev3_fiq_ehrpwm_data *data)
 		}
 		else if (data->ramp_value < 0)
 		{ // end of ramp down
-			data->ramp_value = 0;
+			/* do not reset ramp_step here so that we stay at 1 until PWM is 
+			   turned off or playback is started again */
+			data->ramp_value = 1;
 		}
 
 		return;
@@ -730,6 +734,7 @@ void legoev3_fiq_ehrpwm_ramp(struct snd_pcm_substream *substream,
 	if (direction > 0)
 	{ // ramp up
 		data->ramp_step  = 0x8000 / ramp_samples;
+		data->ramp_value = 1;
 	}
 	else
 	{ // ramp down
