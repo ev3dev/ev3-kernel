@@ -23,6 +23,7 @@ struct ev3_output_port_platform_data {
 	unsigned pin1_gpio;
 	unsigned pin2_gpio;
 	unsigned pin5_gpio;
+	unsigned pin5_tacho_gpio;
 	unsigned pin6_gpio;
 	const char *pwm_dev_name;
 };
@@ -56,5 +57,9 @@ enum ev3_out_dev_id {
 	NUM_EV3_OUT_DEV_ID,
 	EV3_OUT_DEV_ID_ERR = -1
 };
+
+extern int ev3_output_port_float_pin56(struct legoev3_port_device *out_port);
+extern int ev3_output_port_get_pin56_levels(struct legoev3_port_device *out_port, unsigned *pin5, unsigned *pin6);
+extern int ev3_output_port_register_irq(struct legoev3_port_device *out_port );
 
 #endif /* __LINUX_LEGOEV3_EV3_OUTPUT_PORT_H */
