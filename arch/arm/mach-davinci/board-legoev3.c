@@ -942,16 +942,6 @@ static __init void legoev3_init(void)
 		pr_warning("legoev3_init: "
 			"sound mux setup failed: %d\n", ret);
 #if defined(CONFIG_SND_LEGOEV3) || defined(CONFIG_SND_LEGOEV3_MODULE)
-	/*
-	 * TODO:
-	 * We should probably give the sound driver ownership of this gpio
-	 * instead of requesting it here.
-	 */
-	ret = gpio_request_one(EV3_SND_ENA_PIN, GPIOF_OUT_INIT_LOW, "snd_ena");
-	if (ret)
-		pr_warning("legoev3_init:"
-			" sound gpio setup failed: %d\n", ret);
-
 	ret = platform_device_register(&snd_legoev3);
 	if (ret)
 		pr_warning("legoev3_init: "
