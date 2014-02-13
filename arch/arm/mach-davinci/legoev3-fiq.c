@@ -638,7 +638,7 @@ legoev3_fiq_gpio_irq_period_elapsed_callback(int irq, void *ehrpwm_data)
 	return IRQ_HANDLED;
 }
 
-int legoev3_fiq_ehrpwm_request(struct snd_pcm_substream *substream)
+int legoev3_fiq_ehrpwm_request(void)
 {
 	int err;
 
