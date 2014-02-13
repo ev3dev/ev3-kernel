@@ -668,9 +668,27 @@ EXPORT_SYMBOL_GPL(legoev3_fiq_ehrpwm_request);
 
 void legoev3_fiq_ehrpwm_release(void)
 {
+	int i;
 	if (!legoev3_fiq_data)
 		return;
 
+	if ((legoev3_fiq_data->ehrpwm_data.ramp_step < 0) &&
+	    (legoev3_fiq_data->ehrpwm_data.ramp_value > 0))
+	{
+		/*
+		 * we are still in the process of ramping down,
+		 * wait for completition 
+		 */
+		for (i=0; i<5; ++i)
+		{
+			set_current_state(TASK_INTERRUPTIBLE);
+			schedule_timeout(10 * HZ / 1000);
+			
+			if (legoev3_fiq_data->ehrpwm_data.ramp_value <= 0)
+				break;
+		}
+	}
+	
 	local_fiq_disable();
 	free_irq(legoev3_fiq_data->status_gpio_irq,
 		 &legoev3_fiq_data->ehrpwm_data);
