@@ -50,6 +50,7 @@ enum legoev3_pin_map {
 	GPIO_PIN(SYS_POWER_ENA, 6, 5)
 	GPIO_PIN(SYS_5V_POWER, 6, 11)
 	GPIO_PIN(BATT_TYPE, 8, 8)
+	GPIO_PIN(BATT_ADC, 0, 6)
 
 	/* I2C board pins */
 	PIN(I2C_BOARD_SDA, I2C0_SDA)
@@ -72,7 +73,6 @@ enum legoev3_pin_map {
 	PIN(ADC_DATA_OUT, SPI0_SOMI)
 	PIN(ADC_CS, SPI0_SCS_3)
 	PIN(ADC_CLK, SPI0_CLK)
-	GPIO_PIN(ADC_ENA, 0, 6)
 
 	/* USB1 VBUS pins */
 	GPIO_PIN(USB1_OVC, 6, 3)

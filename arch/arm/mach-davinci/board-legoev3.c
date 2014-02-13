@@ -497,7 +497,7 @@ static struct edma_rsv_info *da850_edma_rsv[2] = {
  */
 
 static const short legoev3_adc_pins[] __initconst = {
-	EV3_ADC_DATA_IN, EV3_ADC_DATA_OUT, EV3_ADC_CS, EV3_ADC_CLK, EV3_ADC_ENA,
+	EV3_ADC_DATA_IN, EV3_ADC_DATA_OUT, EV3_ADC_CS, EV3_ADC_CLK,
 	-1
 };
 
@@ -760,7 +760,7 @@ static __init int da850_set_emif_clk_rate(void)
  */
 
 static const short legoev3_power_pins[] __initconst = {
-	EV3_SYS_POWER_ENA, EV3_SYS_5V_POWER, EV3_BATT_TYPE,
+	EV3_SYS_POWER_ENA, EV3_SYS_5V_POWER, EV3_BATT_ADC, EV3_BATT_TYPE,
 	-1
 };
 
@@ -788,7 +788,8 @@ static void legoev3_power_off(void)
 }
 
 static struct legoev3_battery_platform_data ev3_battery_data = {
-	.batt_type_gpio		= EV3_BATT_TYPE_PIN,
+	.batt_adc_gpio	= EV3_BATT_ADC_PIN,
+	.batt_type_gpio	= EV3_BATT_TYPE_PIN,
 };
 
 static struct platform_device legoev3_battery_device = {
