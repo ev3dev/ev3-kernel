@@ -86,7 +86,7 @@ struct msensor_mode_info {
  * @mode_info: Array of mode information for the sensor.
  * @get_mode: Callback to get the current sensor mode.
  * @set_mode: Callback to set the sensor mode.
- * @write_data: Write data to sensor.
+ * @write_data: Write data to sensor (optional).
  * @get_poll_ms: Get the polling period in milliseconds (optional).
  * @set_poll_ms: Set the polling period in milliseconds (optional).
  * @context: Pointer to data structure used by callbacks.

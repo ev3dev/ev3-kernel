@@ -49,7 +49,9 @@ extern struct legoev3_port_device
 			      void *, size_t, struct device *);
 extern void legoev3_port_device_unregister(struct legoev3_port_device *);
 
-#define LEGOEV3_TYPE_ID_UNKNOWN 125
+#define NXT_TOUCH_SENSOR_TYPE_ID	1
+#define EV3_TOUCH_SENSOR_TYPE_ID	16
+#define LEGOEV3_TYPE_ID_UNKNOWN		125
 
 struct legoev3_port_device_id {
 	char name[LEGOEV3_PORT_NAME_SIZE];
