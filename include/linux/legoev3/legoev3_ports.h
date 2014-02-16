@@ -69,4 +69,7 @@ module_driver(driver, legoev3_register_port_driver, legoev3_unregister_port_driv
 extern struct attribute_group legoev3_port_device_type_attr_grp;
 extern struct bus_type legoev3_bus_type;
 
+extern void *legoev3_port_remap_TIMER64P3(void);
+extern void legoev3_port_unmap_TIMER64P3(void *addr);
+
 #endif /* __LINUX_LEGOEV3_PORTS_H */

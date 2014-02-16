@@ -16,6 +16,7 @@
 #ifndef __LINUX_LEGOEV3_EV3_OUTPUT_PORT_H
 #define __LINUX_LEGOEV3_EV3_OUTPUT_PORT_H
 
+#include <linux/interrupt.h>
 #include <mach/legoev3.h>
 
 struct ev3_output_port_platform_data {
@@ -28,14 +29,10 @@ struct ev3_output_port_platform_data {
 	const char *pwm_dev_name;
 };
 
-struct ev3_output_port_device {
-	int (*pin5_mv)(struct ev3_output_port_device *opd);
-	/* private */
-	struct device dev;
-};
-
 struct ev3_motor_platform_data {
 	struct legoev3_port_device *out_port;
+	unsigned tacho_int_gpio;
+        unsigned tacho_dir_gpio;
 };
 
 /* resistor ids for EV3 output devices */
@@ -59,7 +56,5 @@ enum ev3_out_dev_id {
 };
 
 extern int ev3_output_port_float_pin56(struct legoev3_port_device *out_port);
-extern int ev3_output_port_get_pin56_levels(struct legoev3_port_device *out_port, unsigned *pin5, unsigned *pin6);
-extern int ev3_output_port_register_irq(struct legoev3_port_device *out_port );
 
 #endif /* __LINUX_LEGOEV3_EV3_OUTPUT_PORT_H */
