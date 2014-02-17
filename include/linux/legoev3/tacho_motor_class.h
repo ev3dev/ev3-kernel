@@ -19,7 +19,9 @@
 #include <linux/device.h>
 
 struct tacho_motor_device {
-//	bool (*pressed)(struct touch_sensor_device *);
+	unsigned (*get_tacho    )(struct tacho_motor_device *);
+	unsigned (*get_direction)(struct tacho_motor_device *);
+	unsigned (*get_speed    )(struct tacho_motor_device *);
 	/* private */
 	struct device dev;
 };
