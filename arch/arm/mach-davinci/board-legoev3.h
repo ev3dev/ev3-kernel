@@ -84,6 +84,7 @@ enum legoev3_pin_map {
 	PIN(SD_DAT_3, MMCSD0_DAT_3)
 	PIN(SD_CLK, MMCSD0_CLK)
 	PIN(SD_CMD, MMCSD0_CMD)
+	GPIO_PIN(SD_CD, 5, 14)
 
 	/* Input and output port pins */
 	GPIO_PIN(IN1_PIN1, 8, 10)

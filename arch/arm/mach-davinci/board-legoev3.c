@@ -304,32 +304,23 @@ static struct platform_device legoev3_bt_device = {
 /*
  * SD card reader configuration:
  * =============================
- * LEGO did not hook up the write protect pin? And does not use card detect?
+ * MicroSD does not have write protect.
  */
 
 static const short legoev3_sd_pins[] __initconst = {
 	EV3_SD_DAT_0, EV3_SD_DAT_1, EV3_SD_DAT_2,
-	EV3_SD_DAT_3, EV3_SD_CLK, EV3_SD_CMD,
+	EV3_SD_DAT_3, EV3_SD_CLK, EV3_SD_CMD, EV3_SD_CD,
 	-1
 };
-
-#warning Figure out what is the deal with the MMCSD card GPIO pins.
-/*
-static int legoev3_mmc_get_ro(int index)
-{
-	return gpio_get_value(EV3_SD_WP_PIN);
-}
 
 static int legoev3_mmc_get_cd(int index)
 {
 	return !gpio_get_value(EV3_SD_CD_PIN);
 }
-*/
+
 static struct davinci_mmc_config legoev3_sd_config = {
-/*
-	.get_ro		= legoev3_mmc_get_ro,
+
 	.get_cd		= legoev3_mmc_get_cd,
-*/
 	.wires		= 4,
 	.max_freq	= 50000000,
 	.caps		= MMC_CAP_MMC_HIGHSPEED | MMC_CAP_SD_HIGHSPEED,
@@ -970,6 +961,11 @@ static __init void legoev3_init(void)
 		pr_warning("legoev3_init: mmcsd0 mux setup failed:"
 				" %d\n", ret);
 #if defined(CONFIG_MMC_DAVINCI) || defined(CONFIG_MMC_DAVINCI_MODULE)
+	ret = gpio_request(EV3_SD_CD_PIN, "SD Card CD\n");
+	if (ret)
+		pr_warning("legoev3_init: can not open GPIO %d\n", EV3_SD_CD_PIN);
+	gpio_direction_input(EV3_SD_CD_PIN);
+
 	ret = da8xx_register_mmcsd0(&legoev3_sd_config);
 	if (ret)
 		pr_warning("legoev3_init: mmcsd0 registration failed:"
