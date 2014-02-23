@@ -18,7 +18,6 @@
 
 struct legoev3_bluetooth_platform_data {
 	int bt_ena_gpio;
-	int bt_ena2_gpio;
 	int pic_ena_gpio;
 	int pic_rst_gpio;
 	int pic_cts_gpio;

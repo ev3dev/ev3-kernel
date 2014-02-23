@@ -278,7 +278,7 @@ static __init void legoev3_usb_init(void)
  */
 
 static const short legoev3_bt_pins[] __initconst = {
-	EV3_BT_ENA, EV3_BT_ENA2, EV3_BT_PIC_ENA, EV3_BT_PIC_RST, EV3_BT_PIC_CTS,
+	EV3_BT_ENA, EV3_BT_PIC_ENA, EV3_BT_PIC_RST, EV3_BT_PIC_CTS,
 	EV3_BT_CLK, EV3_BT_UART_CTS, EV3_BT_UART_RTS, EV3_BT_UART_RXD,
 	EV3_BT_UART_TXD,
 	-1
@@ -286,7 +286,6 @@ static const short legoev3_bt_pins[] __initconst = {
 
 static struct legoev3_bluetooth_platform_data legoev3_bt_pdata = {
 	.bt_ena_gpio	= EV3_BT_ENA_PIN,
-	.bt_ena2_gpio	= EV3_BT_ENA2_PIN,
 	.pic_ena_gpio	= EV3_BT_PIC_ENA_PIN,
 	.pic_rst_gpio	= EV3_BT_PIC_RST_PIN,
 	.pic_cts_gpio	= EV3_BT_PIC_CTS_PIN,

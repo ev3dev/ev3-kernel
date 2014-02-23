@@ -56,8 +56,7 @@ enum legoev3_pin_map {
 	PIN(I2C_BOARD_SCL, I2C0_SCL)
 
 	/* Bluetooth pins */
-	GPIO_PIN(BT_ENA, 4, 1)
-	GPIO_PIN(BT_ENA2, 4, 9)
+	GPIO_PIN(BT_ENA, 4, 9)
 	GPIO_PIN(BT_PIC_ENA, 3, 3)
 	GPIO_PIN(BT_PIC_RST, 4, 14)
 	GPIO_PIN(BT_PIC_CTS, 5, 7)
