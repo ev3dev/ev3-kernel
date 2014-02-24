@@ -19,6 +19,12 @@
 #include <linux/legoev3/legoev3_analog.h>
 #include <mach/legoev3.h>
 
+enum ev3_input_port_gpio_state {
+	EV3_INPUT_PORT_GPIO_FLOAT,
+	EV3_INPUT_PORT_GPIO_LOW,
+	EV3_INPUT_PORT_GPIO_HIGH,
+};
+
 struct ev3_input_port_platform_data {
 	enum ev3_input_port_id id;
 	unsigned pin1_gpio;
@@ -39,7 +45,10 @@ struct ev3_sensor_platform_data {
 
 extern int ev3_input_port_get_pin1_mv(struct legoev3_port_device *);
 extern int ev3_input_port_get_pin6_mv(struct legoev3_port_device *);
-extern void ev3_input_port_set_pin1_out(struct legoev3_port_device *, int);
+extern void ev3_input_port_set_pin1_gpio(struct legoev3_port_device *,
+					 enum ev3_input_port_gpio_state);
+extern void ev3_input_port_set_pin5_gpio(struct legoev3_port_device *,
+					 enum ev3_input_port_gpio_state);
 extern void ev3_input_port_register_analog_cb(struct legoev3_port_device *,
 					      legoev3_analog_cb_func_t, void *);
 extern int ev3_input_port_register_i2c(struct legoev3_port_device *, struct device *);

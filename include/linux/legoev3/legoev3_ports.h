@@ -50,6 +50,8 @@ extern struct legoev3_port_device
 extern void legoev3_port_device_unregister(struct legoev3_port_device *);
 
 #define NXT_TOUCH_SENSOR_TYPE_ID	1
+#define NXT_LIGHT_SENSOR_TYPE_ID	2
+#define NXT_COLOR_SENSOR_TYPE_ID	4
 #define EV3_TOUCH_SENSOR_TYPE_ID	16
 #define LEGOEV3_TYPE_ID_UNKNOWN		125
 

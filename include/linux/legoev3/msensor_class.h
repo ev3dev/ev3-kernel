@@ -112,6 +112,8 @@ struct msensor_device {
 	struct device dev;
 };
 
+#define to_msensor_device(_dev) container_of(_dev, struct msensor_device, dev)
+
 extern int msensor_ftoi(u32 f, unsigned dp);
 extern u32 msensor_itof(int i, unsigned dp);
 
