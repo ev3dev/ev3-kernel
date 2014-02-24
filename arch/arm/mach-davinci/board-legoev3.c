@@ -104,23 +104,23 @@ static const short legoev3_led_pins[] __initconst = {
 
 static struct gpio_led ev3_gpio_leds[] = {
 	{
-		.name = "ev3:red:right",
-		.default_trigger = "mmc0",
-		.gpio = EV3_LED_0_PIN,
-	},
-	{
-		.name = "ev3:green:right",
-		.default_trigger = "mmc0",
-		.gpio = EV3_LED_1_PIN,
-	},
-	{
 		.name = "ev3:red:left",
 		.default_trigger = "heartbeat",
-		.gpio = EV3_LED_2_PIN,
+		.gpio = EV3_LED_0_PIN,
 	},
 	{
 		.name = "ev3:green:left",
 		.default_trigger = "heartbeat",
+		.gpio = EV3_LED_1_PIN,
+	},
+	{
+		.name = "ev3:green:right",
+		.default_trigger = "mmc0",
+		.gpio = EV3_LED_2_PIN,
+	},
+	{
+		.name = "ev3:red:right",
+		.default_trigger = "mmc0",
 		.gpio = EV3_LED_3_PIN,
 	},
 };

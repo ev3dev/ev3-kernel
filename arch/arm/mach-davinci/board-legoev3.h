@@ -29,10 +29,10 @@ enum legoev3_pin_map {
 	GPIO_PIN(LCD_CS, 2, 12)
 
 	/* LED pins */
-	GPIO_PIN(LED_0, 6, 12)
-	GPIO_PIN(LED_1, 6, 14)
-	GPIO_PIN(LED_2, 6, 13)
-	GPIO_PIN(LED_3, 6, 7)
+	GPIO_PIN(LED_0, 6, 13)
+	GPIO_PIN(LED_1, 6, 7)
+	GPIO_PIN(LED_2, 6, 14)
+	GPIO_PIN(LED_3, 6, 12)
 
 	/* Button pins */
 	GPIO_PIN(BUTTON_0, 7, 15)
