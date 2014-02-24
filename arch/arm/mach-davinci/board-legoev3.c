@@ -278,18 +278,19 @@ static __init void legoev3_usb_init(void)
  */
 
 static const short legoev3_bt_pins[] __initconst = {
-	EV3_BT_ENA, EV3_BT_PIC_ENA, EV3_BT_PIC_RST, EV3_BT_PIC_CTS,
-	EV3_BT_CLK, EV3_BT_UART_CTS, EV3_BT_UART_RTS, EV3_BT_UART_RXD,
-	EV3_BT_UART_TXD,
+	EV3_BT_ENA, EV3_BT_CLK_ENA, EV3_BT_PIC_ENA, EV3_BT_PIC_RST,
+	EV3_BT_PIC_CTS, EV3_BT_CLK, EV3_BT_UART_CTS, EV3_BT_UART_RTS,
+	EV3_BT_UART_RXD, EV3_BT_UART_TXD,
 	-1
 };
 
 static struct legoev3_bluetooth_platform_data legoev3_bt_pdata = {
-	.bt_ena_gpio	= EV3_BT_ENA_PIN,
-	.pic_ena_gpio	= EV3_BT_PIC_ENA_PIN,
-	.pic_rst_gpio	= EV3_BT_PIC_RST_PIN,
-	.pic_cts_gpio	= EV3_BT_PIC_CTS_PIN,
-	.clk_pwm_dev	= "ecap.2",
+	.bt_ena_gpio		= EV3_BT_ENA_PIN,
+	.bt_clk_ena_gpio	= EV3_BT_CLK_ENA_PIN,
+	.pic_ena_gpio		= EV3_BT_PIC_ENA_PIN,
+	.pic_rst_gpio		= EV3_BT_PIC_RST_PIN,
+	.pic_cts_gpio		= EV3_BT_PIC_CTS_PIN,
+	.clk_pwm_dev		= "ecap.2",
 };
 
 static struct platform_device legoev3_bt_device = {
@@ -360,8 +361,6 @@ static __init int legoev3_init_cpufreq(void) { return 0; }
  * Devices are:
  * - EEPROM (24c128) to get the hardware version and the bluetooth MAC
  *	address for the EV3.
- * - The bluetooth module (PIC_*) for lms2012 Mode 2 communications,
- *	whatever that is (see c_i2c.c in lms2012).
  */
 
 static const short legoev3_i2c_board_pins[] __initconst = {
@@ -372,18 +371,6 @@ static const short legoev3_i2c_board_pins[] __initconst = {
 static struct i2c_board_info __initdata legoev3_i2c_board_devices[] = {
 	{
 		I2C_BOARD_INFO("24c128", 0x50),
-	},
-	{
-		I2C_BOARD_INFO("PIC_CodedDataTo", 0x54),
-	},
-	{
-		I2C_BOARD_INFO("PIC_ReadStatus", 0x55),
-	},
-	{
-		I2C_BOARD_INFO("PIC_RawDataTo", 0x56),
-	},
-	{
-		I2C_BOARD_INFO("PIC_ReadDataFrom", 0x57),
 	},
 };
 
