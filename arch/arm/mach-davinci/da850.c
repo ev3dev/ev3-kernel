@@ -877,7 +877,7 @@ const short da850_ehrpwm0_pins[] __initdata = {
 };
 
 const short da850_ehrpwm1_pins[] __initdata = {
-	DA850_EHRPWM1_A, DA850_EHRPWM1_TZ,
+	DA850_EHRPWM1_A, DA850_EHRPWM1_B, DA850_EHRPWM1_TZ,
 	-1
 };
 

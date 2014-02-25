@@ -26,11 +26,15 @@ struct ev3_output_port_platform_data {
 	unsigned pin5_gpio;
 	unsigned pin5_tacho_gpio;
 	unsigned pin6_gpio;
+	unsigned pwm_gpio;
 	const char *pwm_dev_name;
 };
 
 struct ev3_motor_platform_data {
 	struct legoev3_port_device *out_port;
+	struct pwm_device *pwm;
+	unsigned motor_dir0_gpio;
+	unsigned motor_dir1_gpio;
 	unsigned tacho_int_gpio;
         unsigned tacho_dir_gpio;
 };

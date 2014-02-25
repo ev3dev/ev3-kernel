@@ -22,6 +22,8 @@
 #include <linux/slab.h>
 #include <linux/pwm/ehrpwm.h>
 
+#define DEBUG 1
+
 #ifdef DEBUG
 #define debug(format, args...) printk(format, ##args)
 #else

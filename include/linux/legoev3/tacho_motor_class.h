@@ -19,9 +19,14 @@
 #include <linux/device.h>
 
 struct tacho_motor_device {
-	unsigned (*get_tacho    )(struct tacho_motor_device *);
-	unsigned (*get_direction)(struct tacho_motor_device *);
-	unsigned (*get_speed    )(struct tacho_motor_device *);
+	int (*get_tacho    )(struct tacho_motor_device *);
+	int (*get_direction)(struct tacho_motor_device *);
+	int (*get_speed    )(struct tacho_motor_device *);
+	int (*get_power    )(struct tacho_motor_device *);
+
+	int  (*get_target_power    )(struct tacho_motor_device *);
+	void (*set_target_power    )(struct tacho_motor_device *, long target_power);
+
 	/* private */
 	struct device dev;
 };
