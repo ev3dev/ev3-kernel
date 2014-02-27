@@ -200,6 +200,11 @@ static struct platform_device da850_pm_device = {
 /*
  * EV3 USB configuration:
  * ======================
+ * usb1/USB1 is the USB 1.1 host port.
+ * usb20 is the USB 2.0 OTG (On-The-Go) port.
+ *
+ * The over-current GPIO (EV3_USB1_OVC) is actually over-current for the
+ * entire brick, not just the USB port.
  */
 
 static const short legoev3_usb1_pins[] __initconst = {
