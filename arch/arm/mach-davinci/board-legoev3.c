@@ -1011,14 +1011,6 @@ static __init void legoev3_init(void)
 		pr_warning("legoev3_init: pru suart registration failed: %d\n", ret);
 }
 
-#ifdef CONFIG_SERIAL_8250_CONSOLE
-static int __init da850_evm_console_init(void)
-{
-	return add_preferred_console("ttyS", 1, "115200");
-}
-console_initcall(da850_evm_console_init);
-#endif
-
 static void __init legoev3_map_io(void)
 {
 	da850_init();
