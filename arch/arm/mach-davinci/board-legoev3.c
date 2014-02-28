@@ -1016,10 +1016,8 @@ static void __init legoev3_map_io(void)
 	da850_init();
 }
 
-#warning "Make sure DA850_LEGOEV3 gets added to the ARM Build Database!!!"
 // FIXME: Figure out the right dma_zone_size
-//MACHINE_START(DA850_LEGOEV3, "LEGO MINDSTORMS EV3 Programmable Brick")
-MACHINE_START(DAVINCI_DA850_EVM, "DaVinci DA850/OMAP-L138/AM18x EVM")
+MACHINE_START(DAVINCI_DA850_EVM, "LEGO MINDSTORMS EV3 Programmable Brick")
 	.atag_offset	= 0x100,
 	.map_io		= legoev3_map_io,
 	.init_irq	= cp_intc_init,
