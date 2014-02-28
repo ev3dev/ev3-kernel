@@ -96,7 +96,7 @@ quiet_cmd_builddeb = BUILDDEB
 		$(srctree)/scripts/package/builddeb
 
 deb-pkg: FORCE
-	$(MAKE) uImage KBUILD_SRC=
+	$(MAKE) KBUILD_SRC=
 	$(call cmd,builddeb)
 
 clean-dirs += $(objtree)/debian/
