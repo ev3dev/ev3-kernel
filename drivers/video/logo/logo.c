@@ -37,6 +37,9 @@ const struct linux_logo * __init_refok fb_find_logo(int depth)
 		return NULL;
 
 	if (depth >= 1) {
+#ifdef CONFIG_LOGO_EV3DEV_MONO
+		logo = &logo_ev3dev_mono;
+#endif
 #ifdef CONFIG_LOGO_LINUX_MONO
 		/* Generic Linux logo */
 		logo = &logo_linux_mono;
