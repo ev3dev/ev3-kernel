@@ -27,7 +27,7 @@
 #define LEGOEV3_PORT_NAME_SIZE 30
 
 struct legoev3_ports_platform_data {
-	struct ev3_input_port_platform_data input_port_data[NUM_EV3_PORT_IN];
+	struct ev3_input_port_platform_data  input_port_data[NUM_EV3_PORT_IN];
 	struct ev3_output_port_platform_data output_port_data[NUM_EV3_PORT_OUT];
 };
 
@@ -68,8 +68,5 @@ module_driver(driver, legoev3_register_port_driver, legoev3_unregister_port_driv
 
 extern struct attribute_group legoev3_port_device_type_attr_grp;
 extern struct bus_type legoev3_bus_type;
-
-extern void *legoev3_port_remap_TIMER64P3(void);
-extern void legoev3_port_unmap_TIMER64P3(void *addr);
 
 #endif /* __LINUX_LEGOEV3_PORTS_H */

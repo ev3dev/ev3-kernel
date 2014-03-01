@@ -61,4 +61,6 @@ enum ev3_out_dev_id {
 
 extern int ev3_output_port_float_pin56(struct legoev3_port_device *out_port);
 
+extern unsigned long davinci_read_clocksource_cycles( void );
+
 #endif /* __LINUX_LEGOEV3_EV3_OUTPUT_PORT_H */
