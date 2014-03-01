@@ -45,6 +45,7 @@
 #include <mach/nand.h>
 #include <mach/mux.h>
 #include <mach/spi.h>
+#include <mach/time.h>
 #include <mach/usb.h>
 
 #include <video/st7586fb.h>
@@ -937,6 +938,8 @@ static __init void legoev3_init(void)
 	if (ret)
 		pr_warning("legoev3_init: "
 			"input/output port registration failed: %d\n", ret);
+
+	legoev3_hires_timer_init();
 #endif
 
 #if defined(CONFIG_LEGOEV3_FIQ)

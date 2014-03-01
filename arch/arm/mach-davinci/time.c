@@ -21,14 +21,15 @@
 #include <linux/clk.h>
 #include <linux/err.h>
 #include <linux/platform_device.h>
-
+#include <linux/export.h>
 #include <mach/hardware.h>
 #include <asm/mach/irq.h>
 #include <asm/fiq.h>
 #include <asm/mach/time.h>
 #include <mach/cputype.h>
 #include <mach/time.h>
-#include "clock.h"
+
+// #include "clock.h"
 
 static struct clock_event_device clockevent_davinci;
 static unsigned int davinci_clock_tick_rate;
@@ -383,6 +384,7 @@ static void __init davinci_timer_init(void)
 	unsigned int clockevent_id;
 	unsigned int clocksource_id;
 	unsigned int fiqsource_id;
+
 	static char err[] __initdata = KERN_ERR
 		"%s: can't register clocksource!\n";
 	int i;
@@ -504,3 +506,89 @@ void davinci_watchdog_reset(struct platform_device *pdev)
 	wdtcr = 0x00004000;
 	__raw_writel(wdtcr, base + WDTCR);
 }
+
+#if defined(CONFIG_LEGOEV3_DEV_PORTS) || defined(CONFIG_LEGOEV3_DEV_PORTS_MODULE)
+/* Special code to manage Timer3 as a high-resolution 33MHz monotonic clock 
+ * that is only compiled in for the LEGOEV3 target
+ */
+static void __iomem *legoev3_hires_timer_base;
+
+void legoev3_hires_timer_init(void)
+{
+	struct davinci_soc_info *soc_info = &davinci_soc_info;
+	struct davinci_timer_instance *dtip = soc_info->timer_info->timers;
+
+//		u32 tgcr;
+//
+	legoev3_hires_timer_base = ioremap(dtip[3].base, SZ_4K);
+	if (WARN_ON(!legoev3_hires_timer_base))
+		return;
+
+//                                          TIMER64P3[TGCR]   = 0x00003304;\
+//                                          TIMER64P3[TGCR]  |= 0x00000002;\
+//                                          TIMER64P3[PRD34]  = 0xFFFFFFFF;\
+//                                          TIMER64P3[TCR]    = 0x00800000;\
+ 
+	__raw_writel(0x00003306, legoev3_hires_timer_base + TGCR );
+	__raw_writel(0xFFFFFFFF, legoev3_hires_timer_base + PRD34);
+	__raw_writel(0x00800000, legoev3_hires_timer_base + TCR  );
+//
+//		/* reset both timers, no pre-scaler for timer34 */
+//		tgcr = 0;
+//		__raw_writel(tgcr, base[i] + TGCR);
+//
+//		/* Set both timers to unchained 32-bit */
+//		tgcr = TGCR_TIMMODE_32BIT_UNCHAINED << TGCR_TIMMODE_SHIFT;
+//		__raw_writel(tgcr, base[i] + TGCR);
+//
+//		/* Unreset timers */
+//		tgcr |= (TGCR_UNRESET << TGCR_TIM12RS_SHIFT) |
+//			(TGCR_UNRESET << TGCR_TIM34RS_SHIFT);
+//		__raw_writel(tgcr, base[i] + TGCR);
+//
+//		/* Init both counters to zero */
+//		__raw_writel(0, base[i] + TIM12);
+//		__raw_writel(0, base[i] + TIM34);
+//	}
+//
+//	/* Init of each timer as a 32-bit timer */
+//	for (i=0; i< ARRAY_SIZE(timers); i++) {
+//		struct timer_s *t = &timers[i];
+//		int timer = ID_TO_TIMER(t->id);
+//		u32 irq;
+//
+//		t->base = base[timer];
+//		if (!t->base)
+//			continue;
+//
+//		if (IS_TIMER_BOT(t->id)) {
+//			t->enamode_shift = 6;
+//			t->tim_off = TIM12;
+//			t->prd_off = PRD12;
+//			irq = dtip[timer].bottom_irq;
+//		} else {
+//			t->enamode_shift = 22;
+//			t->tim_off = TIM34;
+//			t->prd_off = PRD34;
+//			irq = dtip[timer].top_irq;
+//		}
+//
+//		/* Register interrupt */
+//		t->irqaction.name = t->name;
+//		t->irqaction.dev_id = (void *)t;
+//
+//		if (t->irqaction.handler != NULL) {
+//			irq = USING_COMPARE(t) ? dtip[i].cmp_irq : irq;
+//			setup_irq(irq, &t->irqaction);
+//		}
+//	}
+}
+EXPORT_SYMBOL(legoev3_hires_timer_init);
+
+unsigned long legoev3_hires_timer_read(void)
+{
+	return __raw_readl(legoev3_hires_timer_base + TIM34 );
+}
+EXPORT_SYMBOL(legoev3_hires_timer_read);
+#endif
+
