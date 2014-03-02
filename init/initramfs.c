@@ -605,6 +605,32 @@ static void __init clean_rootfs(void)
 }
 #endif
 
+/*
+ * U-boot image header definitions from u-boot/image.h
+ */
+
+#define IH_MAGIC        0x27051956      /* Image Magic Number           */
+#define IH_NMLEN                32      /* Image Name Length            */
+
+/*
+ * Legacy format image header,
+ * all data in network byte order (aka natural aka bigendian).
+ */
+typedef struct image_header {
+	uint32_t        ih_magic;       /* Image Header Magic Number    */
+	uint32_t        ih_hcrc;        /* Image Header CRC Checksum    */
+	uint32_t        ih_time;        /* Image Creation Timestamp     */
+	uint32_t        ih_size;        /* Image Data Size              */
+	uint32_t        ih_load;        /* Data  Load  Address          */
+	uint32_t        ih_ep;          /* Entry Point Address          */
+	uint32_t        ih_dcrc;        /* Image Data CRC Checksum      */
+	uint8_t         ih_os;          /* Operating System             */
+	uint8_t         ih_arch;        /* CPU architecture             */
+	uint8_t         ih_type;        /* Image Type                   */
+	uint8_t         ih_comp;        /* Compression Type             */
+	uint8_t         ih_name[IH_NMLEN];      /* Image Name           */
+} image_header_t;
+
 static int __init populate_rootfs(void)
 {
 	char *err = unpack_to_rootfs(__initramfs_start, __initramfs_size);
@@ -613,9 +639,34 @@ static int __init populate_rootfs(void)
 	if (initrd_start) {
 #ifdef CONFIG_BLK_DEV_RAM
 		int fd;
+		unsigned long start, end;
+		image_header_t *header = (image_header_t *)initrd_start;
+
+		/*
+		 * This is a workaround for the LEGO Mindstorms EV3. The U-boot
+		 * bootloader on the EV3 is flashed when you do a firmware
+		 * update, so we don't have control over it. The U-boot version
+		 * in the offical firmware is an older version (2009.11) and
+		 * does not properly set ATAG_INITRD2 (or ATAG_INITRD for that
+		 * matter). We can pass the initrd to the kernel using the
+		 * initrd boot parameter, but it expects a gzip file and if the
+		 * contents are a initramfs (cpio) image rather than a legacy
+		 * initrd, then we also have to know the exact size, which we
+		 * cannot get from u-boot. The flash-kernel tools create a
+		 * u-boot image with a initramfs, so we just have to look for
+		 * it and extract the actual initramfs file information from it.
+		 */
+
+		if (ntohl(header->ih_magic) == IH_MAGIC) {
+			start = initrd_start + sizeof(image_header_t);
+			end = start + ntohl(header->ih_size);
+		} else {
+			start = initrd_start;
+			end = initrd_end;
+		}
+
 		printk(KERN_INFO "Trying to unpack rootfs image as initramfs...\n");
-		err = unpack_to_rootfs((char *)initrd_start,
-			initrd_end - initrd_start);
+		err = unpack_to_rootfs((char *)start, end - start);
 		if (!err) {
 			free_initrd();
 			goto done;
@@ -628,8 +679,7 @@ static int __init populate_rootfs(void)
 		fd = sys_open("/initrd.image",
 			      O_WRONLY|O_CREAT, 0700);
 		if (fd >= 0) {
-			ssize_t written = xwrite(fd, (char *)initrd_start,
-						initrd_end - initrd_start);
+			ssize_t written = xwrite(fd, (char *)start, end - start);
 
 			if (written != initrd_end - initrd_start)
 				pr_err("/initrd.image: incomplete write (%zd != %ld)\n",
