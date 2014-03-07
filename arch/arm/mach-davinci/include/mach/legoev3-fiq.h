@@ -49,11 +49,13 @@ extern void legoev3_fiq_release_port(enum ev3_input_port_id port_id);
 extern int legoev3_fiq_start_xfer(enum ev3_input_port_id port_id,
 				  struct i2c_msg msgs[], int num_msg,
 				  void (*complete)(int, void *), void *context);
-extern int legoev3_fiq_ehrpwm_request(struct snd_pcm_substream *substream);
+extern int legoev3_fiq_ehrpwm_request(void);
 extern void legoev3_fiq_ehrpwm_release(void);
 extern int legoev3_fiq_ehrpwm_prepare(struct snd_pcm_substream *substream,
 				      unsigned period_ticks, int volume,
 				      void (*period_elapsed)(void *), void *);
+extern void legoev3_fiq_ehrpwm_ramp(struct snd_pcm_substream *substream,
+                                    int direction, unsigned ramp_ms);
 extern unsigned legoev3_fiq_ehrpwm_get_playback_ptr(void);
 extern void legoev3_fiq_ehrpwm_set_volume(int volume);
 

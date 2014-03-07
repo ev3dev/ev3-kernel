@@ -96,6 +96,8 @@ struct legoev3_fiq_ehrpwm_data {
 	void *period_elapsed_data;
 	unsigned requested_flag:1;
 	unsigned period_elapsed_flag:1;
+	int ramp_step;
+	int ramp_value;
 };
 
 struct legoev3_fiq_data {
@@ -399,6 +401,28 @@ static void legoev3_fiq_ehrpwm_callback(struct legoev3_fiq_ehrpwm_data *data)
 	if (unlikely(!data->requested_flag || !data->dma_area))
 		return;
 
+	if (unlikely(data->ramp_step))
+	{
+		duty_ticks = (data->ramp_value * data->period_ticks) >> 16;
+		if (duty_ticks==0)
+			duty_ticks = 1;
+		fiq_ehrpwm_set_duty_ticks(duty_ticks);
+
+		data->ramp_value += data->ramp_step;
+		if (data->ramp_value >= 0x8000)
+		{ // end of ramp up
+			data->ramp_step = 0;
+		}
+		else if (data->ramp_value < 0)
+		{ // end of ramp down
+			/* do not reset ramp_step here so that we stay at 1 until PWM is 
+			   turned off or playback is started again */
+			data->ramp_value = 1;
+		}
+
+		return;
+	}
+
 	sample = *(short *)(data->dma_area + data->playback_ptr);
 	sample = (sample * data->volume) >> 8;
 	duty_ticks = ((sample + 0x7FFF) * data->period_ticks) >> 16;
@@ -614,7 +638,7 @@ legoev3_fiq_gpio_irq_period_elapsed_callback(int irq, void *ehrpwm_data)
 	return IRQ_HANDLED;
 }
 
-int legoev3_fiq_ehrpwm_request(struct snd_pcm_substream *substream)
+int legoev3_fiq_ehrpwm_request(void)
 {
 	int err;
 
@@ -644,9 +668,27 @@ EXPORT_SYMBOL_GPL(legoev3_fiq_ehrpwm_request);
 
 void legoev3_fiq_ehrpwm_release(void)
 {
+	int i;
 	if (!legoev3_fiq_data)
 		return;
 
+	if ((legoev3_fiq_data->ehrpwm_data.ramp_step < 0) &&
+	    (legoev3_fiq_data->ehrpwm_data.ramp_value > 0))
+	{
+		/*
+		 * we are still in the process of ramping down,
+		 * wait for completition 
+		 */
+		for (i=0; i<5; ++i)
+		{
+			set_current_state(TASK_INTERRUPTIBLE);
+			schedule_timeout(10 * HZ / 1000);
+			
+			if (legoev3_fiq_data->ehrpwm_data.ramp_value <= 0)
+				break;
+		}
+	}
+	
 	local_fiq_disable();
 	free_irq(legoev3_fiq_data->status_gpio_irq,
 		 &legoev3_fiq_data->ehrpwm_data);
@@ -661,7 +703,6 @@ int legoev3_fiq_ehrpwm_prepare(struct snd_pcm_substream *substream,
 			       void (*period_elapsed)(void *), void *context)
 {
 	struct legoev3_fiq_ehrpwm_data *data;
-	int err;
 
 	if (!legoev3_fiq_data)
 		return -ENODEV;
@@ -681,12 +722,47 @@ int legoev3_fiq_ehrpwm_prepare(struct snd_pcm_substream *substream,
 	data->period_elapsed		= period_elapsed;
 	data->period_elapsed_data	= context;
 	data->period_elapsed_flag	= 0;
+	data->ramp_step                 = 0;
+	data->ramp_value                = 0;
 
 	local_fiq_enable();
 
 	return 0;
 }
 EXPORT_SYMBOL_GPL(legoev3_fiq_ehrpwm_prepare);
+
+void legoev3_fiq_ehrpwm_ramp(struct snd_pcm_substream *substream,
+                             int direction, unsigned ramp_ms)
+{
+	struct legoev3_fiq_ehrpwm_data *data;
+	int ramp_samples = substream->runtime->rate * ramp_ms / 1000;
+	if (ramp_samples < 2)
+		return;
+
+	if (!legoev3_fiq_data)
+		return;
+
+	if (direction==0)
+		return;
+
+	data = &legoev3_fiq_data->ehrpwm_data;
+
+	local_fiq_disable();
+
+	if (direction > 0)
+	{ // ramp up
+		data->ramp_step  = 0x8000 / ramp_samples;
+		data->ramp_value = 1;
+	}
+	else
+	{ // ramp down
+		data->ramp_step  = 0x8000 / -ramp_samples;
+		data->ramp_value = 0x8000;
+	}
+
+	local_fiq_enable();
+}
+EXPORT_SYMBOL_GPL(legoev3_fiq_ehrpwm_ramp);
 
 unsigned legoev3_fiq_ehrpwm_get_playback_ptr(void)
 {
