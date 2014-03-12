@@ -75,8 +75,17 @@ struct tacho_motor_device {
 	int  (*get_target_speed    )(struct tacho_motor_device *);
 	void (*set_target_speed    )(struct tacho_motor_device *, long target_speed);
 
+	int  (*get_target_steer    )(struct tacho_motor_device *);
+	void (*set_target_steer    )(struct tacho_motor_device *, long target_steer);
+
 	int  (*get_target_time     )(struct tacho_motor_device *);
 	void (*set_target_time     )(struct tacho_motor_device *, long target_time);
+
+	int  (*get_target_ramp_up_time  )(struct tacho_motor_device *);
+	void (*set_target_ramp_up_time  )(struct tacho_motor_device *, long target_ramp_up_time);
+
+	int  (*get_target_ramp_down_time)(struct tacho_motor_device *);
+	void (*set_target_ramp_down_time)(struct tacho_motor_device *, long target_ramp_down_time);
 
 	/* private */
 	struct device dev;
