@@ -328,7 +328,7 @@ legoev3_fiq_timer_callback(struct legoev3_fiq_port_i2c_data *data)
 		 * Note: The official LEGO firmware does not generate stop
 		 * condition except for in the middle of reads (see below).
 		 * We are going by the book and doing a stop when we are
-		 * suppoed to. We can change it back if there are problems.
+		 * supposed to. We can change it back if there are problems.
 		 */
 		fiq_gpio_dir_out(&data->gpio[FIQ_I2C_PIN_SDA], 0);
 
@@ -520,7 +520,7 @@ static irqreturn_t legoev3_fiq_gpio_irq_i2c_port_callback(int irq, void *port_da
  * @scl_pin: The GPIO pin to use for the I2C clock line. Same notes apply
  *	as on the sda_pin.
  *
- * Returns 0 if the port is availible or -EBUSY if it has already be requested.
+ * Returns 0 if the port is available or -EBUSY if it has already be requested.
  */
 int legoev3_fiq_request_port(enum ev3_input_port_id port_id, int sda_pin,
 			     int scl_pin)
@@ -575,7 +575,7 @@ EXPORT_SYMBOL_GPL(legoev3_fiq_release_port);
 
 /**
  * legoev3_fiq_start_xfer- Start an I2C transfer on the specified port.
- * @port_id: The port identifer that was previously requested.
+ * @port_id: The port identifier that was previously requested.
  * @msgs: The message data to transfer.
  * @num_msg: Number of messages in msgs[].
  * @complete: Function to call when transfer is complete.
@@ -766,21 +766,13 @@ EXPORT_SYMBOL_GPL(legoev3_fiq_ehrpwm_ramp);
 
 unsigned legoev3_fiq_ehrpwm_get_playback_ptr(void)
 {
-	unsigned ptr;
-
-	local_fiq_disable();
-	ptr = legoev3_fiq_data->ehrpwm_data.playback_ptr;
-	local_fiq_enable();
-
-	return ptr;
+	return legoev3_fiq_data->ehrpwm_data.playback_ptr;
 }
 EXPORT_SYMBOL_GPL(legoev3_fiq_ehrpwm_get_playback_ptr);
 
 void legoev3_fiq_ehrpwm_set_volume(int volume)
 {
-	local_fiq_disable();
 	legoev3_fiq_data->ehrpwm_data.volume = volume;
-	local_fiq_enable();
 }
 EXPORT_SYMBOL_GPL(legoev3_fiq_ehrpwm_set_volume);
 
