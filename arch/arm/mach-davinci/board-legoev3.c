@@ -610,7 +610,6 @@ static struct legoev3_ports_platform_data legoev3_ports_data = {
 			.pin5_gpio		= EV3_OUT1_PIN5_PIN,
 			.pin5_tacho_gpio	= EV3_OUT1_PIN5_TACHO_PIN,
 			.pin6_gpio		= EV3_OUT1_PIN6_PIN,
-			.pwm_gpio		= EV3_OUT1_PWM,
 			.pwm_dev_name		= "ehrpwm.1:1",
 		},
 		{
@@ -620,7 +619,6 @@ static struct legoev3_ports_platform_data legoev3_ports_data = {
 			.pin5_gpio		= EV3_OUT2_PIN5_PIN,
 			.pin5_tacho_gpio	= EV3_OUT2_PIN5_TACHO_PIN,
 			.pin6_gpio		= EV3_OUT2_PIN6_PIN,
-			.pwm_gpio		= EV3_OUT2_PWM,
 			.pwm_dev_name		= "ehrpwm.1:0",
 		},
 		{
@@ -630,7 +628,6 @@ static struct legoev3_ports_platform_data legoev3_ports_data = {
 			.pin5_gpio		= EV3_OUT3_PIN5_PIN,
 			.pin5_tacho_gpio	= EV3_OUT3_PIN5_TACHO_PIN,
 			.pin6_gpio		= EV3_OUT3_PIN6_PIN,
-			.pwm_gpio		= EV3_OUT3_PWM,
 			.pwm_dev_name		= "ecap.0",
 		},
 		{
@@ -640,7 +637,6 @@ static struct legoev3_ports_platform_data legoev3_ports_data = {
 			.pin5_gpio		= EV3_OUT4_PIN5_PIN,
 			.pin5_tacho_gpio	= EV3_OUT4_PIN5_TACHO_PIN,
 			.pin6_gpio		= EV3_OUT4_PIN6_PIN,
-			.pwm_gpio		= EV3_OUT4_PWM,
 			.pwm_dev_name		= "ecap.1",
 		},
 	},
