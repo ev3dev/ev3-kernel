@@ -862,6 +862,15 @@ static __init void legoev3_init(void)
 				ret);
 
 	/* support for board-level I2C */
+	/*
+	 * There is a gpio connected to the I2C0 data line. We need to set the
+	 * gpio direction to input so that it does not pull the I2C data line
+	 * up or down. Then we free the gpio so that it can be used by the
+	 * bluetooth driver.
+	 */
+	gpio_request_one(EV3_BT_PIC_CTS_PIN, GPIOF_IN, "EV3_BT_PIC_CTS");
+	gpio_free(EV3_BT_PIC_CTS_PIN);
+
 	ret = davinci_cfg_reg_list(legoev3_i2c_board_pins);
 	if (ret)
 		pr_warning("legoev3_init: board i2c mux setup failed: %d\n",
