@@ -19,6 +19,15 @@
 #include <linux/interrupt.h>
 #include <mach/legoev3.h>
 
+enum motor_type {
+	MOTOR_NONE,
+	MOTOR_NEWTACHO,
+	MOTOR_MINITACHO,
+	MOTOR_TACHO,
+ 	MOTOR_ERR,
+	NUM_MOTOR
+};
+
 struct ev3_output_port_platform_data {
 	enum ev3_output_port_id id;
 	unsigned pin1_gpio;
@@ -37,6 +46,7 @@ struct ev3_motor_platform_data {
 	unsigned motor_dir1_gpio;
 	unsigned tacho_int_gpio;
         unsigned tacho_dir_gpio;
+ 	enum motor_type motor_type;
 };
 
 /* resistor ids for EV3 output devices */

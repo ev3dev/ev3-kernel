@@ -18,43 +18,57 @@
 
 #include <linux/device.h>
 
-enum
-{
-  FORWARD,
-  BACKWARD,
-  BRAKE,
-  COAST,
+enum tacho_motor_stop_mode {
+	STOP_COAST,
+	STOP_BRAKE,
+	NUM_STOP_MODES,
+};
+
+enum tacho_motor_regulation_mode {
+	REGULATION_OFF,
+	REGULATION_ON,
+	NUM_REGULATION_MODES,
+};
+
+enum tacho_motor_ramp_mode {
+	RAMP_OFF,
+	RAMP_TIME,
+	RAMP_TACHO,
+	NUM_RAMP_MODES,
+};
+
+enum tacho_motor_tacho_mode {
+	TACHO_ABSOLUTE,
+	TACHO_RELATIVE,
+	NUM_TACHO_MODES,
+};
+
+enum tacho_motor_polarity_mode {
+	POLARITY_POSITIVE,
+	POLARITY_NEGATIVE,
+	NUM_POLARITY_MODES,
+};
+
+enum tacho_motor_tacho_type {
+	TACHO_TYPE_TACHO,
+	TACHO_TYPE_MINITACHO,
+	NUM_TACHO_TYPES,
 };
 
 enum
 {
   UNLIMITED_UNREG,
   UNLIMITED_REG,
+  SETUP_RAMP_TIME,
+  SETUP_RAMP_ABSOLUTE_TACHO,
+  SETUP_RAMP_RELATIVE_TACHO,
+  SETUP_RAMP_REGULATION,
   RAMP_UP,
   RAMP_CONST,
   RAMP_DOWN,
-  LIMITED_REG_STEPUP,
-  LIMITED_REG_STEPCONST,
-  LIMITED_REG_STEPDOWN,
-  LIMITED_UNREG_STEPUP,
-  LIMITED_UNREG_STEPCONST,
-  LIMITED_UNREG_STEPDOWN,
-  LIMITED_REG_TIMEUP,
-  LIMITED_REG_TIMECONST,
-  LIMITED_REG_TIMEDOWN,
-  LIMITED_UNREG_TIMEUP,
-  LIMITED_UNREG_TIMECONST,
-  LIMITED_UNREG_TIMEDOWN,
-  LIMITED_STEP_SYNC,
-  LIMITED_TURN_SYNC,
-  LIMITED_DIFF_TURN_SYNC,
-  SYNCED_SLAVE,
-  RAMP_DOWN_SYNC,
-  HOLD,
-  BRAKED,
   STOP_MOTOR,
   IDLE,
-  NUM_TACHO_MOTOR_MODES,
+  NUM_TACHO_MOTOR_STATES,
 };
 
 struct tacho_motor_device {
@@ -66,14 +80,29 @@ struct tacho_motor_device {
 	int (*get_power    )(struct tacho_motor_device *);
 	int (*get_state    )(struct tacho_motor_device *);
 
+	int  (*get_stop_mode       )(struct tacho_motor_device *);
+	void (*set_stop_mode       )(struct tacho_motor_device *, long stop_mode);
+
+	int  (*get_regulation_mode )(struct tacho_motor_device *);
+	void (*set_regulation_mode )(struct tacho_motor_device *, long regulation_mode);
+
+	int  (*get_tacho_mode      )(struct tacho_motor_device *);
+	void (*set_tacho_mode      )(struct tacho_motor_device *, long tacho_mode);
+
+	int  (*get_ramp_mode       )(struct tacho_motor_device *);
+	void (*set_ramp_mode       )(struct tacho_motor_device *, long ramp_mode);
+
+	int  (*get_tacho_type      )(struct tacho_motor_device *);
+	void (*set_tacho_type      )(struct tacho_motor_device *, long tacho_type);
+
+
+
+
 	int  (*get_target_power    )(struct tacho_motor_device *);
 	void (*set_target_power    )(struct tacho_motor_device *, long target_power);
 
 	int  (*get_target_tacho    )(struct tacho_motor_device *);
 	void (*set_target_tacho    )(struct tacho_motor_device *, long target_tacho);
-
-	int  (*get_target_step     )(struct tacho_motor_device *);
-	void (*set_target_step     )(struct tacho_motor_device *, long target_step);
 
 	int  (*get_target_speed    )(struct tacho_motor_device *);
 	void (*set_target_speed    )(struct tacho_motor_device *, long target_speed);
@@ -84,11 +113,20 @@ struct tacho_motor_device {
 	int  (*get_target_time     )(struct tacho_motor_device *);
 	void (*set_target_time     )(struct tacho_motor_device *, long target_time);
 
-	int  (*get_target_ramp_up_time  )(struct tacho_motor_device *);
-	void (*set_target_ramp_up_time  )(struct tacho_motor_device *, long target_ramp_up_time);
+	int  (*get_target_ramp_up_count  )(struct tacho_motor_device *);
+	void (*set_target_ramp_up_count  )(struct tacho_motor_device *, long target_ramp_up_count);
 
-	int  (*get_target_ramp_down_time)(struct tacho_motor_device *);
-	void (*set_target_ramp_down_time)(struct tacho_motor_device *, long target_ramp_down_time);
+	int  (*get_target_total_count    )(struct tacho_motor_device *);
+	void (*set_target_total_count    )(struct tacho_motor_device *, long target_total_count);
+
+	int  (*get_target_ramp_down_count)(struct tacho_motor_device *);
+	void (*set_target_ramp_down_count)(struct tacho_motor_device *, long target_ramp_down_count);
+
+	int  (*get_mode     )(struct tacho_motor_device *);
+	void (*set_mode     )(struct tacho_motor_device *, long mode);
+
+	int  (*get_run     )(struct tacho_motor_device *);
+	void (*set_run     )(struct tacho_motor_device *, long run);
 
 	/* private */
 	struct device dev;
