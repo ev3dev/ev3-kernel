@@ -45,6 +45,7 @@
 #include <mach/nand.h>
 #include <mach/mux.h>
 #include <mach/spi.h>
+#include <mach/time.h>
 #include <mach/usb.h>
 
 #include <video/st7586fb.h>
@@ -563,10 +564,10 @@ static const short legoev3_in_out_pins[] __initconst = {
 	EV3_IN2_UART_TXD, EV3_IN2_UART_RXD,
 	EV3_IN3_PIN1, EV3_IN3_PIN2, EV3_IN3_PIN5, EV3_IN3_PIN6, EV3_IN3_BUF_ENA,
 	EV3_IN4_PIN1, EV3_IN4_PIN2, EV3_IN4_PIN5, EV3_IN4_PIN6, EV3_IN4_BUF_ENA,
-	EV3_OUT1_PIN1, EV3_OUT1_PIN2, EV3_OUT1_PIN5, EV3_OUT1_PIN6,
-	EV3_OUT2_PIN1, EV3_OUT2_PIN2, EV3_OUT2_PIN5, EV3_OUT2_PIN6,
-	EV3_OUT3_PIN1, EV3_OUT3_PIN2, EV3_OUT3_PIN5, EV3_OUT3_PIN6,
-	EV3_OUT4_PIN1, EV3_OUT4_PIN2, EV3_OUT4_PIN5, EV3_OUT4_PIN6,
+	EV3_OUT1_PIN1, EV3_OUT1_PIN2, EV3_OUT1_PIN5, EV3_OUT1_PIN5_INT, EV3_OUT1_PIN6_DIR,
+	EV3_OUT2_PIN1, EV3_OUT2_PIN2, EV3_OUT2_PIN5, EV3_OUT2_PIN5_INT, EV3_OUT2_PIN6_DIR,
+	EV3_OUT3_PIN1, EV3_OUT3_PIN2, EV3_OUT3_PIN5, EV3_OUT3_PIN5_INT, EV3_OUT3_PIN6_DIR,
+	EV3_OUT4_PIN1, EV3_OUT4_PIN2, EV3_OUT4_PIN5, EV3_OUT4_PIN5_INT, EV3_OUT4_PIN6_DIR,
 	EV3_OUT1_PWM, EV3_OUT2_PWM, EV3_OUT3_PWM, EV3_OUT4_PWM, EV3_FIQ_STAT,
 	-1
 };
@@ -628,32 +629,40 @@ static struct legoev3_ports_platform_data legoev3_ports_data = {
 			.pin1_gpio		= EV3_OUT1_PIN1_PIN,
 			.pin2_gpio		= EV3_OUT1_PIN2_PIN,
 			.pin5_gpio		= EV3_OUT1_PIN5_PIN,
-			.pin6_gpio		= EV3_OUT1_PIN6_PIN,
-			.pwm_dev_name		= "ehrpwm1.1",
+			.pin5_int_gpio		= EV3_OUT1_PIN5_INT_PIN,
+			.pin6_dir_gpio		= EV3_OUT1_PIN6_DIR_PIN,
+			.pwm_gpio		= EV3_OUT1_PWM,
+			.pwm_dev_name		= "ehrpwm.1:1",
 		},
 		{
 			.id			= EV3_PORT_OUT2,
 			.pin1_gpio		= EV3_OUT2_PIN1_PIN,
 			.pin2_gpio		= EV3_OUT2_PIN2_PIN,
 			.pin5_gpio		= EV3_OUT2_PIN5_PIN,
-			.pin6_gpio		= EV3_OUT2_PIN6_PIN,
-			.pwm_dev_name		= "ehrpwm1.0",
+			.pin5_int_gpio		= EV3_OUT2_PIN5_INT_PIN,
+			.pin6_dir_gpio		= EV3_OUT2_PIN6_DIR_PIN,
+			.pwm_gpio		= EV3_OUT2_PWM,
+			.pwm_dev_name		= "ehrpwm.1:0",
 		},
 		{
 			.id			= EV3_PORT_OUT3,
 			.pin1_gpio		= EV3_OUT3_PIN1_PIN,
 			.pin2_gpio		= EV3_OUT3_PIN2_PIN,
 			.pin5_gpio		= EV3_OUT3_PIN5_PIN,
-			.pin6_gpio		= EV3_OUT3_PIN6_PIN,
-			.pwm_dev_name		= "ecap1",
+			.pin5_int_gpio		= EV3_OUT3_PIN5_INT_PIN,
+			.pin6_dir_gpio		= EV3_OUT3_PIN6_DIR_PIN,
+			.pwm_gpio		= EV3_OUT3_PWM,
+			.pwm_dev_name		= "ecap.0",
 		},
 		{
 			.id			= EV3_PORT_OUT4,
 			.pin1_gpio		= EV3_OUT4_PIN1_PIN,
 			.pin2_gpio		= EV3_OUT4_PIN2_PIN,
 			.pin5_gpio		= EV3_OUT4_PIN5_PIN,
-			.pin6_gpio		= EV3_OUT4_PIN6_PIN,
-			.pwm_dev_name		= "ecap0",
+			.pin5_int_gpio		= EV3_OUT4_PIN5_INT_PIN,
+			.pin6_dir_gpio		= EV3_OUT4_PIN6_DIR_PIN,
+			.pwm_gpio		= EV3_OUT4_PWM,
+			.pwm_dev_name		= "ecap.1",
 		},
 	},
 };
@@ -923,12 +932,16 @@ static __init void legoev3_init(void)
 	if (ret)
 		pr_warning("legoev3_init: "
 			"input port pin mux failed: %d\n", ret);
+
 #if defined(CONFIG_LEGOEV3_DEV_PORTS) || defined(CONFIG_LEGOEV3_DEV_PORTS_MODULE)
 	ret = platform_device_register(&legoev3_ports_device);
 	if (ret)
 		pr_warning("legoev3_init: "
 			"input/output port registration failed: %d\n", ret);
+
+	legoev3_hires_timer_init();
 #endif
+
 #if defined(CONFIG_LEGOEV3_FIQ)
 	ret = platform_device_register(&legoev3_in_port_i2c_fiq);
 	if (ret)
@@ -941,6 +954,7 @@ static __init void legoev3_init(void)
 	if (ret)
 		pr_warning("legoev3_init: "
 			"sound mux setup failed: %d\n", ret);
+
 #if defined(CONFIG_SND_LEGOEV3) || defined(CONFIG_SND_LEGOEV3_MODULE)
 	/*
 	 * TODO:
@@ -1021,6 +1035,21 @@ static __init void legoev3_init(void)
 
 	/* UART support - used by input ports and bluetooth */
 	davinci_serial_init(&legoev3_uart_config);
+
+	/* ecap and hrpwm for output port support */
+	ret = da850_register_ecap(0);
+	if (ret)
+		pr_warning("legoev3_init: registering ecap0 failed:"
+			   " %d\n", ret);
+	ret = da850_register_ecap(1);
+	if (ret)
+		pr_warning("legoev3_init: registering ecap1 failed:"
+			   " %d\n", ret);
+
+#if defined(CONFIG_DAVINCI_EHRPWM) || defined(CONFIG_DAVINCI_EHRPWM_MODULE)
+	ehrpwm_mask = 0xC;
+	da850_register_ehrpwm(ehrpwm_mask);
+#endif
 }
 
 #ifdef CONFIG_SERIAL_8250_CONSOLE

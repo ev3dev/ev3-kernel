@@ -27,7 +27,7 @@
 #define LEGOEV3_PORT_NAME_SIZE 30
 
 struct legoev3_ports_platform_data {
-	struct ev3_input_port_platform_data input_port_data[NUM_EV3_PORT_IN];
+	struct ev3_input_port_platform_data  input_port_data[NUM_EV3_PORT_IN];
 	struct ev3_output_port_platform_data output_port_data[NUM_EV3_PORT_OUT];
 };
 

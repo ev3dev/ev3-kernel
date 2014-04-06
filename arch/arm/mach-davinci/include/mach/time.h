@@ -32,4 +32,9 @@ enum {
 
 extern struct davinci_timer_instance davinci_timer_instance[];
 
+#if defined(CONFIG_LEGOEV3_DEV_PORTS) || defined(CONFIG_LEGOEV3_DEV_PORTS_MODULE)
+extern void legoev3_hires_timer_init(void);
+extern unsigned long legoev3_hires_timer_read(void);
+#endif
+
 #endif /* __ARCH_ARM_MACH_DAVINCI_TIME_H */
