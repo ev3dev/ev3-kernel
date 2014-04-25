@@ -549,6 +549,7 @@ int legoev3_fiq_request_port(enum ev3_input_port_id port_id, int sda_pin,
 	}
 
 	data->transfer_state = TRANSFER_IDLE;
+	data->clock_state = 1;
 	legoev3_fiq_data->port_req_flags |= BIT(port_id);
 
 	return 0;
