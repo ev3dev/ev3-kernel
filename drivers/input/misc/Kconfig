@@ -22,6 +22,16 @@ config INPUT_88PM860X_ONKEY
 	  To compile this driver as a module, choose M here: the module
 	  will be called 88pm860x_onkey.
 
+config INPUT_88PM80X_ONKEY
+	tristate "88PM80x ONKEY support"
+	depends on MFD_88PM800
+	help
+	  Support the ONKEY of Marvell 88PM80x PMICs as an input device
+	  reporting power button status.
+
+	  To compile this driver as a module, choose M here: the module
+	  will be called 88pm80x_onkey.
+
 config INPUT_AB8500_PONKEY
 	tristate "AB8500 Pon (PowerOn) Key"
 	depends on AB8500_CORE
@@ -61,6 +71,16 @@ config INPUT_AD714X_SPI
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called ad714x-spi.
+
+config INPUT_ARIZONA_HAPTICS
+	tristate "Arizona haptics support"
+	depends on MFD_ARIZONA && SND_SOC
+	select INPUT_FF_MEMLESS
+	help
+	  Say Y to enable support for the haptics module in Arizona CODECs.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called arizona-haptics.
 
 config INPUT_BMA150
 	tristate "BMA150/SMB380 acceleration sensor support"
@@ -134,9 +154,21 @@ config INPUT_MAX8925_ONKEY
 	  To compile this driver as a module, choose M here: the module
 	  will be called max8925_onkey.
 
+config INPUT_MAX8997_HAPTIC
+	tristate "MAXIM MAX8997 haptic controller support"
+	depends on PWM && HAVE_PWM && MFD_MAX8997
+	select INPUT_FF_MEMLESS
+	help
+	  This option enables device driver support for the haptic controller
+	  on MAXIM MAX8997 chip. This driver supports ff-memless interface
+	  from input framework.
+
+	  To compile this driver as module, choose M here: the
+	  module will be called max8997-haptic.
+
 config INPUT_MC13783_PWRBUTTON
 	tristate "MC13783 ON buttons"
-	depends on MFD_MC13783
+	depends on MFD_MC13XXX
 	help
 	  Support the ON buttons of MC13783 PMIC as an input device
 	  reporting power button status.
@@ -182,7 +214,7 @@ config INPUT_APANEL
 config INPUT_GP2A
 	tristate "Sharp GP2AP002A00F I2C Proximity/Opto sensor driver"
 	depends on I2C
-	depends on GENERIC_GPIO
+	depends on GPIOLIB
 	help
 	  Say Y here if you have a Sharp GP2AP002A00F proximity/als combo-chip
 	  hooked to an I2C bus.
@@ -190,9 +222,18 @@ config INPUT_GP2A
 	  To compile this driver as a module, choose M here: the
 	  module will be called gp2ap002a00f.
 
+config INPUT_GPIO_BEEPER
+	tristate "Generic GPIO Beeper support"
+	depends on OF_GPIO
+	help
+	  Say Y here if you have a beeper connected to a GPIO pin.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called gpio-beeper.
+
 config INPUT_GPIO_TILT_POLLED
 	tristate "Polled GPIO tilt switch"
-	depends on GENERIC_GPIO
+	depends on GPIOLIB
 	select INPUT_POLLDEV
 	help
 	  This driver implements support for tilt switches connected
@@ -268,8 +309,7 @@ config INPUT_ATI_REMOTE2
 	  called ati_remote2.
 
 config INPUT_KEYSPAN_REMOTE
-	tristate "Keyspan DMR USB remote control (EXPERIMENTAL)"
-	depends on EXPERIMENTAL
+	tristate "Keyspan DMR USB remote control"
 	depends on USB_ARCH_HAS_HCD
 	select USB
 	help
@@ -318,7 +358,6 @@ config INPUT_POWERMATE
 
 config INPUT_YEALINK
 	tristate "Yealink usb-p1k voip phone"
-	depends on EXPERIMENTAL
 	depends on USB_ARCH_HAS_HCD
 	select USB
 	help
@@ -334,7 +373,6 @@ config INPUT_YEALINK
 
 config INPUT_CM109
 	tristate "C-Media CM109 USB I/O Controller"
-	depends on EXPERIMENTAL
 	depends on USB_ARCH_HAS_HCD
 	select USB
 	help
@@ -344,6 +382,16 @@ config INPUT_CM109
 
 	  To compile this driver as a module, choose M here: the module will be
 	  called cm109.
+
+config INPUT_RETU_PWRBUTTON
+	tristate "Retu Power button Driver"
+	depends on MFD_RETU
+	help
+	  Say Y here if you want to enable power key reporting via the
+	  Retu chips found in Nokia Internet Tablets (770, N800, N810).
+
+	  To compile this driver as a module, choose M here. The module will
+	  be called retu-pwrbutton.
 
 config INPUT_TWL4030_PWRBUTTON
 	tristate "TWL4030 Power button Driver"
@@ -368,8 +416,7 @@ config INPUT_TWL4030_VIBRA
 
 config INPUT_TWL6040_VIBRA
 	tristate "Support for TWL6040 Vibrator"
-	depends on TWL4030_CORE
-	select TWL6040_CORE
+	depends on TWL6040_CORE
 	select INPUT_FF_MEMLESS
 	help
 	  This option enables support for TWL6040 Vibrator Driver.
@@ -413,9 +460,9 @@ config INPUT_PCF50633_PMU
 
 config INPUT_PCF8574
 	tristate "PCF8574 Keypad input device"
-	depends on I2C && EXPERIMENTAL
+	depends on I2C
 	help
-	  Say Y here if you want to support a keypad connetced via I2C
+	  Say Y here if you want to support a keypad connected via I2C
 	  with a PCF8574.
 
 	  To compile this driver as a module, choose M here: the
@@ -423,7 +470,7 @@ config INPUT_PCF8574
 
 config INPUT_PWM_BEEPER
 	tristate "PWM beeper support"
-	depends on HAVE_PWM
+	depends on PWM && HAVE_PWM
 	help
 	  Say Y here to get support for PWM based beeper devices.
 
@@ -434,7 +481,7 @@ config INPUT_PWM_BEEPER
 
 config INPUT_GPIO_ROTARY_ENCODER
 	tristate "Rotary encoders connected to GPIO pins"
-	depends on GPIOLIB && GENERIC_GPIO
+	depends on GPIOLIB
 	help
 	  Say Y here to add support for rotary encoders connected to GPIO lines.
 	  Check file:Documentation/input/rotary-encoder.txt for more
@@ -446,7 +493,7 @@ config INPUT_GPIO_ROTARY_ENCODER
 config INPUT_RB532_BUTTON
 	tristate "Mikrotik Routerboard 532 button interface"
 	depends on MIKROTIK_RB532
-	depends on GPIOLIB && GENERIC_GPIO
+	depends on GPIOLIB
 	select INPUT_POLLDEV
 	help
 	  Say Y here if you want support for the S1 button built into
@@ -454,6 +501,26 @@ config INPUT_RB532_BUTTON
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called rb532_button.
+
+config INPUT_DA9052_ONKEY
+	tristate "Dialog DA9052/DA9053 Onkey"
+	depends on PMIC_DA9052
+	help
+	  Support the ONKEY of Dialog DA9052 PMICs as an input device
+	  reporting power button status.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called da9052_onkey.
+
+config INPUT_DA9055_ONKEY
+	tristate "Dialog Semiconductor DA9055 ONKEY"
+	depends on MFD_DA9055
+	help
+	  Support the ONKEY of DA9055 PMICs as an input device
+	  reporting power button status.
+
+	  To compile this driver as a module, choose M here: the module
+	  will be called da9055_onkey.
 
 config INPUT_DM355EVM
 	tristate "TI DaVinci DM355 EVM Keypad and IR Remote"
@@ -541,6 +608,16 @@ config INPUT_ADXL34X_SPI
 	  To compile this driver as a module, choose M here: the
 	  module will be called adxl34x-spi.
 
+config INPUT_IMS_PCU
+	tristate "IMS Passenger Control Unit driver"
+	depends on USB
+	depends on LEDS_CLASS
+	help
+	  Say Y here if you have system with IMS Rave Passenger Control Unit.
+
+	  To compile this driver as a module, choose M here: the module will be
+	  called ims_pcu.
+
 config INPUT_CMA3000
 	tristate "VTI CMA3000 Tri-axis accelerometer"
 	help
@@ -567,7 +644,7 @@ config INPUT_CMA3000_I2C
 
 config INPUT_XEN_KBDDEV_FRONTEND
 	tristate "Xen virtual keyboard and mouse support"
-	depends on XEN_FBDEV_FRONTEND
+	depends on XEN
 	default y
 	select XEN_XENBUS_FRONTEND
 	help
@@ -577,5 +654,25 @@ config INPUT_XEN_KBDDEV_FRONTEND
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called xen-kbdfront.
+
+config INPUT_SIRFSOC_ONKEY
+	bool "CSR SiRFSoC power on/off/suspend key support"
+	depends on ARCH_SIRF && OF
+	default y
+	help
+	  Say Y here if you want to support for the SiRFSoC power on/off/suspend key
+	  in Linux, after you press the onkey, system will suspend.
+
+	  If unsure, say N.
+
+config INPUT_IDEAPAD_SLIDEBAR
+	tristate "IdeaPad Laptop Slidebar"
+	depends on INPUT
+	depends on SERIO_I8042
+	help
+	  Say Y here if you have an IdeaPad laptop with a slidebar.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called ideapad_slidebar.
 
 endif

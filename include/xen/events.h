@@ -7,6 +7,8 @@
 #include <asm/xen/hypercall.h>
 #include <asm/xen/events.h>
 
+unsigned xen_evtchn_nr_channels(void);
+
 int bind_evtchn_to_irq(unsigned int evtchn);
 int bind_evtchn_to_irqhandler(unsigned int evtchn,
 			      irq_handler_t handler,
@@ -36,6 +38,11 @@ int bind_interdomain_evtchn_to_irqhandler(unsigned int remote_domain,
  * made with bind_evtchn_to_irqhandler()).
  */
 void unbind_from_irqhandler(unsigned int irq, void *dev_id);
+
+#define XEN_IRQ_PRIORITY_MAX     EVTCHN_FIFO_PRIORITY_MAX
+#define XEN_IRQ_PRIORITY_DEFAULT EVTCHN_FIFO_PRIORITY_DEFAULT
+#define XEN_IRQ_PRIORITY_MIN     EVTCHN_FIFO_PRIORITY_MIN
+int xen_set_irq_priority(unsigned irq, unsigned priority);
 
 /*
  * Allow extra references to event channels exposed to userspace by evtchn
@@ -73,9 +80,14 @@ void xen_poll_irq_timeout(int irq, u64 timeout);
 
 /* Determine the IRQ which is bound to an event channel */
 unsigned irq_from_evtchn(unsigned int evtchn);
+int irq_from_virq(unsigned int cpu, unsigned int virq);
+unsigned int evtchn_from_irq(unsigned irq);
 
 /* Xen HVM evtchn vector callback */
 void xen_hvm_callback_vector(void);
+#ifdef CONFIG_TRACING
+#define trace_xen_hvm_callback_vector xen_hvm_callback_vector
+#endif
 extern int xen_have_vector_callback;
 int xen_set_callback_via(uint64_t via);
 void xen_evtchn_do_upcall(struct pt_regs *regs);
@@ -90,8 +102,7 @@ int xen_bind_pirq_gsi_to_irq(unsigned gsi,
 int xen_allocate_pirq_msi(struct pci_dev *dev, struct msi_desc *msidesc);
 /* Bind an PSI pirq to an irq. */
 int xen_bind_pirq_msi_to_irq(struct pci_dev *dev, struct msi_desc *msidesc,
-			     int pirq, int vector, const char *name,
-			     domid_t domid);
+			     int pirq, const char *name, domid_t domid);
 #endif
 
 /* De-allocates the above mentioned physical interrupt. */
@@ -103,7 +114,12 @@ int xen_irq_from_pirq(unsigned pirq);
 /* Return the pirq allocated to the irq. */
 int xen_pirq_from_irq(unsigned irq);
 
+/* Return the irq allocated to the gsi */
+int xen_irq_from_gsi(unsigned gsi);
+
 /* Determine whether to ignore this IRQ if it is passed to a guest. */
 int xen_test_irq_shared(int irq);
 
+/* initialize Xen IRQ subsystem */
+void xen_init_IRQ(void);
 #endif	/* _XEN_EVENTS_H */

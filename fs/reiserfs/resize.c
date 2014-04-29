@@ -13,8 +13,7 @@
 #include <linux/vmalloc.h>
 #include <linux/string.h>
 #include <linux/errno.h>
-#include <linux/reiserfs_fs.h>
-#include <linux/reiserfs_fs_sb.h>
+#include "reiserfs.h"
 #include <linux/buffer_head.h>
 
 int reiserfs_resize(struct super_block *s, unsigned long block_count_new)
@@ -35,6 +34,7 @@ int reiserfs_resize(struct super_block *s, unsigned long block_count_new)
 	unsigned long int block_count, free_blocks;
 	int i;
 	int copy_size;
+	int depth;
 
 	sb = SB_DISK_SUPER_BLOCK(s);
 
@@ -44,7 +44,9 @@ int reiserfs_resize(struct super_block *s, unsigned long block_count_new)
 	}
 
 	/* check the device size */
+	depth = reiserfs_write_unlock_nested(s);
 	bh = sb_bread(s, block_count_new - 1);
+	reiserfs_write_lock_nested(s, depth);
 	if (!bh) {
 		printk("reiserfs_resize: can\'t read last block\n");
 		return -EINVAL;
@@ -126,9 +128,12 @@ int reiserfs_resize(struct super_block *s, unsigned long block_count_new)
 		 * transaction begins, and the new bitmaps don't matter if the
 		 * transaction fails. */
 		for (i = bmap_nr; i < bmap_nr_new; i++) {
+			int depth;
 			/* don't use read_bitmap_block since it will cache
 			 * the uninitialized bitmap */
+			depth = reiserfs_write_unlock_nested(s);
 			bh = sb_bread(s, i * s->s_blocksize * 8);
+			reiserfs_write_lock_nested(s, depth);
 			if (!bh) {
 				vfree(bitmap);
 				return -EIO;
@@ -139,9 +144,9 @@ int reiserfs_resize(struct super_block *s, unsigned long block_count_new)
 
 			set_buffer_uptodate(bh);
 			mark_buffer_dirty(bh);
-			reiserfs_write_unlock(s);
+			depth = reiserfs_write_unlock_nested(s);
 			sync_dirty_buffer(bh);
-			reiserfs_write_lock(s);
+			reiserfs_write_lock_nested(s, depth);
 			// update bitmap_info stuff
 			bitmap[i].free_count = sb_blocksize(sb) * 8 - 1;
 			brelse(bh);
@@ -201,7 +206,6 @@ int reiserfs_resize(struct super_block *s, unsigned long block_count_new)
 					  (bmap_nr_new - bmap_nr)));
 	PUT_SB_BLOCK_COUNT(s, block_count_new);
 	PUT_SB_BMAP_NR(s, bmap_would_wrap(bmap_nr_new) ? : bmap_nr_new);
-	s->s_dirt = 1;
 
 	journal_mark_dirty(&th, s, SB_BUFFER_WITH_SB(s));
 

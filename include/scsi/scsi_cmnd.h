@@ -10,6 +10,7 @@
 
 struct Scsi_Host;
 struct scsi_device;
+struct scsi_driver;
 
 /*
  * MAX_COMMAND_SIZE is:
@@ -54,6 +55,7 @@ struct scsi_cmnd {
 	struct scsi_device *device;
 	struct list_head list;  /* scsi_cmnd participates in queue lists */
 	struct list_head eh_entry; /* entry for the host eh_cmd_q */
+	struct delayed_work abort_work;
 	int eh_eflags;		/* Used by error handlr */
 
 	/*
@@ -130,6 +132,12 @@ struct scsi_cmnd {
 
 	unsigned char tag;	/* SCSI-II queued command tag */
 };
+
+/* make sure not to use it with REQ_TYPE_BLOCK_PC commands */
+static inline struct scsi_driver *scsi_cmd_to_driver(struct scsi_cmnd *cmd)
+{
+	return *(struct scsi_driver **)cmd->request->rq_disk->private_data;
+}
 
 extern struct scsi_cmnd *scsi_get_command(struct scsi_device *, gfp_t);
 extern struct scsi_cmnd *__scsi_get_command(struct Scsi_Host *, gfp_t);
@@ -289,17 +297,17 @@ static inline struct scsi_data_buffer *scsi_prot(struct scsi_cmnd *cmd)
 
 static inline void set_msg_byte(struct scsi_cmnd *cmd, char status)
 {
-	cmd->result |= status << 8;
+	cmd->result = (cmd->result & 0xffff00ff) | (status << 8);
 }
 
 static inline void set_host_byte(struct scsi_cmnd *cmd, char status)
 {
-	cmd->result |= status << 16;
+	cmd->result = (cmd->result & 0xff00ffff) | (status << 16);
 }
 
 static inline void set_driver_byte(struct scsi_cmnd *cmd, char status)
 {
-	cmd->result |= status << 24;
+	cmd->result = (cmd->result & 0x00ffffff) | (status << 24);
 }
 
 #endif /* _SCSI_SCSI_CMND_H */

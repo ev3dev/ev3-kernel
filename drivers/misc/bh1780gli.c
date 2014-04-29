@@ -23,6 +23,7 @@
 #include <linux/platform_device.h>
 #include <linux/delay.h>
 #include <linux/module.h>
+#include <linux/of.h>
 
 #define BH1780_REG_CONTROL	0x80
 #define BH1780_REG_PARTID	0x8A
@@ -107,7 +108,7 @@ static ssize_t bh1780_store_power_state(struct device *dev,
 	unsigned long val;
 	int error;
 
-	error = strict_strtoul(buf, 0, &val);
+	error = kstrtoul(buf, 0, &val);
 	if (error)
 		return error;
 
@@ -144,7 +145,7 @@ static const struct attribute_group bh1780_attr_group = {
 	.attrs = bh1780_attributes,
 };
 
-static int __devinit bh1780_probe(struct i2c_client *client,
+static int bh1780_probe(struct i2c_client *client,
 						const struct i2c_device_id *id)
 {
 	int ret;
@@ -185,7 +186,7 @@ err_op_failed:
 	return ret;
 }
 
-static int __devexit bh1780_remove(struct i2c_client *client)
+static int bh1780_remove(struct i2c_client *client)
 {
 	struct bh1780_data *ddata;
 
@@ -196,7 +197,7 @@ static int __devexit bh1780_remove(struct i2c_client *client)
 	return 0;
 }
 
-#ifdef CONFIG_PM
+#ifdef CONFIG_PM_SLEEP
 static int bh1780_suspend(struct device *dev)
 {
 	struct bh1780_data *ddata;
@@ -235,16 +236,23 @@ static int bh1780_resume(struct device *dev)
 
 	return 0;
 }
+#endif /* CONFIG_PM_SLEEP */
+
 static SIMPLE_DEV_PM_OPS(bh1780_pm, bh1780_suspend, bh1780_resume);
-#define BH1780_PMOPS (&bh1780_pm)
-#else
-#define BH1780_PMOPS NULL
-#endif /* CONFIG_PM */
 
 static const struct i2c_device_id bh1780_id[] = {
 	{ "bh1780", 0 },
 	{ },
 };
+
+#ifdef CONFIG_OF
+static const struct of_device_id of_bh1780_match[] = {
+	{ .compatible = "rohm,bh1780gli", },
+	{},
+};
+
+MODULE_DEVICE_TABLE(of, of_bh1780_match);
+#endif
 
 static struct i2c_driver bh1780_driver = {
 	.probe		= bh1780_probe,
@@ -252,22 +260,12 @@ static struct i2c_driver bh1780_driver = {
 	.id_table	= bh1780_id,
 	.driver = {
 		.name = "bh1780",
-		.pm	= BH1780_PMOPS,
-},
+		.pm	= &bh1780_pm,
+		.of_match_table = of_match_ptr(of_bh1780_match),
+	},
 };
 
-static int __init bh1780_init(void)
-{
-	return i2c_add_driver(&bh1780_driver);
-}
-
-static void __exit bh1780_exit(void)
-{
-	i2c_del_driver(&bh1780_driver);
-}
-
-module_init(bh1780_init)
-module_exit(bh1780_exit)
+module_i2c_driver(bh1780_driver);
 
 MODULE_DESCRIPTION("BH1780GLI Ambient Light Sensor Driver");
 MODULE_LICENSE("GPL");

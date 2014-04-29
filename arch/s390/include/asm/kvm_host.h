@@ -1,7 +1,7 @@
 /*
- * asm-s390/kvm_host.h - definition for kernel virtual machines on s390
+ * definition for kernel virtual machines on s390
  *
- * Copyright IBM Corp. 2008,2009
+ * Copyright IBM Corp. 2008, 2009
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License (version 2 only)
@@ -20,9 +20,7 @@
 #include <asm/cpu.h>
 
 #define KVM_MAX_VCPUS 64
-#define KVM_MEMORY_SLOTS 32
-/* memory slots that does not exposed to userspace */
-#define KVM_PRIVATE_MEM_SLOTS 4
+#define KVM_USER_MEM_SLOTS 32
 
 struct sca_entry {
 	atomic_t scn;
@@ -39,13 +37,6 @@ struct sca_block {
 	__u64	reserved2;
 	struct sca_entry cpu[64];
 } __attribute__((packed));
-
-#define KVM_NR_PAGE_SIZES 2
-#define KVM_HPAGE_GFN_SHIFT(x) (((x) - 1) * 8)
-#define KVM_HPAGE_SHIFT(x) (PAGE_SHIFT + KVM_HPAGE_GFN_SHIFT(x))
-#define KVM_HPAGE_SIZE(x) (1UL << KVM_HPAGE_SHIFT(x))
-#define KVM_HPAGE_MASK(x)	(~(KVM_HPAGE_SIZE(x) - 1))
-#define KVM_PAGES_PER_HPAGE(x)	(KVM_HPAGE_SIZE(x) / PAGE_SIZE)
 
 #define CPUSTAT_STOPPED    0x80000000
 #define CPUSTAT_WAIT       0x10000000
@@ -64,20 +55,30 @@ struct sca_block {
 #define CPUSTAT_MCDS       0x00000100
 #define CPUSTAT_SM         0x00000080
 #define CPUSTAT_G          0x00000008
+#define CPUSTAT_GED        0x00000004
 #define CPUSTAT_J          0x00000002
 #define CPUSTAT_P          0x00000001
 
 struct kvm_s390_sie_block {
 	atomic_t cpuflags;		/* 0x0000 */
 	__u32	prefix;			/* 0x0004 */
-	__u8	reserved8[32];		/* 0x0008 */
+	__u8	reserved08[4];		/* 0x0008 */
+#define PROG_IN_SIE (1<<0)
+	__u32	prog0c;			/* 0x000c */
+	__u8	reserved10[16];		/* 0x0010 */
+#define PROG_BLOCK_SIE 0x00000001
+	atomic_t prog20;		/* 0x0020 */
+	__u8	reserved24[4];		/* 0x0024 */
 	__u64	cputm;			/* 0x0028 */
 	__u64	ckc;			/* 0x0030 */
 	__u64	epoch;			/* 0x0038 */
 	__u8	reserved40[4];		/* 0x0040 */
 #define LCTL_CR0	0x8000
+#define LCTL_CR6	0x0200
+#define LCTL_CR14	0x0002
 	__u16   lctl;			/* 0x0044 */
 	__s16	icpua;			/* 0x0046 */
+#define ICTL_LPSW 0x00400000
 	__u32	ictl;			/* 0x0048 */
 	__u32	eca;			/* 0x004c */
 	__u8	icptcode;		/* 0x0050 */
@@ -89,7 +90,8 @@ struct kvm_s390_sie_block {
 	__u32	scaoh;			/* 0x005c */
 	__u8	reserved60;		/* 0x0060 */
 	__u8	ecb;			/* 0x0061 */
-	__u8	reserved62[2];		/* 0x0062 */
+	__u8    ecb2;                   /* 0x0062 */
+	__u8    reserved63[1];          /* 0x0063 */
 	__u32	scaol;			/* 0x0064 */
 	__u8	reserved68[4];		/* 0x0068 */
 	__u32	todpr;			/* 0x006c */
@@ -104,8 +106,21 @@ struct kvm_s390_sie_block {
 	__u64	gbea;			/* 0x0180 */
 	__u8	reserved188[24];	/* 0x0188 */
 	__u32	fac;			/* 0x01a0 */
-	__u8	reserved1a4[92];	/* 0x01a4 */
+	__u8	reserved1a4[68];	/* 0x01a4 */
+	__u64	itdba;			/* 0x01e8 */
+	__u8	reserved1f0[16];	/* 0x01f0 */
 } __attribute__((packed));
+
+struct kvm_s390_itdb {
+	__u8	data[256];
+} __packed;
+
+struct sie_page {
+	struct kvm_s390_sie_block sie_block;
+	__u8 reserved200[1024];		/* 0x0200 */
+	struct kvm_s390_itdb itdb;	/* 0x0600 */
+	__u8 reserved700[2304];		/* 0x0700 */
+} __packed;
 
 struct kvm_vcpu_stat {
 	u32 exit_userspace;
@@ -127,7 +142,9 @@ struct kvm_vcpu_stat {
 	u32 deliver_prefix_signal;
 	u32 deliver_restart_signal;
 	u32 deliver_program_int;
+	u32 deliver_io_int;
 	u32 exit_wait_state;
+	u32 instruction_pfmf;
 	u32 instruction_stidp;
 	u32 instruction_spx;
 	u32 instruction_stpx;
@@ -148,6 +165,7 @@ struct kvm_vcpu_stat {
 	u32 instruction_sigp_restart;
 	u32 diagnose_10;
 	u32 diagnose_44;
+	u32 diagnose_9c;
 };
 
 struct kvm_s390_io_info {
@@ -163,7 +181,7 @@ struct kvm_s390_ext_info {
 };
 
 #define PGM_OPERATION            0x01
-#define PGM_PRIVILEGED_OPERATION 0x02
+#define PGM_PRIVILEGED_OP	 0x02
 #define PGM_EXECUTE              0x03
 #define PGM_PROTECTION           0x04
 #define PGM_ADDRESSING           0x05
@@ -186,6 +204,11 @@ struct kvm_s390_emerg_info {
 	__u16 code;
 };
 
+struct kvm_s390_mchk_info {
+	__u64 cr14;
+	__u64 mcic;
+};
+
 struct kvm_s390_interrupt_info {
 	struct list_head list;
 	u64	type;
@@ -196,13 +219,13 @@ struct kvm_s390_interrupt_info {
 		struct kvm_s390_emerg_info emerg;
 		struct kvm_s390_extcall_info extcall;
 		struct kvm_s390_prefix_info prefix;
+		struct kvm_s390_mchk_info mchk;
 	};
 };
 
 /* for local_interrupt.action_flags */
 #define ACTION_STORE_ON_STOP		(1<<0)
 #define ACTION_STOP_ON_STOP		(1<<1)
-#define ACTION_RELOADVCPU_ON_STOP	(1<<2)
 
 struct kvm_s390_local_interrupt {
 	spinlock_t lock;
@@ -210,7 +233,7 @@ struct kvm_s390_local_interrupt {
 	atomic_t active;
 	struct kvm_s390_float_interrupt *float_int;
 	int timer_due; /* event indicator for waitqueue below */
-	wait_queue_head_t wq;
+	wait_queue_head_t *wq;
 	atomic_t *cpuflags;
 	unsigned int action_bits;
 };
@@ -220,18 +243,17 @@ struct kvm_s390_float_interrupt {
 	struct list_head list;
 	atomic_t active;
 	int next_rr_cpu;
-	unsigned long idle_mask [(64 + sizeof(long) - 1) / sizeof(long)];
-	struct kvm_s390_local_interrupt *local_int[64];
+	unsigned long idle_mask[(KVM_MAX_VCPUS + sizeof(long) - 1)
+				/ sizeof(long)];
+	struct kvm_s390_local_interrupt *local_int[KVM_MAX_VCPUS];
 };
 
 
 struct kvm_vcpu_arch {
 	struct kvm_s390_sie_block *sie_block;
-	unsigned long	  guest_gprs[16];
 	s390_fp_regs      host_fpregs;
 	unsigned int      host_acrs[NUM_ACRS];
 	s390_fp_regs      guest_fpregs;
-	unsigned int      guest_acrs[NUM_ACRS];
 	struct kvm_s390_local_interrupt local_int;
 	struct hrtimer    ckc_timer;
 	struct tasklet_struct tasklet;
@@ -246,12 +268,25 @@ struct kvm_vm_stat {
 	u32 remote_tlb_flush;
 };
 
+struct kvm_arch_memory_slot {
+};
+
 struct kvm_arch{
 	struct sca_block *sca;
 	debug_info_t *dbf;
 	struct kvm_s390_float_interrupt float_int;
 	struct gmap *gmap;
+	int css_support;
 };
 
-extern int sie64a(struct kvm_s390_sie_block *, unsigned long *);
+#define KVM_HVA_ERR_BAD		(-1UL)
+#define KVM_HVA_ERR_RO_BAD	(-2UL)
+
+static inline bool kvm_is_error_hva(unsigned long addr)
+{
+	return IS_ERR_VALUE(addr);
+}
+
+extern int sie64a(struct kvm_s390_sie_block *, u64 *);
+extern char sie_exit;
 #endif

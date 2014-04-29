@@ -28,7 +28,7 @@
 #include <linux/platform_device.h>
 #include <linux/gpio.h>
 #include <linux/leds.h>
-#include <mach/leds-netxbig.h>
+#include <linux/platform_data/leds-kirkwood-netxbig.h>
 
 /*
  * GPIO extension bus.
@@ -71,7 +71,7 @@ static void gpio_ext_set_value(struct netxbig_gpio_ext *gpio_ext,
 	spin_unlock_irqrestore(&gpio_ext_lock, flags);
 }
 
-static int __devinit gpio_ext_init(struct netxbig_gpio_ext *gpio_ext)
+static int gpio_ext_init(struct netxbig_gpio_ext *gpio_ext)
 {
 	int err;
 	int i;
@@ -112,7 +112,7 @@ err_free_addr:
 	return err;
 }
 
-static void __devexit gpio_ext_free(struct netxbig_gpio_ext *gpio_ext)
+static void gpio_ext_free(struct netxbig_gpio_ext *gpio_ext)
 {
 	int i;
 
@@ -243,7 +243,7 @@ static ssize_t netxbig_led_sata_store(struct device *dev,
 	int mode_val;
 	int ret;
 
-	ret = strict_strtoul(buff, 10, &enable);
+	ret = kstrtoul(buff, 10, &enable);
 	if (ret < 0)
 		return ret;
 
@@ -294,19 +294,19 @@ static ssize_t netxbig_led_sata_show(struct device *dev,
 
 static DEVICE_ATTR(sata, 0644, netxbig_led_sata_show, netxbig_led_sata_store);
 
-static void __devexit delete_netxbig_led(struct netxbig_led_data *led_dat)
+static void delete_netxbig_led(struct netxbig_led_data *led_dat)
 {
 	if (led_dat->mode_val[NETXBIG_LED_SATA] != NETXBIG_LED_INVALID_MODE)
 		device_remove_file(led_dat->cdev.dev, &dev_attr_sata);
 	led_classdev_unregister(&led_dat->cdev);
 }
 
-static int __devinit
+static int
 create_netxbig_led(struct platform_device *pdev,
 		   struct netxbig_led_data *led_dat,
 		   const struct netxbig_led *template)
 {
-	struct netxbig_led_platform_data *pdata = pdev->dev.platform_data;
+	struct netxbig_led_platform_data *pdata = dev_get_platdata(&pdev->dev);
 	int ret;
 
 	spin_lock_init(&led_dat->lock);
@@ -352,9 +352,9 @@ create_netxbig_led(struct platform_device *pdev,
 	return ret;
 }
 
-static int __devinit netxbig_led_probe(struct platform_device *pdev)
+static int netxbig_led_probe(struct platform_device *pdev)
 {
-	struct netxbig_led_platform_data *pdata = pdev->dev.platform_data;
+	struct netxbig_led_platform_data *pdata = dev_get_platdata(&pdev->dev);
 	struct netxbig_led_data *leds_data;
 	int i;
 	int ret;
@@ -362,14 +362,14 @@ static int __devinit netxbig_led_probe(struct platform_device *pdev)
 	if (!pdata)
 		return -EINVAL;
 
-	leds_data = kzalloc(sizeof(struct netxbig_led_data) * pdata->num_leds,
-			    GFP_KERNEL);
+	leds_data = devm_kzalloc(&pdev->dev,
+		sizeof(struct netxbig_led_data) * pdata->num_leds, GFP_KERNEL);
 	if (!leds_data)
 		return -ENOMEM;
 
 	ret = gpio_ext_init(pdata->gpio_ext);
 	if (ret < 0)
-		goto err_free_data;
+		return ret;
 
 	for (i = 0; i < pdata->num_leds; i++) {
 		ret = create_netxbig_led(pdev, &leds_data[i], &pdata->leds[i]);
@@ -386,15 +386,12 @@ err_free_leds:
 		delete_netxbig_led(&leds_data[i]);
 
 	gpio_ext_free(pdata->gpio_ext);
-err_free_data:
-	kfree(leds_data);
-
 	return ret;
 }
 
-static int __devexit netxbig_led_remove(struct platform_device *pdev)
+static int netxbig_led_remove(struct platform_device *pdev)
 {
-	struct netxbig_led_platform_data *pdata = pdev->dev.platform_data;
+	struct netxbig_led_platform_data *pdata = dev_get_platdata(&pdev->dev);
 	struct netxbig_led_data *leds_data;
 	int i;
 
@@ -404,14 +401,13 @@ static int __devexit netxbig_led_remove(struct platform_device *pdev)
 		delete_netxbig_led(&leds_data[i]);
 
 	gpio_ext_free(pdata->gpio_ext);
-	kfree(leds_data);
 
 	return 0;
 }
 
 static struct platform_driver netxbig_led_driver = {
 	.probe		= netxbig_led_probe,
-	.remove		= __devexit_p(netxbig_led_remove),
+	.remove		= netxbig_led_remove,
 	.driver		= {
 		.name	= "leds-netxbig",
 		.owner	= THIS_MODULE,

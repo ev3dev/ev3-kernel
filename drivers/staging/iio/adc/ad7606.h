@@ -42,7 +42,7 @@ struct ad7606_platform_data {
 
 /**
  * struct ad7606_chip_info - chip specifc information
- * @name:		indentification string for chip
+ * @name:		identification string for chip
  * @int_vref_mv:	the internal reference voltage
  * @channels:		channel specification
  * @num_channels:	number of channels
@@ -51,7 +51,7 @@ struct ad7606_platform_data {
 struct ad7606_chip_info {
 	const char			*name;
 	u16				int_vref_mv;
-	struct iio_chan_spec		*channels;
+	const struct iio_chan_spec	*channels;
 	unsigned			num_channels;
 };
 

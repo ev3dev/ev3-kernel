@@ -13,7 +13,6 @@
 
 #include <linux/module.h>
 #include <linux/kernel.h>
-#include <linux/init.h>
 #include <linux/delay.h>
 #include <linux/platform_device.h>
 #include <linux/input.h>
@@ -297,9 +296,9 @@ static void da9034_touch_close(struct input_dev *dev)
 }
 
 
-static int __devinit da9034_touch_probe(struct platform_device *pdev)
+static int da9034_touch_probe(struct platform_device *pdev)
 {
-	struct da9034_touch_pdata *pdata = pdev->dev.platform_data;
+	struct da9034_touch_pdata *pdata = dev_get_platdata(&pdev->dev);
 	struct da9034_touch *touch;
 	struct input_dev *input_dev;
 	int ret;
@@ -361,7 +360,7 @@ err_free_touch:
 	return ret;
 }
 
-static int __devexit da9034_touch_remove(struct platform_device *pdev)
+static int da9034_touch_remove(struct platform_device *pdev)
 {
 	struct da9034_touch *touch = platform_get_drvdata(pdev);
 
@@ -377,7 +376,7 @@ static struct platform_driver da9034_touch_driver = {
 		.owner	= THIS_MODULE,
 	},
 	.probe		= da9034_touch_probe,
-	.remove		= __devexit_p(da9034_touch_remove),
+	.remove		= da9034_touch_remove,
 };
 module_platform_driver(da9034_touch_driver);
 

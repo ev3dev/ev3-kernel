@@ -1,6 +1,7 @@
 /*
  *  Copyright (C) 2004 Florian Schirmer <jolt@tuxbox.org>
  *  Copyright (C) 2007 Aurelien Jarno <aurelien@aurel32.net>
+ *  Copyright (C) 2010-2012 Hauke Mehrtens <hauke@hauke-m.de>
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -27,106 +28,35 @@
 #include <linux/types.h>
 #include <linux/kernel.h>
 #include <linux/spinlock.h>
+#include <linux/ssb/ssb_driver_chipcommon.h>
+#include <linux/ssb/ssb_regs.h>
+#include <linux/smp.h>
 #include <asm/bootinfo.h>
-#include <asm/fw/cfe/cfe_api.h>
-#include <asm/fw/cfe/cfe_error.h>
+#include <bcm47xx.h>
+#include <bcm47xx_board.h>
 
-static int cfe_cons_handle;
+
+static char bcm47xx_system_type[20] = "Broadcom BCM47XX";
 
 const char *get_system_type(void)
 {
-	return "Broadcom BCM47XX";
+	return bcm47xx_system_type;
 }
 
-void prom_putchar(char c)
+__init void bcm47xx_set_system_type(u16 chip_id)
 {
-	while (cfe_write(cfe_cons_handle, &c, 1) == 0)
-		;
-}
-
-static __init void prom_init_cfe(void)
-{
-	uint32_t cfe_ept;
-	uint32_t cfe_handle;
-	uint32_t cfe_eptseal;
-	int argc = fw_arg0;
-	char **envp = (char **) fw_arg2;
-	int *prom_vec = (int *) fw_arg3;
-
-	/*
-	 * Check if a loader was used; if NOT, the 4 arguments are
-	 * what CFE gives us (handle, 0, EPT and EPTSEAL)
-	 */
-	if (argc < 0) {
-		cfe_handle = (uint32_t)argc;
-		cfe_ept = (uint32_t)envp;
-		cfe_eptseal = (uint32_t)prom_vec;
-	} else {
-		if ((int)prom_vec < 0) {
-			/*
-			 * Old loader; all it gives us is the handle,
-			 * so use the "known" entrypoint and assume
-			 * the seal.
-			 */
-			cfe_handle = (uint32_t)prom_vec;
-			cfe_ept = 0xBFC00500;
-			cfe_eptseal = CFE_EPTSEAL;
-		} else {
-			/*
-			 * Newer loaders bundle the handle/ept/eptseal
-			 * Note: prom_vec is in the loader's useg
-			 * which is still alive in the TLB.
-			 */
-			cfe_handle = prom_vec[0];
-			cfe_ept = prom_vec[2];
-			cfe_eptseal = prom_vec[3];
-		}
-	}
-
-	if (cfe_eptseal != CFE_EPTSEAL) {
-		/* too early for panic to do any good */
-		printk(KERN_ERR "CFE's entrypoint seal doesn't match.");
-		while (1) ;
-	}
-
-	cfe_init(cfe_handle, cfe_ept);
-}
-
-static __init void prom_init_console(void)
-{
-	/* Initialize CFE console */
-	cfe_cons_handle = cfe_getstdhandle(CFE_STDHANDLE_CONSOLE);
-}
-
-static __init void prom_init_cmdline(void)
-{
-	static char buf[COMMAND_LINE_SIZE] __initdata;
-
-	/* Get the kernel command line from CFE */
-	if (cfe_getenv("LINUX_CMDLINE", buf, COMMAND_LINE_SIZE) >= 0) {
-		buf[COMMAND_LINE_SIZE - 1] = 0;
-		strcpy(arcs_cmdline, buf);
-	}
-
-	/* Force a console handover by adding a console= argument if needed,
-	 * as CFE is not available anymore later in the boot process. */
-	if ((strstr(arcs_cmdline, "console=")) == NULL) {
-		/* Try to read the default serial port used by CFE */
-		if ((cfe_getenv("BOOT_CONSOLE", buf, COMMAND_LINE_SIZE) < 0)
-		    || (strncmp("uart", buf, 4)))
-			/* Default to uart0 */
-			strcpy(buf, "uart0");
-
-		/* Compute the new command line */
-		snprintf(arcs_cmdline, COMMAND_LINE_SIZE, "%s console=ttyS%c,115200",
-			 arcs_cmdline, buf[4]);
-	}
+	snprintf(bcm47xx_system_type, sizeof(bcm47xx_system_type),
+		 (chip_id > 0x9999) ? "Broadcom BCM%d" :
+				      "Broadcom BCM%04X",
+		 chip_id);
 }
 
 static __init void prom_init_mem(void)
 {
 	unsigned long mem;
 	unsigned long max;
+	unsigned long off;
+	struct cpuinfo_mips *c = &current_cpu_data;
 
 	/* Figure out memory size by finding aliases.
 	 *
@@ -143,27 +73,39 @@ static __init void prom_init_mem(void)
 	 * max contains the biggest possible address supported by the platform.
 	 * If the method wants to try something above we assume 128MB ram.
 	 */
-	max = ((unsigned long)(prom_init) | ((128 << 20) - 1));
+	off = (unsigned long)prom_init;
+	max = off | ((128 << 20) - 1);
 	for (mem = (1 << 20); mem < (128 << 20); mem += (1 << 20)) {
-		if (((unsigned long)(prom_init) + mem) > max) {
+		if ((off + mem) > max) {
 			mem = (128 << 20);
 			printk(KERN_DEBUG "assume 128MB RAM\n");
 			break;
 		}
-		if (*(unsigned long *)((unsigned long)(prom_init) + mem) ==
-		    *(unsigned long *)(prom_init))
+		if (!memcmp(prom_init, prom_init + mem, 32))
 			break;
 	}
+
+	/* Ignoring the last page when ddr size is 128M. Cached
+	 * accesses to last page is causing the processor to prefetch
+	 * using address above 128M stepping out of the ddr address
+	 * space.
+	 */
+	if (c->cputype == CPU_74K && (mem == (128  << 20)))
+		mem -= 0x1000;
 
 	add_memory_region(0, mem, BOOT_MEM_RAM);
 }
 
+/*
+ * This is the first serial on the chip common core, it is at this position
+ * for sb (ssb) and ai (bcma) bus.
+ */
+#define BCM47XX_SERIAL_ADDR (SSB_ENUM_BASE + SSB_CHIPCO_UART0_DATA)
+
 void __init prom_init(void)
 {
-	prom_init_cfe();
-	prom_init_console();
-	prom_init_cmdline();
 	prom_init_mem();
+	setup_8250_early_printk_port(CKSEG1ADDR(BCM47XX_SERIAL_ADDR), 0, 0);
 }
 
 void __init prom_free_prom_memory(void)

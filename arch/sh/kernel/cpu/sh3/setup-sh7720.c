@@ -19,6 +19,8 @@
 #include <linux/io.h>
 #include <linux/serial_sci.h>
 #include <linux/sh_timer.h>
+#include <linux/sh_intc.h>
+#include <linux/usb/ohci_pdriver.h>
 #include <asm/rtc.h>
 #include <cpu/serial.h>
 
@@ -30,7 +32,7 @@ static struct resource rtc_resources[] = {
 	},
 	[1] = {
 		/* Shared Period/Carry/Alarm IRQ */
-		.start	= 20,
+		.start	= evt2irq(0x480),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -50,38 +52,46 @@ static struct platform_device rtc_device = {
 };
 
 static struct plat_sci_port scif0_platform_data = {
-	.mapbase	= 0xa4430000,
 	.flags		= UPF_BOOT_AUTOCONF,
 	.scscr		= SCSCR_RE | SCSCR_TE,
-	.scbrr_algo_id	= SCBRR_ALGO_4,
 	.type		= PORT_SCIF,
-	.irqs		= { 80, 80, 80, 80 },
 	.ops		= &sh7720_sci_port_ops,
 	.regtype	= SCIx_SH7705_SCIF_REGTYPE,
+};
+
+static struct resource scif0_resources[] = {
+	DEFINE_RES_MEM(0xa4430000, 0x100),
+	DEFINE_RES_IRQ(evt2irq(0xc00)),
 };
 
 static struct platform_device scif0_device = {
 	.name		= "sh-sci",
 	.id		= 0,
+	.resource	= scif0_resources,
+	.num_resources	= ARRAY_SIZE(scif0_resources),
 	.dev		= {
 		.platform_data	= &scif0_platform_data,
 	},
 };
 
 static struct plat_sci_port scif1_platform_data = {
-	.mapbase	= 0xa4438000,
 	.flags		= UPF_BOOT_AUTOCONF,
 	.scscr		= SCSCR_RE | SCSCR_TE,
-	.scbrr_algo_id	= SCBRR_ALGO_4,
 	.type		= PORT_SCIF,
-	.irqs           = { 81, 81, 81, 81 },
 	.ops		= &sh7720_sci_port_ops,
 	.regtype	= SCIx_SH7705_SCIF_REGTYPE,
+};
+
+static struct resource scif1_resources[] = {
+	DEFINE_RES_MEM(0xa4438000, 0x100),
+	DEFINE_RES_IRQ(evt2irq(0xc20)),
 };
 
 static struct platform_device scif1_device = {
 	.name		= "sh-sci",
 	.id		= 1,
+	.resource	= scif1_resources,
+	.num_resources	= ARRAY_SIZE(scif1_resources),
 	.dev		= {
 		.platform_data	= &scif1_platform_data,
 	},
@@ -94,19 +104,23 @@ static struct resource usb_ohci_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 67,
-		.end	= 67,
+		.start	= evt2irq(0xa60),
+		.end	= evt2irq(0xa60),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
 
 static u64 usb_ohci_dma_mask = 0xffffffffUL;
+
+static struct usb_ohci_pdata usb_ohci_pdata;
+
 static struct platform_device usb_ohci_device = {
-	.name		= "sh_ohci",
+	.name		= "ohci-platform",
 	.id		= -1,
 	.dev = {
 		.dma_mask		= &usb_ohci_dma_mask,
 		.coherent_dma_mask	= 0xffffffff,
+		.platform_data		= &usb_ohci_pdata,
 	},
 	.num_resources	= ARRAY_SIZE(usb_ohci_resources),
 	.resource	= usb_ohci_resources,
@@ -121,8 +135,8 @@ static struct resource usbf_resources[] = {
 	},
 	[1] = {
 		.name	= "sh_udc",
-		.start	= 65,
-		.end	= 65,
+		.start	= evt2irq(0xa20),
+		.end	= evt2irq(0xa20),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -152,7 +166,7 @@ static struct resource cmt0_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 104,
+		.start	= evt2irq(0xf00),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -179,7 +193,7 @@ static struct resource cmt1_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 104,
+		.start	= evt2irq(0xf00),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -206,7 +220,7 @@ static struct resource cmt2_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 104,
+		.start	= evt2irq(0xf00),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -233,7 +247,7 @@ static struct resource cmt3_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 104,
+		.start	= evt2irq(0xf00),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -260,7 +274,7 @@ static struct resource cmt4_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 104,
+		.start	= evt2irq(0xf00),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -288,7 +302,7 @@ static struct resource tmu0_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 16,
+		.start	= evt2irq(0x400),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -316,7 +330,7 @@ static struct resource tmu1_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 17,
+		.start	= evt2irq(0x420),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -343,7 +357,7 @@ static struct resource tmu2_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 18,
+		.start	= evt2irq(0x440),
 		.flags	= IORESOURCE_IRQ,
 	},
 };

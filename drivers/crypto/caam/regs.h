@@ -117,6 +117,49 @@ struct jr_outentry {
 #define CHA_NUM_DECONUM_SHIFT	56
 #define CHA_NUM_DECONUM_MASK	(0xfull << CHA_NUM_DECONUM_SHIFT)
 
+/* CHA Version IDs */
+#define CHA_ID_AES_SHIFT	0
+#define CHA_ID_AES_MASK		(0xfull << CHA_ID_AES_SHIFT)
+
+#define CHA_ID_DES_SHIFT	4
+#define CHA_ID_DES_MASK		(0xfull << CHA_ID_DES_SHIFT)
+
+#define CHA_ID_ARC4_SHIFT	8
+#define CHA_ID_ARC4_MASK	(0xfull << CHA_ID_ARC4_SHIFT)
+
+#define CHA_ID_MD_SHIFT		12
+#define CHA_ID_MD_MASK		(0xfull << CHA_ID_MD_SHIFT)
+
+#define CHA_ID_RNG_SHIFT	16
+#define CHA_ID_RNG_MASK		(0xfull << CHA_ID_RNG_SHIFT)
+
+#define CHA_ID_SNW8_SHIFT	20
+#define CHA_ID_SNW8_MASK	(0xfull << CHA_ID_SNW8_SHIFT)
+
+#define CHA_ID_KAS_SHIFT	24
+#define CHA_ID_KAS_MASK		(0xfull << CHA_ID_KAS_SHIFT)
+
+#define CHA_ID_PK_SHIFT		28
+#define CHA_ID_PK_MASK		(0xfull << CHA_ID_PK_SHIFT)
+
+#define CHA_ID_CRC_SHIFT	32
+#define CHA_ID_CRC_MASK		(0xfull << CHA_ID_CRC_SHIFT)
+
+#define CHA_ID_SNW9_SHIFT	36
+#define CHA_ID_SNW9_MASK	(0xfull << CHA_ID_SNW9_SHIFT)
+
+#define CHA_ID_DECO_SHIFT	56
+#define CHA_ID_DECO_MASK	(0xfull << CHA_ID_DECO_SHIFT)
+
+#define CHA_ID_JR_SHIFT		60
+#define CHA_ID_JR_MASK		(0xfull << CHA_ID_JR_SHIFT)
+
+struct sec_vid {
+	u16 ip_id;
+	u8 maj_rev;
+	u8 min_rev;
+};
+
 struct caam_perfmon {
 	/* Performance Monitor Registers			f00-f9f */
 	u64 req_dequeued;	/* PC_REQ_DEQ - Dequeued Requests	     */
@@ -167,7 +210,7 @@ struct partid {
 	u32 pidr;	/* partition ID, DECO */
 };
 
-/* RNG test mode (replicated twice in some configurations) */
+/* RNGB test mode (replicated twice in some configurations) */
 /* Padded out to 0x100 */
 struct rngtst {
 	u32 mode;		/* RTSTMODEx - Test mode */
@@ -200,6 +243,40 @@ struct rngtst {
 	u32 rsvd14[15];
 };
 
+/* RNG4 TRNG test registers */
+struct rng4tst {
+#define RTMCTL_PRGM	0x00010000	/* 1 -> program mode, 0 -> run mode */
+	u32 rtmctl;		/* misc. control register */
+	u32 rtscmisc;		/* statistical check misc. register */
+	u32 rtpkrrng;		/* poker range register */
+	union {
+		u32 rtpkrmax;	/* PRGM=1: poker max. limit register */
+		u32 rtpkrsq;	/* PRGM=0: poker square calc. result register */
+	};
+#define RTSDCTL_ENT_DLY_SHIFT 16
+#define RTSDCTL_ENT_DLY_MASK (0xffff << RTSDCTL_ENT_DLY_SHIFT)
+#define RTSDCTL_ENT_DLY_MIN 1200
+#define RTSDCTL_ENT_DLY_MAX 12800
+	u32 rtsdctl;		/* seed control register */
+	union {
+		u32 rtsblim;	/* PRGM=1: sparse bit limit register */
+		u32 rttotsam;	/* PRGM=0: total samples register */
+	};
+	u32 rtfrqmin;		/* frequency count min. limit register */
+	union {
+		u32 rtfrqmax;	/* PRGM=1: freq. count max. limit register */
+		u32 rtfrqcnt;	/* PRGM=0: freq. count register */
+	};
+	u32 rsvd1[40];
+#define RDSTA_SKVT 0x80000000
+#define RDSTA_SKVN 0x40000000
+#define RDSTA_IF0 0x00000001
+#define RDSTA_IF1 0x00000002
+#define RDSTA_IFMASK (RDSTA_IF1 | RDSTA_IF0)
+	u32 rdsta;
+	u32 rsvd2[15];
+};
+
 /*
  * caam_ctrl - basic core configuration
  * starts base + 0x0000 padded out to 0x1000
@@ -221,7 +298,8 @@ struct caam_ctrl {
 	/* Read/Writable					        */
 	u32 rsvd1;
 	u32 mcr;		/* MCFG      Master Config Register  */
-	u32 rsvd2[2];
+	u32 rsvd2;
+	u32 scfgr;		/* SCFGR, Security Config Register */
 
 	/* Bus Access Configuration Section			010-11f */
 	/* Read/Writable                                                */
@@ -249,7 +327,10 @@ struct caam_ctrl {
 
 	/* RNG Test/Verification/Debug Access                   600-7ff */
 	/* (Useful in Test/Debug modes only...)                         */
-	struct rngtst rtst[2];
+	union {
+		struct rngtst rtst[2];
+		struct rng4tst r4tst[2];
+	};
 
 	u32 rsvd9[448];
 
@@ -265,6 +346,9 @@ struct caam_ctrl {
 #define MCFGR_WDFAIL		0x20000000 /* DECO watchdog force-fail */
 #define MCFGR_DMA_RESET		0x10000000
 #define MCFGR_LONG_PTR		0x00010000 /* Use >32-bit desc addressing */
+#define SCFGR_RDBENABLE		0x00000400
+#define DECORR_RQD0ENABLE	0x00000001 /* Enable DECO0 for direct access */
+#define DECORR_DEN0		0x00010000 /* DECO0 available for access*/
 
 /* AXI read cache control */
 #define MCFGR_ARCACHE_SHIFT	12
@@ -614,6 +698,7 @@ struct caam_deco {
 	u32 jr_ctl_hi;	/* CxJRR - JobR Control Register      @800 */
 	u32 jr_ctl_lo;
 	u64 jr_descaddr;	/* CxDADR - JobR Descriptor Address */
+#define DECO_OP_STATUS_HI_ERR_MASK 0xF00000FF
 	u32 op_status_hi;	/* DxOPSTA - DECO Operation Status */
 	u32 op_status_lo;
 	u32 rsvd24[2];
@@ -627,8 +712,16 @@ struct caam_deco {
 	struct deco_sg_table sctr_tbl[4];	/* DxSTR - Scatter Tables */
 	u32 rsvd29[48];
 	u32 descbuf[64];	/* DxDESB - Descriptor buffer */
-	u32 rsvd30[320];
+	u32 rscvd30[193];
+#define DESC_DBG_DECO_STAT_HOST_ERR	0x00D00000
+#define DESC_DBG_DECO_STAT_VALID	0x80000000
+#define DESC_DBG_DECO_STAT_MASK		0x00F00000
+	u32 desc_dbg;		/* DxDDR - DECO Debug Register */
+	u32 rsvd31[126];
 };
+
+#define DECO_JQCR_WHL		0x20000000
+#define DECO_JQCR_FOUR		0x10000000
 
 /*
  * Current top-level view of memory map is:
@@ -657,6 +750,7 @@ struct caam_full {
 	u64 rsvd[512];
 	struct caam_assurance assure;
 	struct caam_queue_if qi;
+	struct caam_deco deco;
 };
 
 #endif /* REGS_H */

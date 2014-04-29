@@ -17,7 +17,6 @@
 #include <linux/export.h>
 #include <linux/crash_dump.h>
 #include <linux/delay.h>
-#include <linux/init.h>
 #include <linux/irq.h>
 #include <linux/types.h>
 
@@ -27,8 +26,8 @@
 #include <asm/kdump.h>
 #include <asm/prom.h>
 #include <asm/smp.h>
-#include <asm/system.h>
 #include <asm/setjmp.h>
+#include <asm/debug.h>
 
 /*
  * The primary CPU waits a while for all secondary CPUs to enter. This is to

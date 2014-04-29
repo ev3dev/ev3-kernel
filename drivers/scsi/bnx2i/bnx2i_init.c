@@ -1,6 +1,6 @@
 /* bnx2i.c: Broadcom NetXtreme II iSCSI driver.
  *
- * Copyright (c) 2006 - 2011 Broadcom Corporation
+ * Copyright (c) 2006 - 2013 Broadcom Corporation
  * Copyright (c) 2007, 2008 Red Hat, Inc.  All rights reserved.
  * Copyright (c) 2007, 2008 Mike Christie
  *
@@ -18,10 +18,10 @@ static struct list_head adapter_list = LIST_HEAD_INIT(adapter_list);
 static u32 adapter_count;
 
 #define DRV_MODULE_NAME		"bnx2i"
-#define DRV_MODULE_VERSION	"2.7.0.3"
-#define DRV_MODULE_RELDATE	"Jun 15, 2011"
+#define DRV_MODULE_VERSION	"2.7.6.2"
+#define DRV_MODULE_RELDATE	"Jun 06, 2013"
 
-static char version[] __devinitdata =
+static char version[] =
 		"Broadcom NetXtreme II iSCSI Driver " DRV_MODULE_NAME \
 		" v" DRV_MODULE_VERSION " (" DRV_MODULE_RELDATE ")\n";
 
@@ -49,11 +49,11 @@ module_param(en_tcp_dack, int, 0664);
 MODULE_PARM_DESC(en_tcp_dack, "Enable TCP Delayed ACK");
 
 unsigned int error_mask1 = 0x00;
-module_param(error_mask1, int, 0664);
+module_param(error_mask1, uint, 0664);
 MODULE_PARM_DESC(error_mask1, "Config FW iSCSI Error Mask #1");
 
 unsigned int error_mask2 = 0x00;
-module_param(error_mask2, int, 0664);
+module_param(error_mask2, uint, 0664);
 MODULE_PARM_DESC(error_mask2, "Config FW iSCSI Error Mask #2");
 
 unsigned int sq_size;
@@ -79,42 +79,33 @@ static struct notifier_block bnx2i_cpu_notifier = {
 /**
  * bnx2i_identify_device - identifies NetXtreme II device type
  * @hba: 		Adapter structure pointer
+ * @cnic:		Corresponding cnic device
  *
  * This function identifies the NX2 device type and sets appropriate
  *	queue mailbox register access method, 5709 requires driver to
  *	access MBOX regs using *bin* mode
  */
-void bnx2i_identify_device(struct bnx2i_hba *hba)
+void bnx2i_identify_device(struct bnx2i_hba *hba, struct cnic_dev *dev)
 {
 	hba->cnic_dev_type = 0;
-	if ((hba->pci_did == PCI_DEVICE_ID_NX2_5706) ||
-	    (hba->pci_did == PCI_DEVICE_ID_NX2_5706S))
-		set_bit(BNX2I_NX2_DEV_5706, &hba->cnic_dev_type);
-	else if ((hba->pci_did == PCI_DEVICE_ID_NX2_5708) ||
-	    (hba->pci_did == PCI_DEVICE_ID_NX2_5708S))
-		set_bit(BNX2I_NX2_DEV_5708, &hba->cnic_dev_type);
-	else if ((hba->pci_did == PCI_DEVICE_ID_NX2_5709) ||
-	    (hba->pci_did == PCI_DEVICE_ID_NX2_5709S)) {
-		set_bit(BNX2I_NX2_DEV_5709, &hba->cnic_dev_type);
-		hba->mail_queue_access = BNX2I_MQ_BIN_MODE;
-	} else if (hba->pci_did == PCI_DEVICE_ID_NX2_57710    ||
-		   hba->pci_did == PCI_DEVICE_ID_NX2_57711    ||
-		   hba->pci_did == PCI_DEVICE_ID_NX2_57711E   ||
-		   hba->pci_did == PCI_DEVICE_ID_NX2_57712    ||
-		   hba->pci_did == PCI_DEVICE_ID_NX2_57712E   ||
-		   hba->pci_did == PCI_DEVICE_ID_NX2_57800    ||
-		   hba->pci_did == PCI_DEVICE_ID_NX2_57800_MF ||
-		   hba->pci_did == PCI_DEVICE_ID_NX2_57800_VF ||
-		   hba->pci_did == PCI_DEVICE_ID_NX2_57810    ||
-		   hba->pci_did == PCI_DEVICE_ID_NX2_57810_MF ||
-		   hba->pci_did == PCI_DEVICE_ID_NX2_57810_VF ||
-		   hba->pci_did == PCI_DEVICE_ID_NX2_57840    ||
-		   hba->pci_did == PCI_DEVICE_ID_NX2_57840_MF ||
-		   hba->pci_did == PCI_DEVICE_ID_NX2_57840_VF)
+	if (test_bit(CNIC_F_BNX2_CLASS, &dev->flags)) {
+		if (hba->pci_did == PCI_DEVICE_ID_NX2_5706 ||
+		    hba->pci_did == PCI_DEVICE_ID_NX2_5706S) {
+			set_bit(BNX2I_NX2_DEV_5706, &hba->cnic_dev_type);
+		} else if (hba->pci_did == PCI_DEVICE_ID_NX2_5708 ||
+		    hba->pci_did == PCI_DEVICE_ID_NX2_5708S) {
+			set_bit(BNX2I_NX2_DEV_5708, &hba->cnic_dev_type);
+		} else if (hba->pci_did == PCI_DEVICE_ID_NX2_5709 ||
+		    hba->pci_did == PCI_DEVICE_ID_NX2_5709S) {
+			set_bit(BNX2I_NX2_DEV_5709, &hba->cnic_dev_type);
+			hba->mail_queue_access = BNX2I_MQ_BIN_MODE;
+		}
+	} else if (test_bit(CNIC_F_BNX2X_CLASS, &dev->flags)) {
 		set_bit(BNX2I_NX2_DEV_57710, &hba->cnic_dev_type);
-	else
+	} else {
 		printk(KERN_ALERT "bnx2i: unknown device, 0x%x\n",
 				  hba->pci_did);
+	}
 }
 
 
@@ -181,16 +172,14 @@ void bnx2i_start(void *handle)
 	struct bnx2i_hba *hba = handle;
 	int i = HZ;
 
-	/*
-	 * We should never register devices that don't support iSCSI
-	 * (see bnx2i_init_one), so something is wrong if we try to
-	 * start a iSCSI adapter on hardware with 0 supported iSCSI
-	 * connections
+	/* On some bnx2x devices, it is possible that iSCSI is no
+	 * longer supported after firmware is downloaded.  In that
+	 * case, the iscsi_init_msg will return failure.
 	 */
-	BUG_ON(!hba->cnic->max_iscsi_conn);
 
 	bnx2i_send_fw_iscsi_init_msg(hba);
-	while (!test_bit(ADAPTER_STATE_UP, &hba->adapter_state) && i--)
+	while (!test_bit(ADAPTER_STATE_UP, &hba->adapter_state) &&
+	       !test_bit(ADAPTER_STATE_INIT_FAILED, &hba->adapter_state) && i--)
 		msleep(BNX2I_INIT_POLL_TIME);
 }
 
@@ -381,6 +370,46 @@ void bnx2i_ulp_exit(struct cnic_dev *dev)
 
 
 /**
+ * bnx2i_get_stats - Retrieve various statistic from iSCSI offload
+ * @handle:	bnx2i_hba
+ *
+ * function callback exported via bnx2i - cnic driver interface to
+ *      retrieve various iSCSI offload related statistics.
+ */
+int bnx2i_get_stats(void *handle)
+{
+	struct bnx2i_hba *hba = handle;
+	struct iscsi_stats_info *stats;
+
+	if (!hba)
+		return -EINVAL;
+
+	stats = (struct iscsi_stats_info *)hba->cnic->stats_addr;
+
+	if (!stats)
+		return -ENOMEM;
+
+	strlcpy(stats->version, DRV_MODULE_VERSION, sizeof(stats->version));
+	memcpy(stats->mac_add1 + 2, hba->cnic->mac_addr, ETH_ALEN);
+
+	stats->max_frame_size = hba->netdev->mtu;
+	stats->txq_size = hba->max_sqes;
+	stats->rxq_size = hba->max_cqes;
+
+	stats->txq_avg_depth = 0;
+	stats->rxq_avg_depth = 0;
+
+	GET_STATS_64(hba, stats, rx_pdus);
+	GET_STATS_64(hba, stats, rx_bytes);
+
+	GET_STATS_64(hba, stats, tx_pdus);
+	GET_STATS_64(hba, stats, tx_bytes);
+
+	return 0;
+}
+
+
+/**
  * bnx2i_percpu_thread_create - Create a receive thread for an
  *				online CPU
  *
@@ -393,8 +422,9 @@ static void bnx2i_percpu_thread_create(unsigned int cpu)
 
 	p = &per_cpu(bnx2i_percpu, cpu);
 
-	thread = kthread_create(bnx2i_percpu_io_thread, (void *)p,
-				"bnx2i_thread/%d", cpu);
+	thread = kthread_create_on_node(bnx2i_percpu_io_thread, (void *)p,
+					cpu_to_node(cpu),
+					"bnx2i_thread/%d", cpu);
 	/* bind thread to the cpu */
 	if (likely(!IS_ERR(thread))) {
 		kthread_bind(thread, cpu);

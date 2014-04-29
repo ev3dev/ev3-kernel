@@ -113,6 +113,7 @@ void blk_set_default_limits(struct queue_limits *lim)
 	lim->seg_boundary_mask = BLK_SEG_BOUNDARY_MASK;
 	lim->max_segment_size = BLK_MAX_SEGMENT_SIZE;
 	lim->max_sectors = lim->max_hw_sectors = BLK_SAFE_MAX_SECTORS;
+	lim->max_write_same_sectors = 0;
 	lim->max_discard_sectors = 0;
 	lim->discard_granularity = 0;
 	lim->discard_alignment = 0;
@@ -143,8 +144,9 @@ void blk_set_stacking_limits(struct queue_limits *lim)
 	lim->discard_zeroes_data = 1;
 	lim->max_segments = USHRT_MAX;
 	lim->max_hw_sectors = UINT_MAX;
-
-	lim->max_sectors = BLK_DEF_MAX_SECTORS;
+	lim->max_segment_size = UINT_MAX;
+	lim->max_sectors = UINT_MAX;
+	lim->max_write_same_sectors = UINT_MAX;
 }
 EXPORT_SYMBOL(blk_set_stacking_limits);
 
@@ -194,17 +196,17 @@ EXPORT_SYMBOL(blk_queue_make_request);
 /**
  * blk_queue_bounce_limit - set bounce buffer limit for queue
  * @q: the request queue for the device
- * @dma_mask: the maximum address the device can handle
+ * @max_addr: the maximum address the device can handle
  *
  * Description:
  *    Different hardware can have different requirements as to what pages
  *    it can do I/O directly to. A low level driver can call
  *    blk_queue_bounce_limit to have lower memory pages allocated as bounce
- *    buffers for doing I/O to pages residing above @dma_mask.
+ *    buffers for doing I/O to pages residing above @max_addr.
  **/
-void blk_queue_bounce_limit(struct request_queue *q, u64 dma_mask)
+void blk_queue_bounce_limit(struct request_queue *q, u64 max_addr)
 {
-	unsigned long b_pfn = dma_mask >> PAGE_SHIFT;
+	unsigned long b_pfn = max_addr >> PAGE_SHIFT;
 	int dma = 0;
 
 	q->bounce_gfp = GFP_NOIO;
@@ -285,6 +287,18 @@ void blk_queue_max_discard_sectors(struct request_queue *q,
 	q->limits.max_discard_sectors = max_discard_sectors;
 }
 EXPORT_SYMBOL(blk_queue_max_discard_sectors);
+
+/**
+ * blk_queue_max_write_same_sectors - set max sectors for a single write same
+ * @q:  the request queue for the device
+ * @max_write_same_sectors: maximum number of sectors to write per command
+ **/
+void blk_queue_max_write_same_sectors(struct request_queue *q,
+				      unsigned int max_write_same_sectors)
+{
+	q->limits.max_write_same_sectors = max_write_same_sectors;
+}
+EXPORT_SYMBOL(blk_queue_max_write_same_sectors);
 
 /**
  * blk_queue_max_segments - set max hw segments for a request for this queue
@@ -511,6 +525,8 @@ int blk_stack_limits(struct queue_limits *t, struct queue_limits *b,
 
 	t->max_sectors = min_not_zero(t->max_sectors, b->max_sectors);
 	t->max_hw_sectors = min_not_zero(t->max_hw_sectors, b->max_hw_sectors);
+	t->max_write_same_sectors = min(t->max_write_same_sectors,
+					b->max_write_same_sectors);
 	t->bounce_pfn = min_not_zero(t->bounce_pfn, b->bounce_pfn);
 
 	t->seg_boundary_mask = min_not_zero(t->seg_boundary_mask,
@@ -576,6 +592,10 @@ int blk_stack_limits(struct queue_limits *t, struct queue_limits *b,
 		ret = -1;
 	}
 
+	t->raid_partial_stripes_expensive =
+		max(t->raid_partial_stripes_expensive,
+		    b->raid_partial_stripes_expensive);
+
 	/* Find lowest common alignment_offset */
 	t->alignment_offset = lcm(t->alignment_offset, alignment)
 		& (max(t->physical_block_size, t->io_min) - 1);
@@ -596,7 +616,7 @@ int blk_stack_limits(struct queue_limits *t, struct queue_limits *b,
 			bottom = b->discard_granularity + alignment;
 
 			/* Verify that top and bottom intervals line up */
-			if (max(top, bottom) & (min(top, bottom) - 1))
+			if ((max(top, bottom) % min(top, bottom)) != 0)
 				t->discard_misaligned = 1;
 		}
 
@@ -604,8 +624,8 @@ int blk_stack_limits(struct queue_limits *t, struct queue_limits *b,
 						      b->max_discard_sectors);
 		t->discard_granularity = max(t->discard_granularity,
 					     b->discard_granularity);
-		t->discard_alignment = lcm(t->discard_alignment, alignment) &
-			(t->discard_granularity - 1);
+		t->discard_alignment = lcm(t->discard_alignment, alignment) %
+			t->discard_granularity;
 	}
 
 	return ret;

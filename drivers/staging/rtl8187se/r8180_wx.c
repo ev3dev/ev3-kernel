@@ -2,7 +2,7 @@
 	This file contains wireless extension handlers.
 
 	This is part of rtl8180 OpenSource driver.
-	Copyright (C) Andrea Merello 2004-2005  <andreamrl@tiscali.it>
+	Copyright (C) Andrea Merello 2004-2005  <andrea.merello@gmail.com>
 	Released under the terms of GPL (General Public Licence)
 
 	Parts of this driver are based on the GPL part
@@ -13,7 +13,7 @@
 
 	Parts of this driver are based on the Intel Pro Wireless 2100 GPL driver.
 
-	We want to tanks the Authors of those projects and the Ndiswrapper
+	We want to thanks the Authors of those projects and the Ndiswrapper
 	project Authors.
 */
 
@@ -21,26 +21,25 @@
 #include "r8180.h"
 #include "r8180_hw.h"
 
+#include <net/iw_handler.h>
 #include "ieee80211/dot11d.h"
 
-/* #define RATE_COUNT 4 */
-u32 rtl8180_rates[] = {1000000, 2000000, 5500000, 11000000,
+static u32 rtl8180_rates[] = {1000000, 2000000, 5500000, 11000000,
 	6000000, 9000000, 12000000, 18000000, 24000000, 36000000, 48000000, 54000000};
 
 #define RATE_COUNT ARRAY_SIZE(rtl8180_rates)
 
 static CHANNEL_LIST DefaultChannelPlan[] = {
-/*	{{1,2,3,4,5,6,7,8,9,10,11,12,13,14},14},	*/	/*Default channel plan	*/
-	{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 36, 40, 44, 48, 52, 56, 60, 64}, 19},			/*FCC							*/
-	{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}, 11},											/*IC							*/
-	{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 36, 40, 44, 48, 52, 56, 60, 64}, 21},	/*ETSI							*/
-	{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 36, 40, 44, 48, 52, 56, 60, 64}, 21},	/*Spain. Change to ETSI.		*/
-	{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 36, 40, 44, 48, 52, 56, 60, 64}, 21},	/*France. Change to ETSI.		*/
-	{{14, 36, 40, 44, 48, 52, 56, 60, 64}, 9},											/*MKK							*/
-	{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 36, 40, 44, 48, 52, 56, 60, 64}, 22},/*MKK1						*/
-	{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 36, 40, 44, 48, 52, 56, 60, 64}, 21},	/*Israel.						*/
-	{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 34, 38, 42, 46}, 17},					/*For 11a , TELEC				*/
-	{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}, 14}								/*For Global Domain. 1-11:active scan, 12-14 passive scan.*/	/* +YJ, 080626 */
+	{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 36, 40, 44, 48, 52, 56, 60, 64}, 19},		/* FCC */
+	{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}, 11},						/* IC */
+	{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 36, 40, 44, 48, 52, 56, 60, 64}, 21},	/* ETSI	*/
+	{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 36, 40, 44, 48, 52, 56, 60, 64}, 21},	/* Spain. Change to ETSI. */
+	{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 36, 40, 44, 48, 52, 56, 60, 64}, 21},	/* France. Change to ETSI. */
+	{{14, 36, 40, 44, 48, 52, 56, 60, 64}, 9},						/* MKK */
+	{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 36, 40, 44, 48, 52, 56, 60, 64}, 22},	/* MKK1	*/
+	{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 36, 40, 44, 48, 52, 56, 60, 64}, 21},	/* Israel */
+	{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 34, 38, 42, 46}, 17},			/* For 11a , TELEC */
+	{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}, 14}					/* For Global Domain. 1-11:active scan, 12-14 passive scan.*/	/* +YJ, 080626 */
 };
 static int r8180_wx_get_freq(struct net_device *dev,
 			     struct iw_request_info *a,
@@ -52,8 +51,9 @@ static int r8180_wx_get_freq(struct net_device *dev,
 }
 
 
-int r8180_wx_set_key(struct net_device *dev, struct iw_request_info *info,
-		     union iwreq_data *wrqu, char *key)
+static int r8180_wx_set_key(struct net_device *dev,
+			    struct iw_request_info *info,
+			    union iwreq_data *wrqu, char *key)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
 	struct iw_point *erq = &(wrqu->encoding);
@@ -61,17 +61,8 @@ int r8180_wx_set_key(struct net_device *dev, struct iw_request_info *info,
 	if (priv->ieee80211->bHwRadioOff)
 		return 0;
 
-	if (erq->flags & IW_ENCODE_DISABLED)
-
-/*	i = erq->flags & IW_ENCODE_INDEX;
-	if (i < 1 || i > 4)
-*/
-
 	if (erq->length > 0) {
-
-		/*int len = erq->length <= 5 ? 5 : 13;	*/
-
-		u32* tkey = (u32*) key;
+		u32 *tkey = (u32 *) key;
 		priv->key0[0] = tkey[0];
 		priv->key0[1] = tkey[1];
 		priv->key0[2] = tkey[2];
@@ -84,8 +75,9 @@ int r8180_wx_set_key(struct net_device *dev, struct iw_request_info *info,
 }
 
 
-static int r8180_wx_set_beaconinterval(struct net_device *dev, struct iw_request_info *aa,
-			  union iwreq_data *wrqu, char *b)
+static int r8180_wx_set_beaconinterval(struct net_device *dev,
+				       struct iw_request_info *aa,
+				       union iwreq_data *wrqu, char *b)
 {
 	int *parms = (int *)b;
 	int bi = parms[0];
@@ -192,14 +184,11 @@ static int r8180_wx_set_mode(struct net_device *dev, struct iw_request_info *a,
 		return 0;
 
 	down(&priv->wx_sem);
-/*	printk("set mode ENABLE_IPS\n");	*/
 	if (priv->bInactivePs)	{
 		if (wrqu->mode == IW_MODE_ADHOC)
 			IPSLeave(dev);
 	}
 	ret = ieee80211_wx_set_mode(priv->ieee80211, a, wrqu, b);
-
-/*	rtl8180_commit(dev);	*/
 
 	up(&priv->wx_sem);
 	return ret;
@@ -207,18 +196,20 @@ static int r8180_wx_set_mode(struct net_device *dev, struct iw_request_info *a,
 
 /* YJ,add,080819,for hidden ap */
 struct  iw_range_with_scan_capa	{
-		/* Informative stuff (to choose between different interface)	*/
-		__u32		throughput;		/* To give an idea...				*/
+		/* Informative stuff (to choose between different interface) */
+
+		__u32		throughput; /* To give an idea... */
+
 		/* In theory this value should be the maximum benchmarked
-		* TCP/IP throughput, because with most of these devices the
-		* bit rate is meaningless (overhead an co) to estimate how
-		* fast the connection will go and pick the fastest one.
-		* I suggest people to play with Netperf or any benchmark...
-		*/
+		 * TCP/IP throughput, because with most of these devices the
+		 * bit rate is meaningless (overhead an co) to estimate how
+		 * fast the connection will go and pick the fastest one.
+		 * I suggest people to play with Netperf or any benchmark...
+		 */
 
 		/* NWID (or domain id)	*/
-		__u32           min_nwid;       /* Minimal NWID we are able to set */
-		__u32			max_nwid;		/* Maximal NWID we are able to set */
+		__u32           min_nwid; /* Minimal NWID we are able to set */
+		__u32			max_nwid; /* Maximal NWID we are able to set */
 
 		/* Old Frequency (backward compat - moved lower ) */
 		__u16			old_num_channels;
@@ -238,7 +229,6 @@ static int rtl8180_wx_get_range(struct net_device *dev,
 	struct r8180_priv *priv = ieee80211_priv(dev);
 	u16 val;
 	int i;
-	/*struct iw_range_with_scan_capa* tmp = (struct iw_range_with_scan_capa*)range; */ /*YJ,add,080819,for hidden ap */
 
 	wrqu->data.length = sizeof(*range);
 	memset(range, 0, sizeof(*range));
@@ -291,14 +281,6 @@ static int rtl8180_wx_get_range(struct net_device *dev,
 	range->we_version_compiled = WIRELESS_EXT;
 	range->we_version_source = 16;
 
-/*	range->retry_capa;	*/	/* What retry options are supported */
-/*	range->retry_flags;	*/	/* How to decode max/min retry limit */
-/*	range->r_time_flags;*/	/* How to decode max/min retry life */
-/*	range->min_retry;	*/	/* Minimal number of retries */
-/*	range->max_retry;	*/	/* Maximal number of retries */
-/*	range->min_r_time;	*/	/* Minimal retry lifetime */
-/*	range->max_r_time;	*/	/* Maximal retry lifetime */
-
 		range->num_channels = 14;
 
 	for (i = 0, val = 0; i < 14; i++) {
@@ -310,19 +292,17 @@ static int rtl8180_wx_get_range(struct net_device *dev,
 			range->freq[val].e = 1;
 			val++;
 		} else {
-			/* FIXME: do we need to set anything for channels	*/
-			/* we don't use ?	*/
+			/* FIXME: do we need to set anything for channels */
+			/* we don't use ? */
 		}
 
 		if (val == IW_MAX_FREQUENCIES)
-		break;
+			break;
 	}
 
 	range->num_frequency = val;
 	range->enc_capa = IW_ENC_CAPA_WPA | IW_ENC_CAPA_WPA2 |
 						IW_ENC_CAPA_CIPHER_TKIP | IW_ENC_CAPA_CIPHER_CCMP;
-
-	/*tmp->scan_capa = 0x01;	*/	/*YJ,add,080819,for hidden ap	*/
 
 	return 0;
 }
@@ -333,56 +313,35 @@ static int r8180_wx_set_scan(struct net_device *dev, struct iw_request_info *a,
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
 	int ret;
-	struct ieee80211_device* ieee = priv->ieee80211;
+	struct ieee80211_device *ieee = priv->ieee80211;
 
 
 	if (priv->ieee80211->bHwRadioOff)
 		return 0;
 
-/*YJ,add,080819, for hidden ap	*/
-	/*printk("==*&*&*&==>%s in\n", __func__);	*/
-	/*printk("=*&*&*&*===>flag:%x, %x\n", wrqu->data.flags, IW_SCAN_THIS_ESSID);	*/
 	if (wrqu->data.flags & IW_SCAN_THIS_ESSID)	{
-		struct iw_scan_req* req = (struct iw_scan_req*)b;
+		struct iw_scan_req *req = (struct iw_scan_req *)b;
 		if (req->essid_len)		{
-			/*printk("==**&*&*&**===>scan set ssid:%s\n", req->essid); */
 			ieee->current_network.ssid_len = req->essid_len;
 			memcpy(ieee->current_network.ssid, req->essid, req->essid_len);
-			/*printk("=====>network ssid:%s\n", ieee->current_network.ssid); */
 		}
 	}
-/*YJ,add,080819, for hidden ap, end */
 
 	down(&priv->wx_sem);
 	if (priv->up)	{
-/*		printk("set scan ENABLE_IPS\n");	*/
 		priv->ieee80211->actscanning = true;
 		if (priv->bInactivePs && (priv->ieee80211->state != IEEE80211_LINKED))	{
 			IPSLeave(dev);
-			/*down(&priv->ieee80211->wx_sem);	*/
-/*
-			if (priv->ieee80211->iw_mode == IW_MODE_MONITOR || !(priv->ieee80211->proto_started)){
-				ret = -1;
-				up(&priv->ieee80211->wx_sem);
-				up(&priv->wx_sem);
-				return ret;
-			}
-*/
-	/*	queue_work(priv->ieee80211->wq, &priv->ieee80211->wx_sync_scan_wq); */
-		/* printk("start scan============================>\n"); */
 		ieee80211_softmac_ips_scan_syncro(priv->ieee80211);
-/* ieee80211_rtl_start_scan(priv->ieee80211); */
-		/* intentionally forget to up sem */
-/*			up(&priv->ieee80211->wx_sem); */
 			ret = 0;
 		}	else	{
-			/* YJ,add,080828, prevent scan in BusyTraffic */
+			/* prevent scan in BusyTraffic */
 			/* FIXME: Need to consider last scan time */
 			if ((priv->link_detect.bBusyTraffic) && (true))	{
 				ret = 0;
 				printk("Now traffic is busy, please try later!\n");
 			}	else
-				/* YJ,add,080828, prevent scan in BusyTraffic,end */
+				/* prevent scan in BusyTraffic,end */
 				ret = ieee80211_wx_set_scan(priv->ieee80211, a, wrqu, b);
 		}
 	}	else
@@ -424,10 +383,8 @@ static int r8180_wx_set_essid(struct net_device *dev,
 		return 0;
 
 	down(&priv->wx_sem);
-	/* printk("set essid ENABLE_IPS\n"); */
 	if (priv->bInactivePs)
 		IPSLeave(dev);
-/*	printk("haha:set essid %s essid_len = %d essid_flgs = %d\n",b,  wrqu->essid.length, wrqu->essid.flags);	*/
 
 	ret = ieee80211_wx_set_essid(priv->ieee80211, a, wrqu, b);
 
@@ -518,9 +475,8 @@ static int r8180_wx_get_frag(struct net_device *dev,
 
 
 static int r8180_wx_set_wap(struct net_device *dev,
-			 struct iw_request_info *info,
-			 union iwreq_data *awrq,
-			 char *extra)
+			    struct iw_request_info *info,
+			    union iwreq_data *awrq, char *extra)
 {
 	int ret;
 	struct r8180_priv *priv = ieee80211_priv(dev);
@@ -561,7 +517,8 @@ static int r8180_wx_set_enc(struct net_device *dev,
 
 	down(&priv->wx_sem);
 
-	if (priv->hw_wep) ret = r8180_wx_set_key(dev, info, wrqu, key);
+	if (priv->hw_wep)
+		ret = r8180_wx_set_key(dev, info, wrqu, key);
 	else	{
 		DMESG("Setting SW wep key");
 		ret = ieee80211_wx_set_encode(priv->ieee80211, info, wrqu, key);
@@ -582,11 +539,13 @@ static int r8180_wx_get_enc(struct net_device *dev,
 }
 
 
-static int r8180_wx_set_scan_type(struct net_device *dev, struct iw_request_info *aa, union
-	iwreq_data *wrqu, char *p)	{
+static int r8180_wx_set_scan_type(struct net_device *dev,
+				  struct iw_request_info *aa,
+				  union	iwreq_data *wrqu, char *p)
+{
 
 	struct r8180_priv *priv = ieee80211_priv(dev);
-	int *parms = (int*)p;
+	int *parms = (int *)p;
 	int mode = parms[0];
 
 	if (priv->ieee80211->bHwRadioOff)
@@ -597,31 +556,9 @@ static int r8180_wx_set_scan_type(struct net_device *dev, struct iw_request_info
 	return 1;
 }
 
-
-/* added by christian */
-/*
-static int r8180_wx_set_monitor_type(struct net_device *dev, struct iw_request_info *aa, union
-	iwreq_data *wrqu, char *p){
-
-	struct r8180_priv *priv = ieee80211_priv(dev);
-	int *parms=(int*)p;
-	int mode=parms[0];
-
-	if(priv->ieee80211->iw_mode != IW_MODE_MONITOR) return -1;
-	priv->prism_hdr = mode;
-	if(!mode)dev->type=ARPHRD_IEEE80211;
-	else dev->type=ARPHRD_IEEE80211_PRISM;
-	DMESG("using %s RX encap", mode ? "AVS":"80211");
-	return 0;
-
-}
-*/
-/*of         r8180_wx_set_monitor_type */
-/* end added christian */
-
 static int r8180_wx_set_retry(struct net_device *dev,
-				struct iw_request_info *info,
-				union iwreq_data *wrqu, char *extra)
+			      struct iw_request_info *info,
+			      union iwreq_data *wrqu, char *extra)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
 	int err = 0;
@@ -661,14 +598,6 @@ static int r8180_wx_set_retry(struct net_device *dev,
 	 */
 
 	rtl8180_commit(dev);
-	/*
-	if(priv->up){
-		rtl8180_rtx_disable(dev);
-		rtl8180_rx_enable(dev);
-		rtl8180_tx_enable(dev);
-
-	}
-	*/
 exit:
 	up(&priv->wx_sem);
 
@@ -676,8 +605,8 @@ exit:
 }
 
 static int r8180_wx_get_retry(struct net_device *dev,
-				struct iw_request_info *info,
-				union iwreq_data *wrqu, char *extra)
+			      struct iw_request_info *info,
+			      union iwreq_data *wrqu, char *extra)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
 
@@ -689,21 +618,19 @@ static int r8180_wx_get_retry(struct net_device *dev,
 		return -EINVAL;
 
 	if (wrqu->retry.flags & IW_RETRY_MAX) {
-		wrqu->retry.flags = IW_RETRY_LIMIT & IW_RETRY_MAX;
+		wrqu->retry.flags = IW_RETRY_LIMIT | IW_RETRY_MAX;
 		wrqu->retry.value = priv->retry_rts;
 	} else {
-		wrqu->retry.flags = IW_RETRY_LIMIT & IW_RETRY_MIN;
+		wrqu->retry.flags = IW_RETRY_LIMIT | IW_RETRY_MIN;
 		wrqu->retry.value = priv->retry_data;
 	}
-	/* DMESG("returning %d",wrqu->retry.value); */
-
 
 	return 0;
 }
 
 static int r8180_wx_get_sens(struct net_device *dev,
-				struct iw_request_info *info,
-				union iwreq_data *wrqu, char *extra)
+			     struct iw_request_info *info,
+			     union iwreq_data *wrqu, char *extra)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
 	if (priv->rf_set_sens == NULL)
@@ -714,8 +641,8 @@ static int r8180_wx_get_sens(struct net_device *dev,
 
 
 static int r8180_wx_set_sens(struct net_device *dev,
-				struct iw_request_info *info,
-				union iwreq_data *wrqu, char *extra)
+			     struct iw_request_info *info,
+			     union iwreq_data *wrqu, char *extra)
 {
 
 	struct r8180_priv *priv = ieee80211_priv(dev);
@@ -726,7 +653,6 @@ static int r8180_wx_set_sens(struct net_device *dev,
 		return 0;
 
 	down(&priv->wx_sem);
-	/* DMESG("attempt to set sensivity to %ddb",wrqu->sens.value); */
 	if (priv->rf_set_sens == NULL) {
 		err = -1; /* we have not this support for this radio */
 		goto exit;
@@ -744,8 +670,8 @@ exit:
 
 
 static int r8180_wx_set_rawtx(struct net_device *dev,
-			       struct iw_request_info *info,
-			       union iwreq_data *wrqu, char *extra)
+			      struct iw_request_info *info,
+			      union iwreq_data *wrqu, char *extra)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
 	int ret;
@@ -764,8 +690,8 @@ static int r8180_wx_set_rawtx(struct net_device *dev,
 }
 
 static int r8180_wx_get_power(struct net_device *dev,
-			       struct iw_request_info *info,
-			       union iwreq_data *wrqu, char *extra)
+			      struct iw_request_info *info,
+			      union iwreq_data *wrqu, char *extra)
 {
 	int ret;
 	struct r8180_priv *priv = ieee80211_priv(dev);
@@ -780,8 +706,8 @@ static int r8180_wx_get_power(struct net_device *dev,
 }
 
 static int r8180_wx_set_power(struct net_device *dev,
-			       struct iw_request_info *info,
-			       union iwreq_data *wrqu, char *extra)
+			      struct iw_request_info *info,
+			      union iwreq_data *wrqu, char *extra)
 {
 	int ret;
 	struct r8180_priv *priv = ieee80211_priv(dev);
@@ -806,8 +732,8 @@ static int r8180_wx_set_power(struct net_device *dev,
 }
 
 static int r8180_wx_set_rts(struct net_device *dev,
-			     struct iw_request_info *info,
-			     union iwreq_data *wrqu, char *extra)
+			    struct iw_request_info *info,
+			    union iwreq_data *wrqu, char *extra)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
 
@@ -828,8 +754,8 @@ static int r8180_wx_set_rts(struct net_device *dev,
 	return 0;
 }
 static int r8180_wx_get_rts(struct net_device *dev,
-			     struct iw_request_info *info,
-			     union iwreq_data *wrqu, char *extra)
+			    struct iw_request_info *info,
+			    union iwreq_data *wrqu, char *extra)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
 
@@ -846,58 +772,6 @@ static int dummy(struct net_device *dev, struct iw_request_info *a,
 {
 	return -1;
 }
-
-/*
-static int r8180_wx_get_psmode(struct net_device *dev,
-			       struct iw_request_info *info,
-			       union iwreq_data *wrqu, char *extra)
-{
-	struct r8180_priv *priv = ieee80211_priv(dev);
-	struct ieee80211_device *ieee;
-	int ret = 0;
-
-
-
-	down(&priv->wx_sem);
-
-	if(priv) {
-		ieee = priv->ieee80211;
-		if(ieee->ps == IEEE80211_PS_DISABLED) {
-			*((unsigned int *)extra) = IEEE80211_PS_DISABLED;
-			goto exit;
-		}
-		*((unsigned int *)extra) = IW_POWER_TIMEOUT;
-	if (ieee->ps & IEEE80211_PS_MBCAST)
-			*((unsigned int *)extra) |= IW_POWER_ALL_R;
-		else
-			*((unsigned int *)extra) |= IW_POWER_UNICAST_R;
-	} else
-		ret = -1;
-exit:
-	up(&priv->wx_sem);
-
-	return ret;
-}
-static int r8180_wx_set_psmode(struct net_device *dev,
-			       struct iw_request_info *info,
-			       union iwreq_data *wrqu, char *extra)
-{
-	struct r8180_priv *priv = ieee80211_priv(dev);
-	//struct ieee80211_device *ieee;
-	int ret = 0;
-
-
-
-	down(&priv->wx_sem);
-
-	ret = ieee80211_wx_set_power(priv->ieee80211, info, wrqu, extra);
-
-	up(&priv->wx_sem);
-
-	return ret;
-
-}
-*/
 
 static int r8180_wx_get_iwmode(struct net_device *dev,
 			       struct iw_request_info *info,
@@ -964,7 +838,6 @@ static int r8180_wx_set_iwmode(struct net_device *dev,
 	} else {
 		ieee->mode = mode;
 		ieee->modulation = modulation;
-/*		ieee80211_start_protocol(ieee); */
 	}
 
 	up(&priv->wx_sem);
@@ -972,8 +845,8 @@ static int r8180_wx_set_iwmode(struct net_device *dev,
 	return ret;
 }
 static int r8180_wx_get_preamble(struct net_device *dev,
-			     struct iw_request_info *info,
-			     union iwreq_data *wrqu, char *extra)
+				 struct iw_request_info *info,
+				 union iwreq_data *wrqu, char *extra)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
 
@@ -989,8 +862,8 @@ static int r8180_wx_get_preamble(struct net_device *dev,
 	return 0;
 }
 static int r8180_wx_set_preamble(struct net_device *dev,
-			     struct iw_request_info *info,
-			     union iwreq_data *wrqu, char *extra)
+				 struct iw_request_info *info,
+				 union iwreq_data *wrqu, char *extra)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
 	int ret = 0;
@@ -1003,7 +876,7 @@ static int r8180_wx_set_preamble(struct net_device *dev,
 	if (*extra < 0 || *extra > 2)
 		ret = -1;
 	else
-		priv->plcp_preamble_mode = *((short *)extra) ;
+		priv->plcp_preamble_mode = *((short *)extra);
 
 
 
@@ -1012,11 +885,10 @@ static int r8180_wx_set_preamble(struct net_device *dev,
 	return ret;
 }
 static int r8180_wx_get_siglevel(struct net_device *dev,
-			       struct iw_request_info *info,
-			       union iwreq_data *wrqu, char *extra)
+				 struct iw_request_info *info,
+				 union iwreq_data *wrqu, char *extra)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
-	/* struct ieee80211_network *network = &(priv->ieee80211->current_network); */
 	int ret = 0;
 
 
@@ -1032,11 +904,10 @@ static int r8180_wx_get_siglevel(struct net_device *dev,
 	return ret;
 }
 static int r8180_wx_get_sigqual(struct net_device *dev,
-			       struct iw_request_info *info,
-			       union iwreq_data *wrqu, char *extra)
+				struct iw_request_info *info,
+				union iwreq_data *wrqu, char *extra)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
-	/* struct ieee80211_network *network = &(priv->ieee80211->current_network); */
 	int ret = 0;
 
 
@@ -1092,8 +963,8 @@ static int r8180_wx_reset_stats(struct net_device *dev,
 
 }
 static int r8180_wx_radio_on(struct net_device *dev,
-				struct iw_request_info *info,
-				union iwreq_data *wrqu, char *extra)
+			     struct iw_request_info *info,
+			     union iwreq_data *wrqu, char *extra)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
 
@@ -1111,8 +982,8 @@ static int r8180_wx_radio_on(struct net_device *dev,
 }
 
 static int r8180_wx_radio_off(struct net_device *dev,
-				struct iw_request_info *info,
-				union iwreq_data *wrqu, char *extra)
+			      struct iw_request_info *info,
+			      union iwreq_data *wrqu, char *extra)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
 
@@ -1129,8 +1000,8 @@ static int r8180_wx_radio_off(struct net_device *dev,
 
 }
 static int r8180_wx_get_channelplan(struct net_device *dev,
-			     struct iw_request_info *info,
-			     union iwreq_data *wrqu, char *extra)
+				    struct iw_request_info *info,
+				    union iwreq_data *wrqu, char *extra)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
 
@@ -1146,11 +1017,10 @@ static int r8180_wx_get_channelplan(struct net_device *dev,
 	return 0;
 }
 static int r8180_wx_set_channelplan(struct net_device *dev,
-			     struct iw_request_info *info,
-			     union iwreq_data *wrqu, char *extra)
+				    struct iw_request_info *info,
+				    union iwreq_data *wrqu, char *extra)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
-	/* struct ieee80211_device *ieee = netdev_priv(dev); */
 	int *val = (int *)extra;
 	int i;
 	printk("-----in fun %s\n", __func__);
@@ -1169,7 +1039,7 @@ static int r8180_wx_set_channelplan(struct net_device *dev,
 		/* Set new channel map */
 		for (i = 1; i <= DefaultChannelPlan[*val].Len; i++)
 			GET_DOT11D_INFO(priv->ieee80211)->channel_map[DefaultChannelPlan[*val].Channel[i-1]] = 1;
-		
+
 	}
 	up(&priv->wx_sem);
 
@@ -1177,8 +1047,8 @@ static int r8180_wx_set_channelplan(struct net_device *dev,
 }
 
 static int r8180_wx_get_version(struct net_device *dev,
-			       struct iw_request_info *info,
-			       union iwreq_data *wrqu, char *extra)
+				struct iw_request_info *info,
+				union iwreq_data *wrqu, char *extra)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
 	/* struct ieee80211_device *ieee; */
@@ -1193,8 +1063,8 @@ static int r8180_wx_get_version(struct net_device *dev,
 /* added by amy 080818 */
 /*receive datarate from user typing valid rate is from 2 to 108 (1 - 54M), if input 0, return to normal rate adaptive. */
 static int r8180_wx_set_forcerate(struct net_device *dev,
-			     struct iw_request_info *info,
-			     union iwreq_data *wrqu, char *extra)
+				  struct iw_request_info *info,
+				  union iwreq_data *wrqu, char *extra)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
 	u8 forcerate = *extra;
@@ -1204,8 +1074,7 @@ static int r8180_wx_set_forcerate(struct net_device *dev,
 	printk("==============>%s(): forcerate is %d\n", __func__, forcerate);
 	if ((forcerate == 2) || (forcerate == 4) || (forcerate == 11) || (forcerate == 22) || (forcerate == 12) ||
 		(forcerate == 18) || (forcerate == 24) || (forcerate == 36) || (forcerate == 48) || (forcerate == 72) ||
-		(forcerate == 96) || (forcerate == 108))
-	{
+		(forcerate == 96) || (forcerate == 108)) {
 		priv->ForcedDataRate = 1;
 		priv->ieee80211->rate = forcerate * 5;
 	}	else if (forcerate == 0)	{
@@ -1218,12 +1087,11 @@ static int r8180_wx_set_forcerate(struct net_device *dev,
 }
 
 static int r8180_wx_set_enc_ext(struct net_device *dev,
-										struct iw_request_info *info,
-										union iwreq_data *wrqu, char *extra)
+				struct iw_request_info *info,
+				union iwreq_data *wrqu, char *extra)
 {
 
 	struct r8180_priv *priv = ieee80211_priv(dev);
-	/* printk("===>%s()\n", __func__); */
 
 	int ret = 0;
 
@@ -1240,7 +1108,6 @@ static int r8180_wx_set_auth(struct net_device *dev,
 			     struct iw_request_info *info,
 			     union iwreq_data *wrqu, char *extra)
 {
-	/* printk("====>%s()\n", __func__); */
 	struct r8180_priv *priv = ieee80211_priv(dev);
 	int ret = 0;
 
@@ -1254,11 +1121,9 @@ static int r8180_wx_set_auth(struct net_device *dev,
 }
 
 static int r8180_wx_set_mlme(struct net_device *dev,
-										struct iw_request_info *info,
-										union iwreq_data *wrqu, char *extra)
+			     struct iw_request_info *info,
+			     union iwreq_data *wrqu, char *extra)
 {
-	/* printk("====>%s()\n", __func__); */
-
 	int ret = 0;
 	struct r8180_priv *priv = ieee80211_priv(dev);
 
@@ -1278,7 +1143,6 @@ static int r8180_wx_set_gen_ie(struct net_device *dev,
 			       struct iw_request_info *info,
 			       union iwreq_data *wrqu, char *extra)
 {
-/*	printk("====>%s(), len:%d\n", __func__, data->length); */
 	int ret = 0;
 		struct r8180_priv *priv = ieee80211_priv(dev);
 
@@ -1286,75 +1150,57 @@ static int r8180_wx_set_gen_ie(struct net_device *dev,
 	if (priv->ieee80211->bHwRadioOff)
 		return 0;
 
-		down(&priv->wx_sem);
+	down(&priv->wx_sem);
 #if 1
-		ret = ieee80211_wx_set_gen_ie(priv->ieee80211, extra, wrqu->data.length);
+	ret = ieee80211_wx_set_gen_ie(priv->ieee80211, extra, wrqu->data.length);
 #endif
-		up(&priv->wx_sem);
-	/* printk("<======%s(), ret:%d\n", __func__, ret); */
-		return ret;
+	up(&priv->wx_sem);
+	return ret;
 
 
 }
-static iw_handler r8180_wx_handlers[] =	{
-		NULL,						/* SIOCSIWCOMMIT */
-		r8180_wx_get_name,			/* SIOCGIWNAME */
-		dummy,						/* SIOCSIWNWID */
-		dummy,						/* SIOCGIWNWID */
-		r8180_wx_set_freq,			/* SIOCSIWFREQ */
-		r8180_wx_get_freq,			/* SIOCGIWFREQ */
-		r8180_wx_set_mode,			/* SIOCSIWMODE */
-		r8180_wx_get_mode,			/* SIOCGIWMODE */
-		r8180_wx_set_sens,			/* SIOCSIWSENS */
-		r8180_wx_get_sens,			/* SIOCGIWSENS */
-		NULL,						/* SIOCSIWRANGE */
-		rtl8180_wx_get_range,		/* SIOCGIWRANGE */
-		NULL,						/* SIOCSIWPRIV */
-		NULL,						/* SIOCGIWPRIV */
-		NULL,						/* SIOCSIWSTATS */
-		NULL,						/* SIOCGIWSTATS */
-		dummy,						/* SIOCSIWSPY */
-		dummy,						/* SIOCGIWSPY */
-		NULL,						/* SIOCGIWTHRSPY */
-		NULL,						/* SIOCWIWTHRSPY */
-		r8180_wx_set_wap,			/* SIOCSIWAP */
-		r8180_wx_get_wap,			/* SIOCGIWAP */
-		r8180_wx_set_mlme,			/* SIOCSIWMLME*/
-		dummy,						/* SIOCGIWAPLIST -- depricated */
-		r8180_wx_set_scan,			/* SIOCSIWSCAN */
-		r8180_wx_get_scan,			/* SIOCGIWSCAN */
-		r8180_wx_set_essid,			/* SIOCSIWESSID */
-		r8180_wx_get_essid,			/* SIOCGIWESSID */
-		dummy,						/* SIOCSIWNICKN */
-		dummy,						/* SIOCGIWNICKN */
-		NULL,						/* -- hole -- */
-		NULL,						/* -- hole -- */
-		r8180_wx_set_rate,			/* SIOCSIWRATE */
-		r8180_wx_get_rate,			/* SIOCGIWRATE */
-		r8180_wx_set_rts,			/* SIOCSIWRTS */
-		r8180_wx_get_rts,			/* SIOCGIWRTS */
-		r8180_wx_set_frag,			/* SIOCSIWFRAG */
-		r8180_wx_get_frag,			/* SIOCGIWFRAG */
-		dummy,						/* SIOCSIWTXPOW */
-		dummy,						/* SIOCGIWTXPOW */
-		r8180_wx_set_retry,			/* SIOCSIWRETRY */
-		r8180_wx_get_retry,			/* SIOCGIWRETRY */
-		r8180_wx_set_enc,			/* SIOCSIWENCODE */
-		r8180_wx_get_enc,			/* SIOCGIWENCODE */
-		r8180_wx_set_power,			/* SIOCSIWPOWER */
-		r8180_wx_get_power,			/* SIOCGIWPOWER */
-		NULL,						/*---hole---*/
-		NULL,						/*---hole---*/
-		r8180_wx_set_gen_ie,		/* SIOCSIWGENIE */
-		NULL,						/* SIOCSIWGENIE */
-		r8180_wx_set_auth,			/* SIOCSIWAUTH */
-		NULL,						/* SIOCSIWAUTH */
-		r8180_wx_set_enc_ext,		/* SIOCSIWENCODEEXT */
-		NULL,						/* SIOCSIWENCODEEXT */
-		NULL,						/* SIOCSIWPMKSA */
-		NULL,						/*---hole---*/
-};
 
+static const iw_handler r8180_wx_handlers[] =	{
+	IW_HANDLER(SIOCGIWNAME,		r8180_wx_get_name),
+	IW_HANDLER(SIOCSIWNWID,		dummy),
+	IW_HANDLER(SIOCGIWNWID,		dummy),
+	IW_HANDLER(SIOCSIWFREQ,		r8180_wx_set_freq),
+	IW_HANDLER(SIOCGIWFREQ,		r8180_wx_get_freq),
+	IW_HANDLER(SIOCSIWMODE, 	r8180_wx_set_mode),
+	IW_HANDLER(SIOCGIWMODE,		r8180_wx_get_mode),
+	IW_HANDLER(SIOCSIWSENS,		r8180_wx_set_sens),
+	IW_HANDLER(SIOCGIWSENS,		r8180_wx_get_sens),
+	IW_HANDLER(SIOCGIWRANGE,	rtl8180_wx_get_range),
+	IW_HANDLER(SIOCSIWSPY,		dummy),
+	IW_HANDLER(SIOCGIWSPY,		dummy),
+	IW_HANDLER(SIOCSIWAP,		r8180_wx_set_wap),
+	IW_HANDLER(SIOCGIWAP,		r8180_wx_get_wap),
+	IW_HANDLER(SIOCSIWMLME,		r8180_wx_set_mlme),
+	IW_HANDLER(SIOCGIWAPLIST,	dummy),		/* deprecated */
+	IW_HANDLER(SIOCSIWSCAN,		r8180_wx_set_scan),
+	IW_HANDLER(SIOCGIWSCAN,		r8180_wx_get_scan),
+	IW_HANDLER(SIOCSIWESSID,	r8180_wx_set_essid),
+	IW_HANDLER(SIOCGIWESSID,	r8180_wx_get_essid),
+	IW_HANDLER(SIOCSIWNICKN,	dummy),
+	IW_HANDLER(SIOCGIWNICKN,	dummy),
+	IW_HANDLER(SIOCSIWRATE,		r8180_wx_set_rate),
+	IW_HANDLER(SIOCGIWRATE,		r8180_wx_get_rate),
+	IW_HANDLER(SIOCSIWRTS,		r8180_wx_set_rts),
+	IW_HANDLER(SIOCGIWRTS,		r8180_wx_get_rts),
+	IW_HANDLER(SIOCSIWFRAG,		r8180_wx_set_frag),
+	IW_HANDLER(SIOCGIWFRAG,		r8180_wx_get_frag),
+	IW_HANDLER(SIOCSIWTXPOW,	dummy),
+	IW_HANDLER(SIOCGIWTXPOW,	dummy),
+	IW_HANDLER(SIOCSIWRETRY,	r8180_wx_set_retry),
+	IW_HANDLER(SIOCGIWRETRY,	r8180_wx_get_retry),
+	IW_HANDLER(SIOCSIWENCODE,	r8180_wx_set_enc),
+	IW_HANDLER(SIOCGIWENCODE,	r8180_wx_get_enc),
+	IW_HANDLER(SIOCSIWPOWER,	r8180_wx_set_power),
+	IW_HANDLER(SIOCGIWPOWER,	r8180_wx_get_power),
+	IW_HANDLER(SIOCSIWGENIE,	r8180_wx_set_gen_ie),
+	IW_HANDLER(SIOCSIWAUTH,		r8180_wx_set_auth),
+	IW_HANDLER(SIOCSIWENCODEEXT,	r8180_wx_set_enc_ext),
+};
 
 static const struct iw_priv_args r8180_private_args[] = {
 	{
@@ -1373,14 +1219,6 @@ static const struct iw_priv_args r8180_private_args[] = {
 		0, 0, "dummy"
 
 	},
-	/* added by christian */
-	/*
-	{
-		SIOCIWFIRSTPRIV + 0x2,
-		IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1, 0, "prismhdr"
-	},
-	*/
-	/* end added by christian */
 	{
 		SIOCIWFIRSTPRIV + 0x4,
 		IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1, 0, "activescan"
@@ -1399,18 +1237,6 @@ static const struct iw_priv_args r8180_private_args[] = {
 		0, 0, "dummy"
 
 	},
-/*
-	{
-		SIOCIWFIRSTPRIV + 0x5,
-		0, IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1, "getpsmode"
-	},
-	{
-		SIOCIWFIRSTPRIV + 0x6,
-		IW_PRIV_SIZE_FIXED, 0, "setpsmode"
-	},
-*/
-/* set/get mode have been realized in public handlers */
-
 	{
 		SIOCIWFIRSTPRIV + 0x8,
 		IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1, 0, "setiwmode"
@@ -1481,7 +1307,7 @@ static const struct iw_priv_args r8180_private_args[] = {
 
 
 static iw_handler r8180_private_handler[] = {
-	r8180_wx_set_crcmon,   /*SIOCIWSECONDPRIV*/
+	r8180_wx_set_crcmon, /*SIOCIWSECONDPRIV*/
 	dummy,
 	r8180_wx_set_beaconinterval,
 	dummy,
@@ -1510,36 +1336,46 @@ static iw_handler r8180_private_handler[] = {
 };
 
 static inline int is_same_network(struct ieee80211_network *src,
-									struct ieee80211_network *dst,
+				  struct ieee80211_network *dst,
 				  struct ieee80211_device *ieee)
 {
-		/*		A network is only a duplicate if the channel, BSSID, ESSID
-		* and the capability field (in particular IBSS and BSS) all match.
-		* We treat all <hidden> with the same BSSID and channel
-		* as one network		*/
-		return (((src->ssid_len == dst->ssid_len) || (ieee->iw_mode == IW_MODE_INFRA)) &&	/* YJ,mod, 080819,for hidden ap	*/
-			/* ((src->ssid_len == dst->ssid_len) && */
-			(src->channel == dst->channel) &&
-			!memcmp(src->bssid, dst->bssid, ETH_ALEN) &&
-			(!memcmp(src->ssid, dst->ssid, src->ssid_len) || (ieee->iw_mode == IW_MODE_INFRA)) &&  /* YJ,mod, 080819,for hidden ap */
-			/*!memcmp(src->ssid, dst->ssid, src->ssid_len) && */
-			((src->capability & WLAN_CAPABILITY_IBSS) ==
-			(dst->capability & WLAN_CAPABILITY_IBSS)) &&
-			((src->capability & WLAN_CAPABILITY_BSS) ==
-			(dst->capability & WLAN_CAPABILITY_BSS)));
+		/* A network is only a duplicate if the channel, BSSID, ESSID
+		 * and the capability field (in particular IBSS and BSS) all match.
+		 * We treat all <hidden> with the same BSSID and channel
+		 * as one network
+		 */
+		if (src->channel != dst->channel)
+			return 0;
+
+		if (memcmp(src->bssid, dst->bssid, ETH_ALEN) != 0)
+			return 0;
+
+		if (ieee->iw_mode != IW_MODE_INFRA) {
+			if (src->ssid_len != dst->ssid_len)
+				return 0;
+			if (memcmp(src->ssid, dst->ssid, src->ssid_len) != 0)
+				return 0;
+		}
+
+		if ((src->capability & WLAN_CAPABILITY_IBSS) !=
+		    (dst->capability & WLAN_CAPABILITY_IBSS))
+			return 0;
+		if ((src->capability & WLAN_CAPABILITY_BSS) !=
+		    (dst->capability & WLAN_CAPABILITY_BSS))
+			return 0;
+
+		return 1;
 }
 
-/* WB modefied to show signal to GUI on 18-01-2008 */
+/* WB modified to show signal to GUI on 18-01-2008 */
 static struct iw_statistics *r8180_get_wireless_stats(struct net_device *dev)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
-	struct ieee80211_device* ieee = priv->ieee80211;
-	struct iw_statistics* wstats = &priv->wstats;
-	/* struct ieee80211_network* target = NULL; */
+	struct ieee80211_device *ieee = priv->ieee80211;
+	struct iw_statistics *wstats = &priv->wstats;
 	int tmp_level = 0;
 	int tmp_qual = 0;
 	int tmp_noise = 0;
-	/* unsigned long flag; */
 
 	if (ieee->state < IEEE80211_LINKED)	{
 		wstats->qual.qual = 0;
@@ -1552,9 +1388,7 @@ static struct iw_statistics *r8180_get_wireless_stats(struct net_device *dev)
 	tmp_level = (&ieee->current_network)->stats.signal;
 	tmp_qual = (&ieee->current_network)->stats.signalstrength;
 	tmp_noise = (&ieee->current_network)->stats.noise;
-	/* printk("level:%d, qual:%d, noise:%d\n", tmp_level, tmp_qual, tmp_noise); */
 
-/*	printk("level:%d\n", tmp_level);	*/
 	wstats->qual.level = tmp_level;
 	wstats->qual.qual = tmp_qual;
 	wstats->qual.noise = tmp_noise;

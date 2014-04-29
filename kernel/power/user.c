@@ -12,7 +12,6 @@
 #include <linux/suspend.h>
 #include <linux/syscalls.h>
 #include <linux/reboot.h>
-#include <linux/kmod.h>
 #include <linux/string.h>
 #include <linux/device.h>
 #include <linux/miscdevice.h>
@@ -25,7 +24,6 @@
 #include <linux/console.h>
 #include <linux/cpu.h>
 #include <linux/freezer.h>
-#include <scsi/scsi_scan.h>
 
 #include <asm/uaccess.h>
 
@@ -38,9 +36,10 @@ static struct snapshot_data {
 	struct snapshot_handle handle;
 	int swap;
 	int mode;
-	char frozen;
-	char ready;
-	char platform_support;
+	bool frozen;
+	bool ready;
+	bool platform_support;
+	bool free_bitmaps;
 } snapshot_state;
 
 atomic_t snapshot_device_available = ATOMIC_INIT(1);
@@ -62,11 +61,6 @@ static int snapshot_open(struct inode *inode, struct file *filp)
 		error = -ENOSYS;
 		goto Unlock;
 	}
-	if(create_basic_memory_bitmaps()) {
-		atomic_inc(&snapshot_device_available);
-		error = -ENOMEM;
-		goto Unlock;
-	}
 	nonseekable_open(inode, filp);
 	data = &snapshot_state;
 	filp->private_data = data;
@@ -76,6 +70,7 @@ static int snapshot_open(struct inode *inode, struct file *filp)
 		data->swap = swsusp_resume_device ?
 			swap_type_of(swsusp_resume_device, 0, NULL) : -1;
 		data->mode = O_RDONLY;
+		data->free_bitmaps = false;
 		error = pm_notifier_call_chain(PM_HIBERNATION_PREPARE);
 		if (error)
 			pm_notifier_call_chain(PM_POST_HIBERNATION);
@@ -85,21 +80,23 @@ static int snapshot_open(struct inode *inode, struct file *filp)
 		 * appear.
 		 */
 		wait_for_device_probe();
-		scsi_complete_async_scans();
 
 		data->swap = -1;
 		data->mode = O_WRONLY;
 		error = pm_notifier_call_chain(PM_RESTORE_PREPARE);
+		if (!error) {
+			error = create_basic_memory_bitmaps();
+			data->free_bitmaps = !error;
+		}
 		if (error)
 			pm_notifier_call_chain(PM_POST_RESTORE);
 	}
-	if (error) {
-		free_basic_memory_bitmaps();
+	if (error)
 		atomic_inc(&snapshot_device_available);
-	}
-	data->frozen = 0;
-	data->ready = 0;
-	data->platform_support = 0;
+
+	data->frozen = false;
+	data->ready = false;
+	data->platform_support = false;
 
  Unlock:
 	unlock_system_sleep();
@@ -114,12 +111,14 @@ static int snapshot_release(struct inode *inode, struct file *filp)
 	lock_system_sleep();
 
 	swsusp_free();
-	free_basic_memory_bitmaps();
 	data = filp->private_data;
 	free_all_swap_pages(data->swap);
 	if (data->frozen) {
 		pm_restore_gfp_mask();
+		free_basic_memory_bitmaps();
 		thaw_processes();
+	} else if (data->free_bitmaps) {
+		free_basic_memory_bitmaps();
 	}
 	pm_notifier_call_chain(data->mode == O_RDONLY ?
 			PM_POST_HIBERNATION : PM_POST_RESTORE);
@@ -210,6 +209,7 @@ static long snapshot_ioctl(struct file *filp, unsigned int cmd,
 	if (!mutex_trylock(&pm_mutex))
 		return -EBUSY;
 
+	lock_device_hotplug();
 	data = filp->private_data;
 
 	switch (cmd) {
@@ -222,24 +222,26 @@ static long snapshot_ioctl(struct file *filp, unsigned int cmd,
 		sys_sync();
 		printk("done.\n");
 
-		error = usermodehelper_disable();
+		error = freeze_processes();
 		if (error)
 			break;
 
-		error = freeze_processes();
+		error = create_basic_memory_bitmaps();
 		if (error)
-			usermodehelper_enable();
+			thaw_processes();
 		else
-			data->frozen = 1;
+			data->frozen = true;
+
 		break;
 
 	case SNAPSHOT_UNFREEZE:
 		if (!data->frozen || data->ready)
 			break;
 		pm_restore_gfp_mask();
+		free_basic_memory_bitmaps();
+		data->free_bitmaps = false;
 		thaw_processes();
-		usermodehelper_enable();
-		data->frozen = 0;
+		data->frozen = false;
 		break;
 
 	case SNAPSHOT_CREATE_IMAGE:
@@ -249,16 +251,10 @@ static long snapshot_ioctl(struct file *filp, unsigned int cmd,
 		}
 		pm_restore_gfp_mask();
 		error = hibernation_snapshot(data->platform_support);
-		if (error) {
-			thaw_kernel_threads();
-		} else {
+		if (!error) {
 			error = put_user(in_suspend, (int __user *)arg);
-			if (!error && !freezer_test_done)
-				data->ready = 1;
-			if (freezer_test_done) {
-				freezer_test_done = false;
-				thaw_kernel_threads();
-			}
+			data->ready = !freezer_test_done && !error;
+			freezer_test_done = false;
 		}
 		break;
 
@@ -275,7 +271,7 @@ static long snapshot_ioctl(struct file *filp, unsigned int cmd,
 	case SNAPSHOT_FREE:
 		swsusp_free();
 		memset(&data->handle, 0, sizeof(struct snapshot_handle));
-		data->ready = 0;
+		data->ready = false;
 		/*
 		 * It is necessary to thaw kernel threads here, because
 		 * SNAPSHOT_CREATE_IMAGE may be invoked directly after
@@ -339,7 +335,7 @@ static long snapshot_ioctl(struct file *filp, unsigned int cmd,
 		 * PM_HIBERNATION_PREPARE
 		 */
 		error = suspend_devices_and_enter(PM_SUSPEND_MEM);
-		data->ready = 0;
+		data->ready = false;
 		break;
 
 	case SNAPSHOT_PLATFORM_SUPPORT:
@@ -387,6 +383,7 @@ static long snapshot_ioctl(struct file *filp, unsigned int cmd,
 
 	}
 
+	unlock_device_hotplug();
 	mutex_unlock(&pm_mutex);
 
 	return error;

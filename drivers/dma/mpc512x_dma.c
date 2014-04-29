@@ -39,10 +39,14 @@
 #include <linux/interrupt.h>
 #include <linux/io.h>
 #include <linux/slab.h>
+#include <linux/of_address.h>
 #include <linux/of_device.h>
+#include <linux/of_irq.h>
 #include <linux/of_platform.h>
 
 #include <linux/random.h>
+
+#include "dmaengine.h"
 
 /* Number of DMA Transfer descriptors allocated per channel */
 #define MPC_DMA_DESCRIPTORS	64
@@ -188,7 +192,6 @@ struct mpc_dma_chan {
 	struct list_head		completed;
 	struct mpc_dma_tcd		*tcd;
 	dma_addr_t			tcd_paddr;
-	dma_cookie_t			completed_cookie;
 
 	/* Lock for this structure */
 	spinlock_t			lock;
@@ -365,7 +368,7 @@ static void mpc_dma_process_completed(struct mpc_dma *mdma)
 		/* Free descriptors */
 		spin_lock_irqsave(&mchan->lock, flags);
 		list_splice_tail_init(&list, &mchan->free);
-		mchan->completed_cookie = last_cookie;
+		mchan->chan.completed_cookie = last_cookie;
 		spin_unlock_irqrestore(&mchan->lock, flags);
 	}
 }
@@ -438,13 +441,7 @@ static dma_cookie_t mpc_dma_tx_submit(struct dma_async_tx_descriptor *txd)
 		mpc_dma_execute(mchan);
 
 	/* Update cookie */
-	cookie = mchan->chan.cookie + 1;
-	if (cookie <= 0)
-		cookie = 1;
-
-	mchan->chan.cookie = cookie;
-	mdesc->desc.cookie = cookie;
-
+	cookie = dma_cookie_assign(txd);
 	spin_unlock_irqrestore(&mchan->lock, flags);
 
 	return cookie;
@@ -561,18 +558,7 @@ static enum dma_status
 mpc_dma_tx_status(struct dma_chan *chan, dma_cookie_t cookie,
 	       struct dma_tx_state *txstate)
 {
-	struct mpc_dma_chan *mchan = dma_chan_to_mpc_dma_chan(chan);
-	unsigned long flags;
-	dma_cookie_t last_used;
-	dma_cookie_t last_complete;
-
-	spin_lock_irqsave(&mchan->lock, flags);
-	last_used = mchan->chan.cookie;
-	last_complete = mchan->completed_cookie;
-	spin_unlock_irqrestore(&mchan->lock, flags);
-
-	dma_set_tx_state(txstate, last_complete, last_used, 0);
-	return dma_async_is_complete(cookie, last_complete, last_used);
+	return dma_cookie_status(chan, cookie, txstate);
 }
 
 /* Prepare descriptor for memory to memory copy */
@@ -649,7 +635,7 @@ mpc_dma_prep_memcpy(struct dma_chan *chan, dma_addr_t dst, dma_addr_t src,
 	return &mdesc->desc;
 }
 
-static int __devinit mpc_dma_probe(struct platform_device *op)
+static int mpc_dma_probe(struct platform_device *op)
 {
 	struct device_node *dn = op->dev.of_node;
 	struct device *dev = &op->dev;
@@ -741,8 +727,7 @@ static int __devinit mpc_dma_probe(struct platform_device *op)
 		mchan = &mdma->channels[i];
 
 		mchan->chan.device = dma;
-		mchan->chan.cookie = 1;
-		mchan->completed_cookie = mchan->chan.cookie;
+		dma_cookie_init(&mchan->chan);
 
 		INIT_LIST_HEAD(&mchan->free);
 		INIT_LIST_HEAD(&mchan->prepared);
@@ -808,7 +793,7 @@ static int __devinit mpc_dma_probe(struct platform_device *op)
 	return retval;
 }
 
-static int __devexit mpc_dma_remove(struct platform_device *op)
+static int mpc_dma_remove(struct platform_device *op)
 {
 	struct device *dev = &op->dev;
 	struct mpc_dma *mdma = dev_get_drvdata(dev);
@@ -827,7 +812,7 @@ static struct of_device_id mpc_dma_match[] = {
 
 static struct platform_driver mpc_dma_driver = {
 	.probe		= mpc_dma_probe,
-	.remove		= __devexit_p(mpc_dma_remove),
+	.remove		= mpc_dma_remove,
 	.driver = {
 		.name = DRV_NAME,
 		.owner = THIS_MODULE,

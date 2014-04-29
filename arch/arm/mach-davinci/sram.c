@@ -10,12 +10,39 @@
  */
 #include <linux/module.h>
 #include <linux/init.h>
+#include <linux/io.h>
+#include <linux/genalloc.h>
 
 #include <mach/common.h>
 #include <mach/sram.h>
 
-struct gen_pool *davinci_gen_pool;
-EXPORT_SYMBOL_GPL(davinci_gen_pool);
+static struct gen_pool *sram_pool;
+
+struct gen_pool *sram_get_gen_pool(void)
+{
+	return sram_pool;
+}
+
+void *sram_alloc(size_t len, dma_addr_t *dma)
+{
+	dma_addr_t dma_base = davinci_soc_info.sram_dma;
+
+	if (dma)
+		*dma = 0;
+	if (!sram_pool || (dma && !dma_base))
+		return NULL;
+
+	return gen_pool_dma_alloc(sram_pool, len, dma);
+
+}
+EXPORT_SYMBOL(sram_alloc);
+
+void sram_free(void *addr, size_t len)
+{
+	gen_pool_free(sram_pool, (unsigned long) addr, len);
+}
+EXPORT_SYMBOL(sram_free);
+
 
 /*
  * REVISIT This supports CPU and DMA access to/from SRAM, but it
@@ -25,20 +52,30 @@ EXPORT_SYMBOL_GPL(davinci_gen_pool);
  */
 static int __init sram_init(void)
 {
+	phys_addr_t phys = davinci_soc_info.sram_dma;
 	unsigned len = davinci_soc_info.sram_len;
+	int status = 0;
+	void __iomem *addr;
 
-	if (!len)
-		return 0;
+	if (len) {
+		len = min_t(unsigned, len, SRAM_SIZE);
+		sram_pool = gen_pool_create(ilog2(SRAM_GRANULARITY), -1);
+		if (!sram_pool)
+			status = -ENOMEM;
+	}
 
-	len = min_t(unsigned, len, SRAM_SIZE);
-	davinci_gen_pool = gen_pool_create(ilog2(SRAM_GRANULARITY), -1);
+	if (sram_pool) {
+		addr = ioremap(phys, len);
+		if (!addr)
+			return -ENOMEM;
+		status = gen_pool_add_virt(sram_pool, (unsigned long) addr,
+					   phys, len, -1);
+		if (status < 0)
+			iounmap(addr);
+	}
 
-	if (!davinci_gen_pool)
-		return -ENOMEM;
-
-	WARN_ON(gen_pool_add_virt(davinci_gen_pool, SRAM_VIRT,
-				  davinci_soc_info.sram_phys, len, -1));
-
-	return 0;
+	WARN_ON(status < 0);
+	return status;
 }
 core_initcall(sram_init);
+

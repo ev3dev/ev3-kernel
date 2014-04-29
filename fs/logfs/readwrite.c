@@ -119,8 +119,8 @@ static void logfs_disk_to_inode(struct logfs_disk_inode *di, struct inode*inode)
 	inode->i_mode	= be16_to_cpu(di->di_mode);
 	li->li_height	= di->di_height;
 	li->li_flags	= be32_to_cpu(di->di_flags);
-	inode->i_uid	= be32_to_cpu(di->di_uid);
-	inode->i_gid	= be32_to_cpu(di->di_gid);
+	i_uid_write(inode, be32_to_cpu(di->di_uid));
+	i_gid_write(inode, be32_to_cpu(di->di_gid));
 	inode->i_size	= be64_to_cpu(di->di_size);
 	logfs_set_blocks(inode, be64_to_cpu(di->di_used_bytes));
 	inode->i_atime	= be64_to_timespec(di->di_atime);
@@ -156,8 +156,8 @@ static void logfs_inode_to_disk(struct inode *inode, struct logfs_disk_inode*di)
 	di->di_height	= li->li_height;
 	di->di_pad	= 0;
 	di->di_flags	= cpu_to_be32(li->li_flags);
-	di->di_uid	= cpu_to_be32(inode->i_uid);
-	di->di_gid	= cpu_to_be32(inode->i_gid);
+	di->di_uid	= cpu_to_be32(i_uid_read(inode));
+	di->di_gid	= cpu_to_be32(i_gid_read(inode));
 	di->di_size	= cpu_to_be64(i_size_read(inode));
 	di->di_used_bytes = cpu_to_be64(li->li_used_bytes);
 	di->di_atime	= timespec_to_be64(inode->i_atime);
@@ -517,9 +517,9 @@ static int indirect_write_alias(struct super_block *sb,
 
 		ino = page->mapping->host->i_ino;
 		logfs_unpack_index(page->index, &bix, &level);
-		child = kmap_atomic(page, KM_USER0);
+		child = kmap_atomic(page);
 		val = child[pos];
-		kunmap_atomic(child, KM_USER0);
+		kunmap_atomic(child);
 		err = write_one_alias(sb, ino, bix, level, pos, val);
 		if (err)
 			return err;
@@ -673,9 +673,9 @@ static void alloc_indirect_block(struct inode *inode, struct page *page,
 	alloc_data_block(inode, page);
 
 	block = logfs_block(page);
-	array = kmap_atomic(page, KM_USER0);
+	array = kmap_atomic(page);
 	initialize_block_counters(page, block, array, page_is_empty);
-	kunmap_atomic(array, KM_USER0);
+	kunmap_atomic(array);
 }
 
 static void block_set_pointer(struct page *page, int index, u64 ptr)
@@ -685,10 +685,10 @@ static void block_set_pointer(struct page *page, int index, u64 ptr)
 	u64 oldptr;
 
 	BUG_ON(!block);
-	array = kmap_atomic(page, KM_USER0);
+	array = kmap_atomic(page);
 	oldptr = be64_to_cpu(array[index]);
 	array[index] = cpu_to_be64(ptr);
-	kunmap_atomic(array, KM_USER0);
+	kunmap_atomic(array);
 	SetPageUptodate(page);
 
 	block->full += !!(ptr & LOGFS_FULLY_POPULATED)
@@ -701,9 +701,9 @@ static u64 block_get_pointer(struct page *page, int index)
 	__be64 *block;
 	u64 ptr;
 
-	block = kmap_atomic(page, KM_USER0);
+	block = kmap_atomic(page);
 	ptr = be64_to_cpu(block[index]);
-	kunmap_atomic(block, KM_USER0);
+	kunmap_atomic(block);
 	return ptr;
 }
 
@@ -850,7 +850,7 @@ static u64 seek_holedata_loop(struct inode *inode, u64 bix, int data)
 		}
 
 		slot = get_bits(bix, SUBLEVEL(level));
-		rblock = kmap_atomic(page, KM_USER0);
+		rblock = kmap_atomic(page);
 		while (slot < LOGFS_BLOCK_FACTOR) {
 			if (data && (rblock[slot] != 0))
 				break;
@@ -861,12 +861,12 @@ static u64 seek_holedata_loop(struct inode *inode, u64 bix, int data)
 			bix &= ~(increment - 1);
 		}
 		if (slot >= LOGFS_BLOCK_FACTOR) {
-			kunmap_atomic(rblock, KM_USER0);
+			kunmap_atomic(rblock);
 			logfs_put_read_page(page);
 			return bix;
 		}
 		bofs = be64_to_cpu(rblock[slot]);
-		kunmap_atomic(rblock, KM_USER0);
+		kunmap_atomic(rblock);
 		logfs_put_read_page(page);
 		if (!bofs) {
 			BUG_ON(data);
@@ -1887,9 +1887,15 @@ int logfs_truncate(struct inode *inode, u64 target)
 		logfs_put_wblocks(sb, NULL, 1);
 	}
 
-	if (!err)
-		err = vmtruncate(inode, target);
+	if (!err) {
+		err = inode_newsize_ok(inode, target);
+		if (err)
+			goto out;
 
+		truncate_setsize(inode, target);
+	}
+
+ out:
 	/* I don't trust error recovery yet. */
 	WARN_ON(err);
 	return err;
@@ -1961,9 +1967,9 @@ int logfs_read_inode(struct inode *inode)
 	if (IS_ERR(page))
 		return PTR_ERR(page);
 
-	di = kmap_atomic(page, KM_USER0);
+	di = kmap_atomic(page);
 	logfs_disk_to_inode(di, inode);
-	kunmap_atomic(di, KM_USER0);
+	kunmap_atomic(di);
 	move_page_to_inode(inode, page);
 	page_cache_release(page);
 	return 0;
@@ -1982,9 +1988,9 @@ static struct page *inode_to_page(struct inode *inode)
 	if (!page)
 		return NULL;
 
-	di = kmap_atomic(page, KM_USER0);
+	di = kmap_atomic(page);
 	logfs_inode_to_disk(inode, di);
-	kunmap_atomic(di, KM_USER0);
+	kunmap_atomic(di);
 	move_inode_to_page(page, inode);
 	return page;
 }
@@ -2041,13 +2047,13 @@ static void logfs_mod_segment_entry(struct super_block *sb, u32 segno,
 
 	if (write)
 		alloc_indirect_block(inode, page, 0);
-	se = kmap_atomic(page, KM_USER0);
+	se = kmap_atomic(page);
 	change_se(se + child_no, arg);
 	if (write) {
 		logfs_set_alias(sb, logfs_block(page), child_no);
 		BUG_ON((int)be32_to_cpu(se[child_no].valid) > super->s_segsize);
 	}
-	kunmap_atomic(se, KM_USER0);
+	kunmap_atomic(se);
 
 	logfs_put_write_page(page);
 }
@@ -2175,7 +2181,7 @@ void logfs_evict_inode(struct inode *inode)
 		}
 	}
 	truncate_inode_pages(&inode->i_data, 0);
-	end_writeback(inode);
+	clear_inode(inode);
 
 	/* Cheaper version of write_inode.  All changes are concealed in
 	 * aliases, which are moved back.  No write to the medium happens.
@@ -2189,7 +2195,6 @@ void logfs_evict_inode(struct inode *inode)
 		return;
 	}
 
-	BUG_ON(inode->i_ino < LOGFS_RESERVED_INOS);
 	page = inode_to_page(inode);
 	BUG_ON(!page); /* FIXME: Use emergency page */
 	logfs_put_write_page(page);
@@ -2245,10 +2250,10 @@ int logfs_inode_write(struct inode *inode, const void *buf, size_t count,
 	if (!page)
 		return -ENOMEM;
 
-	pagebuf = kmap_atomic(page, KM_USER0);
+	pagebuf = kmap_atomic(page);
 	memcpy(pagebuf, buf, count);
 	flush_dcache_page(page);
-	kunmap_atomic(pagebuf, KM_USER0);
+	kunmap_atomic(pagebuf);
 
 	if (i_size_read(inode) < pos + LOGFS_BLOCKSIZE)
 		i_size_write(inode, pos + LOGFS_BLOCKSIZE);

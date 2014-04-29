@@ -1,7 +1,7 @@
 #ifndef __UM_FS_HOSTFS
 #define __UM_FS_HOSTFS
 
-#include "os.h"
+#include <os.h>
 
 /*
  * These are exactly the same definitions as in fs.h, but the names are
@@ -67,7 +67,8 @@ extern int access_file(char *path, int r, int w, int x);
 extern int open_file(char *path, int r, int w, int append);
 extern void *open_dir(char *path, int *err_out);
 extern char *read_dir(void *stream, unsigned long long *pos,
-		      unsigned long long *ino_out, int *len_out);
+		      unsigned long long *ino_out, int *len_out,
+		      unsigned int *type_out);
 extern void close_file(void *stream);
 extern int replace_file(int oldfd, int fd);
 extern void close_dir(void *stream);

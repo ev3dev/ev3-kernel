@@ -30,23 +30,18 @@
 
 #include <asm/irq.h>
 
-#include <mach/hardware.h>
 #include <mach/map.h>
-#include <mach/regs-clock.h>
 #include <mach/regs-gpio.h>
+
+#if defined(CONFIG_ARCH_S3C24XX) || defined(CONFIG_ARCH_S3C64XX)
+#include <mach/gpio-samsung.h>
+#endif
 
 #include <plat/cpu.h>
 #include <plat/gpio-core.h>
 #include <plat/gpio-cfg.h>
 #include <plat/gpio-cfg-helpers.h>
-#include <plat/gpio-fns.h>
 #include <plat/pm.h>
-
-#ifndef DEBUG_GPIO
-#define gpio_dbg(x...) do { } while (0)
-#else
-#define gpio_dbg(x...) printk(KERN_DEBUG x)
-#endif
 
 int samsung_gpio_setpull_updown(struct samsung_gpio_chip *chip,
 				unsigned int off, samsung_gpio_pull_t pull)
@@ -167,28 +162,6 @@ int s3c24xx_gpio_setpull_1down(struct samsung_gpio_chip *chip,
 			       unsigned int off, samsung_gpio_pull_t pull)
 {
 	return s3c24xx_gpio_setpull_1(chip, off, pull, S3C_GPIO_PULL_DOWN);
-}
-
-static int exynos4_gpio_setpull(struct samsung_gpio_chip *chip,
-				unsigned int off, samsung_gpio_pull_t pull)
-{
-	if (pull == S3C_GPIO_PULL_UP)
-		pull = 3;
-
-	return samsung_gpio_setpull_updown(chip, off, pull);
-}
-
-static samsung_gpio_pull_t exynos4_gpio_getpull(struct samsung_gpio_chip *chip,
-						unsigned int off)
-{
-	samsung_gpio_pull_t pull;
-
-	pull = samsung_gpio_getpull_updown(chip, off);
-
-	if (pull == 3)
-		pull = S3C_GPIO_PULL_UP;
-
-	return pull;
 }
 
 /*
@@ -452,13 +425,6 @@ static struct samsung_gpio_cfg s3c24xx_gpiocfg_banka = {
 };
 #endif
 
-static struct samsung_gpio_cfg exynos4_gpio_cfg = {
-	.set_pull	= exynos4_gpio_setpull,
-	.get_pull	= exynos4_gpio_getpull,
-	.set_config	= samsung_gpio_setcfg_4bit,
-	.get_config	= samsung_gpio_getcfg_4bit,
-};
-
 #if defined(CONFIG_CPU_S5P6440) || defined(CONFIG_CPU_S5P6450)
 static struct samsung_gpio_cfg s5p64x0_gpio_cfg_rbank = {
 	.cfg_eint	= 0x3,
@@ -501,15 +467,6 @@ static struct samsung_gpio_cfg samsung_gpio_cfgs[] = {
 		.set_config	= samsung_gpio_setcfg_2bit,
 		.get_config	= samsung_gpio_getcfg_2bit,
 	},
-	[8] = {
-		.set_pull	= exynos4_gpio_setpull,
-		.get_pull	= exynos4_gpio_getpull,
-	},
-	[9] = {
-		.cfg_eint	= 0x3,
-		.set_pull	= exynos4_gpio_setpull,
-		.get_pull	= exynos4_gpio_getpull,
-	}
 };
 
 /*
@@ -594,10 +551,13 @@ static int samsung_gpiolib_4bit_input(struct gpio_chip *chip,
 	unsigned long con;
 
 	con = __raw_readl(base + GPIOCON_OFF);
-	con &= ~(0xf << con_4bit_shift(offset));
+	if (ourchip->bitmap_gpio_int & BIT(offset))
+		con |= 0xf << con_4bit_shift(offset);
+	else
+		con &= ~(0xf << con_4bit_shift(offset));
 	__raw_writel(con, base + GPIOCON_OFF);
 
-	gpio_dbg("%s: %p: CON now %08lx\n", __func__, base, con);
+	pr_debug("%s: %p: CON now %08lx\n", __func__, base, con);
 
 	return 0;
 }
@@ -625,7 +585,7 @@ static int samsung_gpiolib_4bit_output(struct gpio_chip *chip,
 	__raw_writel(con, base + GPIOCON_OFF);
 	__raw_writel(dat, base + GPIODAT_OFF);
 
-	gpio_dbg("%s: %p: CON %08lx, DAT %08lx\n", __func__, base, con, dat);
+	pr_debug("%s: %p: CON %08lx, DAT %08lx\n", __func__, base, con, dat);
 
 	return 0;
 }
@@ -669,7 +629,7 @@ static int samsung_gpiolib_4bit2_input(struct gpio_chip *chip,
 	con &= ~(0xf << con_4bit_shift(offset));
 	__raw_writel(con, regcon);
 
-	gpio_dbg("%s: %p: CON %08lx\n", __func__, base, con);
+	pr_debug("%s: %p: CON %08lx\n", __func__, base, con);
 
 	return 0;
 }
@@ -704,7 +664,7 @@ static int samsung_gpiolib_4bit2_output(struct gpio_chip *chip,
 	__raw_writel(con, regcon);
 	__raw_writel(dat, base + GPIODAT_OFF);
 
-	gpio_dbg("%s: %p: CON %08lx, DAT %08lx\n", __func__, base, con, dat);
+	pr_debug("%s: %p: CON %08lx, DAT %08lx\n", __func__, base, con, dat);
 
 	return 0;
 }
@@ -924,10 +884,10 @@ static void __init samsung_gpiolib_add(struct samsung_gpio_chip *chip)
 #ifdef CONFIG_PM
 	if (chip->pm != NULL) {
 		if (!chip->pm->save || !chip->pm->resume)
-			printk(KERN_ERR "gpio: %s has missing PM functions\n",
+			pr_err("gpio: %s has missing PM functions\n",
 			       gc->label);
 	} else
-		printk(KERN_ERR "gpio: %s has no PM function\n", gc->label);
+		pr_err("gpio: %s has no PM function\n", gc->label);
 #endif
 
 	/* gpiochip_add() prints own failure message on error. */
@@ -1016,6 +976,8 @@ static void __init samsung_gpiolib_add_4bit_chips(struct samsung_gpio_chip *chip
 		if ((base != NULL) && (chip->base == NULL))
 			chip->base = base + ((i) * 0x20);
 
+		chip->bitmap_gpio_int = 0;
+
 		samsung_gpiolib_add(chip);
 	}
 }
@@ -1060,8 +1022,12 @@ int samsung_gpiolib_to_irq(struct gpio_chip *chip, unsigned int offset)
 #ifdef CONFIG_PLAT_S3C24XX
 static int s3c24xx_gpiolib_fbank_to_irq(struct gpio_chip *chip, unsigned offset)
 {
-	if (offset < 4)
-		return IRQ_EINT0 + offset;
+	if (offset < 4) {
+		if (soc_is_s3c2412())
+			return IRQ_EINT0_2412 + offset;
+		else
+			return IRQ_EINT0 + offset;
+	}
 
 	if (offset < 8)
 		return IRQ_EINT4 + offset - 4;
@@ -1070,7 +1036,7 @@ static int s3c24xx_gpiolib_fbank_to_irq(struct gpio_chip *chip, unsigned offset)
 }
 #endif
 
-#ifdef CONFIG_PLAT_S3C64XX
+#ifdef CONFIG_ARCH_S3C64XX
 static int s3c64xx_gpiolib_mbank_to_irq(struct gpio_chip *chip, unsigned pin)
 {
 	return pin < 5 ? IRQ_EINT(23) + pin : -ENXIO;
@@ -1090,7 +1056,7 @@ struct samsung_gpio_chip s3c24xx_gpios[] = {
 			.base			= S3C2410_GPA(0),
 			.owner			= THIS_MODULE,
 			.label			= "GPIOA",
-			.ngpio			= 24,
+			.ngpio			= 27,
 			.direction_input	= s3c24xx_gpiolib_banka_input,
 			.direction_output	= s3c24xx_gpiolib_banka_output,
 		},
@@ -1099,7 +1065,7 @@ struct samsung_gpio_chip s3c24xx_gpios[] = {
 			.base	= S3C2410_GPB(0),
 			.owner	= THIS_MODULE,
 			.label	= "GPIOB",
-			.ngpio	= 16,
+			.ngpio	= 11,
 		},
 	}, {
 		.chip	= {
@@ -1144,7 +1110,7 @@ struct samsung_gpio_chip s3c24xx_gpios[] = {
 			.base	= S3C2410_GPH(0),
 			.owner	= THIS_MODULE,
 			.label	= "GPIOH",
-			.ngpio	= 11,
+			.ngpio	= 15,
 		},
 	},
 		/* GPIOS for the S3C2443 and later devices. */
@@ -1211,7 +1177,7 @@ struct samsung_gpio_chip s3c24xx_gpios[] = {
  */
 
 static struct samsung_gpio_chip s3c64xx_gpios_4bit[] = {
-#ifdef CONFIG_PLAT_S3C64XX
+#ifdef CONFIG_ARCH_S3C64XX
 	{
 		.chip	= {
 			.base	= S3C64XX_GPA(0),
@@ -1264,7 +1230,7 @@ static struct samsung_gpio_chip s3c64xx_gpios_4bit[] = {
 };
 
 static struct samsung_gpio_chip s3c64xx_gpios_4bit2[] = {
-#ifdef CONFIG_PLAT_S3C64XX
+#ifdef CONFIG_ARCH_S3C64XX
 	{
 		.base	= S3C64XX_GPH_BASE + 0x4,
 		.chip	= {
@@ -1294,7 +1260,7 @@ static struct samsung_gpio_chip s3c64xx_gpios_4bit2[] = {
 };
 
 static struct samsung_gpio_chip s3c64xx_gpios_2bit[] = {
-#ifdef CONFIG_PLAT_S3C64XX
+#ifdef CONFIG_ARCH_S3C64XX
 	{
 		.base	= S3C64XX_GPF_BASE,
 		.config	= &samsung_gpio_cfgs[6],
@@ -2112,346 +2078,21 @@ static struct samsung_gpio_chip s5pv210_gpios_4bit[] = {
 #endif
 };
 
-/*
- * Followings are the gpio banks in EXYNOS4210
- *
- * The 'config' member when left to NULL, is initialized to the default
- * structure samsung_gpio_cfgs[3] in the init function below.
- *
- * The 'base' member is also initialized in the init function below.
- * Note: The initialization of 'base' member of samsung_gpio_chip structure
- * uses the above macro and depends on the banks being listed in order here.
- */
-
-static struct samsung_gpio_chip exynos4_gpios_1[] = {
-#ifdef CONFIG_ARCH_EXYNOS4
-	{
-		.chip	= {
-			.base	= EXYNOS4_GPA0(0),
-			.ngpio	= EXYNOS4_GPIO_A0_NR,
-			.label	= "GPA0",
-		},
-	}, {
-		.chip	= {
-			.base	= EXYNOS4_GPA1(0),
-			.ngpio	= EXYNOS4_GPIO_A1_NR,
-			.label	= "GPA1",
-		},
-	}, {
-		.chip	= {
-			.base	= EXYNOS4_GPB(0),
-			.ngpio	= EXYNOS4_GPIO_B_NR,
-			.label	= "GPB",
-		},
-	}, {
-		.chip	= {
-			.base	= EXYNOS4_GPC0(0),
-			.ngpio	= EXYNOS4_GPIO_C0_NR,
-			.label	= "GPC0",
-		},
-	}, {
-		.chip	= {
-			.base	= EXYNOS4_GPC1(0),
-			.ngpio	= EXYNOS4_GPIO_C1_NR,
-			.label	= "GPC1",
-		},
-	}, {
-		.chip	= {
-			.base	= EXYNOS4_GPD0(0),
-			.ngpio	= EXYNOS4_GPIO_D0_NR,
-			.label	= "GPD0",
-		},
-	}, {
-		.chip	= {
-			.base	= EXYNOS4_GPD1(0),
-			.ngpio	= EXYNOS4_GPIO_D1_NR,
-			.label	= "GPD1",
-		},
-	}, {
-		.chip	= {
-			.base	= EXYNOS4_GPE0(0),
-			.ngpio	= EXYNOS4_GPIO_E0_NR,
-			.label	= "GPE0",
-		},
-	}, {
-		.chip	= {
-			.base	= EXYNOS4_GPE1(0),
-			.ngpio	= EXYNOS4_GPIO_E1_NR,
-			.label	= "GPE1",
-		},
-	}, {
-		.chip	= {
-			.base	= EXYNOS4_GPE2(0),
-			.ngpio	= EXYNOS4_GPIO_E2_NR,
-			.label	= "GPE2",
-		},
-	}, {
-		.chip	= {
-			.base	= EXYNOS4_GPE3(0),
-			.ngpio	= EXYNOS4_GPIO_E3_NR,
-			.label	= "GPE3",
-		},
-	}, {
-		.chip	= {
-			.base	= EXYNOS4_GPE4(0),
-			.ngpio	= EXYNOS4_GPIO_E4_NR,
-			.label	= "GPE4",
-		},
-	}, {
-		.chip	= {
-			.base	= EXYNOS4_GPF0(0),
-			.ngpio	= EXYNOS4_GPIO_F0_NR,
-			.label	= "GPF0",
-		},
-	}, {
-		.chip	= {
-			.base	= EXYNOS4_GPF1(0),
-			.ngpio	= EXYNOS4_GPIO_F1_NR,
-			.label	= "GPF1",
-		},
-	}, {
-		.chip	= {
-			.base	= EXYNOS4_GPF2(0),
-			.ngpio	= EXYNOS4_GPIO_F2_NR,
-			.label	= "GPF2",
-		},
-	}, {
-		.chip	= {
-			.base	= EXYNOS4_GPF3(0),
-			.ngpio	= EXYNOS4_GPIO_F3_NR,
-			.label	= "GPF3",
-		},
-	},
-#endif
-};
-
-static struct samsung_gpio_chip exynos4_gpios_2[] = {
-#ifdef CONFIG_ARCH_EXYNOS4
-	{
-		.chip	= {
-			.base	= EXYNOS4_GPJ0(0),
-			.ngpio	= EXYNOS4_GPIO_J0_NR,
-			.label	= "GPJ0",
-		},
-	}, {
-		.chip	= {
-			.base	= EXYNOS4_GPJ1(0),
-			.ngpio	= EXYNOS4_GPIO_J1_NR,
-			.label	= "GPJ1",
-		},
-	}, {
-		.chip	= {
-			.base	= EXYNOS4_GPK0(0),
-			.ngpio	= EXYNOS4_GPIO_K0_NR,
-			.label	= "GPK0",
-		},
-	}, {
-		.chip	= {
-			.base	= EXYNOS4_GPK1(0),
-			.ngpio	= EXYNOS4_GPIO_K1_NR,
-			.label	= "GPK1",
-		},
-	}, {
-		.chip	= {
-			.base	= EXYNOS4_GPK2(0),
-			.ngpio	= EXYNOS4_GPIO_K2_NR,
-			.label	= "GPK2",
-		},
-	}, {
-		.chip	= {
-			.base	= EXYNOS4_GPK3(0),
-			.ngpio	= EXYNOS4_GPIO_K3_NR,
-			.label	= "GPK3",
-		},
-	}, {
-		.chip	= {
-			.base	= EXYNOS4_GPL0(0),
-			.ngpio	= EXYNOS4_GPIO_L0_NR,
-			.label	= "GPL0",
-		},
-	}, {
-		.chip	= {
-			.base	= EXYNOS4_GPL1(0),
-			.ngpio	= EXYNOS4_GPIO_L1_NR,
-			.label	= "GPL1",
-		},
-	}, {
-		.chip	= {
-			.base	= EXYNOS4_GPL2(0),
-			.ngpio	= EXYNOS4_GPIO_L2_NR,
-			.label	= "GPL2",
-		},
-	}, {
-		.config	= &samsung_gpio_cfgs[8],
-		.chip	= {
-			.base	= EXYNOS4_GPY0(0),
-			.ngpio	= EXYNOS4_GPIO_Y0_NR,
-			.label	= "GPY0",
-		},
-	}, {
-		.config	= &samsung_gpio_cfgs[8],
-		.chip	= {
-			.base	= EXYNOS4_GPY1(0),
-			.ngpio	= EXYNOS4_GPIO_Y1_NR,
-			.label	= "GPY1",
-		},
-	}, {
-		.config	= &samsung_gpio_cfgs[8],
-		.chip	= {
-			.base	= EXYNOS4_GPY2(0),
-			.ngpio	= EXYNOS4_GPIO_Y2_NR,
-			.label	= "GPY2",
-		},
-	}, {
-		.config	= &samsung_gpio_cfgs[8],
-		.chip	= {
-			.base	= EXYNOS4_GPY3(0),
-			.ngpio	= EXYNOS4_GPIO_Y3_NR,
-			.label	= "GPY3",
-		},
-	}, {
-		.config	= &samsung_gpio_cfgs[8],
-		.chip	= {
-			.base	= EXYNOS4_GPY4(0),
-			.ngpio	= EXYNOS4_GPIO_Y4_NR,
-			.label	= "GPY4",
-		},
-	}, {
-		.config	= &samsung_gpio_cfgs[8],
-		.chip	= {
-			.base	= EXYNOS4_GPY5(0),
-			.ngpio	= EXYNOS4_GPIO_Y5_NR,
-			.label	= "GPY5",
-		},
-	}, {
-		.config	= &samsung_gpio_cfgs[8],
-		.chip	= {
-			.base	= EXYNOS4_GPY6(0),
-			.ngpio	= EXYNOS4_GPIO_Y6_NR,
-			.label	= "GPY6",
-		},
-	}, {
-		.base	= (S5P_VA_GPIO2 + 0xC00),
-		.config	= &samsung_gpio_cfgs[9],
-		.irq_base = IRQ_EINT(0),
-		.chip	= {
-			.base	= EXYNOS4_GPX0(0),
-			.ngpio	= EXYNOS4_GPIO_X0_NR,
-			.label	= "GPX0",
-			.to_irq	= samsung_gpiolib_to_irq,
-		},
-	}, {
-		.base	= (S5P_VA_GPIO2 + 0xC20),
-		.config	= &samsung_gpio_cfgs[9],
-		.irq_base = IRQ_EINT(8),
-		.chip	= {
-			.base	= EXYNOS4_GPX1(0),
-			.ngpio	= EXYNOS4_GPIO_X1_NR,
-			.label	= "GPX1",
-			.to_irq	= samsung_gpiolib_to_irq,
-		},
-	}, {
-		.base	= (S5P_VA_GPIO2 + 0xC40),
-		.config	= &samsung_gpio_cfgs[9],
-		.irq_base = IRQ_EINT(16),
-		.chip	= {
-			.base	= EXYNOS4_GPX2(0),
-			.ngpio	= EXYNOS4_GPIO_X2_NR,
-			.label	= "GPX2",
-			.to_irq	= samsung_gpiolib_to_irq,
-		},
-	}, {
-		.base	= (S5P_VA_GPIO2 + 0xC60),
-		.config	= &samsung_gpio_cfgs[9],
-		.irq_base = IRQ_EINT(24),
-		.chip	= {
-			.base	= EXYNOS4_GPX3(0),
-			.ngpio	= EXYNOS4_GPIO_X3_NR,
-			.label	= "GPX3",
-			.to_irq	= samsung_gpiolib_to_irq,
-		},
-	},
-#endif
-};
-
-static struct samsung_gpio_chip exynos4_gpios_3[] = {
-#ifdef CONFIG_ARCH_EXYNOS4
-	{
-		.chip	= {
-			.base	= EXYNOS4_GPZ(0),
-			.ngpio	= EXYNOS4_GPIO_Z_NR,
-			.label	= "GPZ",
-		},
-	},
-#endif
-};
-
-#if defined(CONFIG_ARCH_EXYNOS4) && defined(CONFIG_OF)
-static int exynos4_gpio_xlate(struct gpio_chip *gc,
-			const struct of_phandle_args *gpiospec, u32 *flags)
-{
-	unsigned int pin;
-
-	if (WARN_ON(gc->of_gpio_n_cells < 4))
-		return -EINVAL;
-
-	if (WARN_ON(gpiospec->args_count < gc->of_gpio_n_cells))
-		return -EINVAL;
-
-	if (gpiospec->args[0] > gc->ngpio)
-		return -EINVAL;
-
-	pin = gc->base + gpiospec->args[0];
-
-	if (s3c_gpio_cfgpin(pin, S3C_GPIO_SFN(gpiospec->args[1])))
-		pr_warn("gpio_xlate: failed to set pin function\n");
-	if (s3c_gpio_setpull(pin, gpiospec->args[2]))
-		pr_warn("gpio_xlate: failed to set pin pull up/down\n");
-	if (s5p_gpio_set_drvstr(pin, gpiospec->args[3]))
-		pr_warn("gpio_xlate: failed to set pin drive strength\n");
-
-	return gpiospec->args[0];
-}
-
-static const struct of_device_id exynos4_gpio_dt_match[] __initdata = {
-	{ .compatible = "samsung,exynos4-gpio", },
-	{}
-};
-
-static __init void exynos4_gpiolib_attach_ofnode(struct samsung_gpio_chip *chip,
-						 u64 base, u64 offset)
-{
-	struct gpio_chip *gc =  &chip->chip;
-	u64 address;
-
-	if (!of_have_populated_dt())
-		return;
-
-	address = chip->base ? base + ((u32)chip->base & 0xfff) : base + offset;
-	gc->of_node = of_find_matching_node_by_address(NULL,
-			exynos4_gpio_dt_match, address);
-	if (!gc->of_node) {
-		pr_info("gpio: device tree node not found for gpio controller"
-			" with base address %08llx\n", address);
-		return;
-	}
-	gc->of_gpio_n_cells = 4;
-	gc->of_xlate = exynos4_gpio_xlate;
-}
-#elif defined(CONFIG_ARCH_EXYNOS4)
-static __init void exynos4_gpiolib_attach_ofnode(struct samsung_gpio_chip *chip,
-						 u64 base, u64 offset)
-{
-	return;
-}
-#endif /* defined(CONFIG_ARCH_EXYNOS4) && defined(CONFIG_OF) */
-
 /* TODO: cleanup soc_is_* */
 static __init int samsung_gpiolib_init(void)
 {
 	struct samsung_gpio_chip *chip;
 	int i, nr_chips;
 	int group = 0;
+
+	/*
+	 * Currently there are two drivers that can provide GPIO support for
+	 * Samsung SoCs. For device tree enabled platforms, the new
+	 * pinctrl-samsung driver is used, providing both GPIO and pin control
+	 * interfaces. For legacy (non-DT) platforms this driver is used.
+	 */
+	if (of_have_populated_dt())
+		return -ENODEV;
 
 	samsung_gpiolib_set_cfg(samsung_gpio_cfgs, ARRAY_SIZE(samsung_gpio_cfgs));
 
@@ -2514,61 +2155,6 @@ static __init int samsung_gpiolib_init(void)
 		samsung_gpiolib_add_4bit_chips(s5pv210_gpios_4bit, nr_chips, S5P_VA_GPIO);
 #if defined(CONFIG_CPU_S5PV210) && defined(CONFIG_S5P_GPIO_INT)
 		s5p_register_gpioint_bank(IRQ_GPIOINT, 0, S5P_GPIOINT_GROUP_MAXNR);
-#endif
-	} else if (soc_is_exynos4210()) {
-		group = 0;
-
-		/* gpio part1 */
-		chip = exynos4_gpios_1;
-		nr_chips = ARRAY_SIZE(exynos4_gpios_1);
-
-		for (i = 0; i < nr_chips; i++, chip++) {
-			if (!chip->config) {
-				chip->config = &exynos4_gpio_cfg;
-				chip->group = group++;
-			}
-#ifdef CONFIG_CPU_EXYNOS4210
-			exynos4_gpiolib_attach_ofnode(chip,
-					EXYNOS4_PA_GPIO1, i * 0x20);
-#endif
-		}
-		samsung_gpiolib_add_4bit_chips(exynos4_gpios_1, nr_chips, S5P_VA_GPIO1);
-
-		/* gpio part2 */
-		chip = exynos4_gpios_2;
-		nr_chips = ARRAY_SIZE(exynos4_gpios_2);
-
-		for (i = 0; i < nr_chips; i++, chip++) {
-			if (!chip->config) {
-				chip->config = &exynos4_gpio_cfg;
-				chip->group = group++;
-			}
-#ifdef CONFIG_CPU_EXYNOS4210
-			exynos4_gpiolib_attach_ofnode(chip,
-					EXYNOS4_PA_GPIO2, i * 0x20);
-#endif
-		}
-		samsung_gpiolib_add_4bit_chips(exynos4_gpios_2, nr_chips, S5P_VA_GPIO2);
-
-		/* gpio part3 */
-		chip = exynos4_gpios_3;
-		nr_chips = ARRAY_SIZE(exynos4_gpios_3);
-
-		for (i = 0; i < nr_chips; i++, chip++) {
-			if (!chip->config) {
-				chip->config = &exynos4_gpio_cfg;
-				chip->group = group++;
-			}
-#ifdef CONFIG_CPU_EXYNOS4210
-			exynos4_gpiolib_attach_ofnode(chip,
-					EXYNOS4_PA_GPIO3, i * 0x20);
-#endif
-		}
-		samsung_gpiolib_add_4bit_chips(exynos4_gpios_3, nr_chips, S5P_VA_GPIO3);
-
-#if defined(CONFIG_CPU_EXYNOS4210) && defined(CONFIG_S5P_GPIO_INT)
-		s5p_register_gpioint_bank(IRQ_GPIO_XA, 0, IRQ_GPIO1_NR_GROUPS);
-		s5p_register_gpioint_bank(IRQ_GPIO_XB, IRQ_GPIO1_NR_GROUPS, IRQ_GPIO2_NR_GROUPS);
 #endif
 	} else {
 		WARN(1, "Unknown SoC in gpio-samsung, no GPIOs added\n");
@@ -2686,46 +2272,6 @@ samsung_gpio_pull_t s3c_gpio_getpull(unsigned int pin)
 	return (__force samsung_gpio_pull_t)pup;
 }
 EXPORT_SYMBOL(s3c_gpio_getpull);
-
-/* gpiolib wrappers until these are totally eliminated */
-
-void s3c2410_gpio_pullup(unsigned int pin, unsigned int to)
-{
-	int ret;
-
-	WARN_ON(to);	/* should be none of these left */
-
-	if (!to) {
-		/* if pull is enabled, try first with up, and if that
-		 * fails, try using down */
-
-		ret = s3c_gpio_setpull(pin, S3C_GPIO_PULL_UP);
-		if (ret)
-			s3c_gpio_setpull(pin, S3C_GPIO_PULL_DOWN);
-	} else {
-		s3c_gpio_setpull(pin, S3C_GPIO_PULL_NONE);
-	}
-}
-EXPORT_SYMBOL(s3c2410_gpio_pullup);
-
-void s3c2410_gpio_setpin(unsigned int pin, unsigned int to)
-{
-	/* do this via gpiolib until all users removed */
-
-	gpio_request(pin, "temporary");
-	gpio_set_value(pin, to);
-	gpio_free(pin);
-}
-EXPORT_SYMBOL(s3c2410_gpio_setpin);
-
-unsigned int s3c2410_gpio_getpin(unsigned int pin)
-{
-	struct samsung_gpio_chip *chip = samsung_gpiolib_getchip(pin);
-	unsigned long offs = pin - chip->chip.base;
-
-	return __raw_readl(chip->base + 0x04) & (1 << offs);
-}
-EXPORT_SYMBOL(s3c2410_gpio_getpin);
 
 #ifdef CONFIG_S5P_GPIO_DRVSTR
 s5p_gpio_drvstr_t s5p_gpio_get_drvstr(unsigned int pin)

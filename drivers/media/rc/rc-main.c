@@ -16,10 +16,15 @@
 #include <linux/spinlock.h>
 #include <linux/delay.h>
 #include <linux/input.h>
+#include <linux/leds.h>
 #include <linux/slab.h>
 #include <linux/device.h>
 #include <linux/module.h>
 #include "rc-core-priv.h"
+
+/* Bitmap to store allocated device numbers from 0 to IRRCV_NUM_DEVICES - 1 */
+#define IRRCV_NUM_DEVICES      256
+DECLARE_BITMAP(ir_core_dev_number, IRRCV_NUM_DEVICES);
 
 /* Sizes are in bytes, 256 bytes allows for 32 entries on x64 */
 #define IR_TAB_MIN_SIZE	256
@@ -31,6 +36,7 @@
 /* Used to keep track of known keymaps */
 static LIST_HEAD(rc_map_list);
 static DEFINE_SPINLOCK(rc_map_lock);
+static struct led_trigger *led_feedback;
 
 static struct rc_map_list *seek_rc_map(const char *name)
 {
@@ -535,6 +541,7 @@ static void ir_do_keyup(struct rc_dev *dev, bool sync)
 
 	IR_dprintk(1, "keyup key 0x%04x\n", dev->last_keycode);
 	input_report_key(dev->input_dev, dev->last_keycode, 0);
+	led_trigger_event(led_feedback, LED_OFF);
 	if (sync)
 		input_sync(dev->input_dev);
 	dev->keypressed = false;
@@ -648,6 +655,7 @@ static void ir_do_keydown(struct rc_dev *dev, int scancode,
 		input_report_key(dev->input_dev, keycode, 1);
 	}
 
+	led_trigger_event(led_feedback, LED_FULL);
 	input_sync(dev->input_dev);
 }
 
@@ -699,50 +707,92 @@ void rc_keydown_notimeout(struct rc_dev *dev, int scancode, u8 toggle)
 }
 EXPORT_SYMBOL_GPL(rc_keydown_notimeout);
 
+int rc_open(struct rc_dev *rdev)
+{
+	int rval = 0;
+
+	if (!rdev)
+		return -EINVAL;
+
+	mutex_lock(&rdev->lock);
+	if (!rdev->users++ && rdev->open != NULL)
+		rval = rdev->open(rdev);
+
+	if (rval)
+		rdev->users--;
+
+	mutex_unlock(&rdev->lock);
+
+	return rval;
+}
+EXPORT_SYMBOL_GPL(rc_open);
+
 static int ir_open(struct input_dev *idev)
 {
 	struct rc_dev *rdev = input_get_drvdata(idev);
 
-	return rdev->open(rdev);
+	return rc_open(rdev);
 }
+
+void rc_close(struct rc_dev *rdev)
+{
+	if (rdev) {
+		mutex_lock(&rdev->lock);
+
+		 if (!--rdev->users && rdev->close != NULL)
+			rdev->close(rdev);
+
+		mutex_unlock(&rdev->lock);
+	}
+}
+EXPORT_SYMBOL_GPL(rc_close);
 
 static void ir_close(struct input_dev *idev)
 {
 	struct rc_dev *rdev = input_get_drvdata(idev);
-
-	 if (rdev)
-		rdev->close(rdev);
+	rc_close(rdev);
 }
 
 /* class for /sys/class/rc */
-static char *ir_devnode(struct device *dev, umode_t *mode)
+static char *rc_devnode(struct device *dev, umode_t *mode)
 {
 	return kasprintf(GFP_KERNEL, "rc/%s", dev_name(dev));
 }
 
-static struct class ir_input_class = {
+static struct class rc_class = {
 	.name		= "rc",
-	.devnode	= ir_devnode,
+	.devnode	= rc_devnode,
 };
 
+/*
+ * These are the protocol textual descriptions that are
+ * used by the sysfs protocols file. Note that the order
+ * of the entries is relevant.
+ */
 static struct {
 	u64	type;
 	char	*name;
 } proto_names[] = {
-	{ RC_TYPE_UNKNOWN,	"unknown"	},
-	{ RC_TYPE_RC5,		"rc-5"		},
-	{ RC_TYPE_NEC,		"nec"		},
-	{ RC_TYPE_RC6,		"rc-6"		},
-	{ RC_TYPE_JVC,		"jvc"		},
-	{ RC_TYPE_SONY,		"sony"		},
-	{ RC_TYPE_RC5_SZ,	"rc-5-sz"	},
-	{ RC_TYPE_SANYO,	"sanyo"		},
-	{ RC_TYPE_MCE_KBD,	"mce_kbd"	},
-	{ RC_TYPE_LIRC,		"lirc"		},
-	{ RC_TYPE_OTHER,	"other"		},
+	{ RC_BIT_NONE,		"none"		},
+	{ RC_BIT_OTHER,		"other"		},
+	{ RC_BIT_UNKNOWN,	"unknown"	},
+	{ RC_BIT_RC5 |
+	  RC_BIT_RC5X,		"rc-5"		},
+	{ RC_BIT_NEC,		"nec"		},
+	{ RC_BIT_RC6_0 |
+	  RC_BIT_RC6_6A_20 |
+	  RC_BIT_RC6_6A_24 |
+	  RC_BIT_RC6_6A_32 |
+	  RC_BIT_RC6_MCE,	"rc-6"		},
+	{ RC_BIT_JVC,		"jvc"		},
+	{ RC_BIT_SONY12 |
+	  RC_BIT_SONY15 |
+	  RC_BIT_SONY20,	"sony"		},
+	{ RC_BIT_RC5_SZ,	"rc-5-sz"	},
+	{ RC_BIT_SANYO,		"sanyo"		},
+	{ RC_BIT_MCE_KBD,	"mce_kbd"	},
+	{ RC_BIT_LIRC,		"lirc"		},
 };
-
-#define PROTO_NONE	"none"
 
 /**
  * show_protocols() - shows the current IR protocol(s)
@@ -772,12 +822,14 @@ static ssize_t show_protocols(struct device *device,
 
 	mutex_lock(&dev->lock);
 
-	if (dev->driver_type == RC_DRIVER_SCANCODE) {
-		enabled = dev->rc_map.rc_type;
+	enabled = dev->enabled_protocols;
+	if (dev->driver_type == RC_DRIVER_SCANCODE)
 		allowed = dev->allowed_protos;
-	} else {
-		enabled = dev->raw->enabled_protocols;
+	else if (dev->raw)
 		allowed = ir_raw_get_allowed_protocols();
+	else {
+		mutex_unlock(&dev->lock);
+		return -ENODEV;
 	}
 
 	IR_dprintk(1, "allowed - 0x%llx, enabled - 0x%llx\n",
@@ -789,6 +841,9 @@ static ssize_t show_protocols(struct device *device,
 			tmp += sprintf(tmp, "[%s] ", proto_names[i].name);
 		else if (allowed & proto_names[i].type)
 			tmp += sprintf(tmp, "%s ", proto_names[i].name);
+
+		if (allowed & proto_names[i].type)
+			allowed &= ~proto_names[i].type;
 	}
 
 	if (tmp != buf)
@@ -830,7 +885,6 @@ static ssize_t store_protocols(struct device *device,
 	u64 type;
 	u64 mask;
 	int rc, i, count = 0;
-	unsigned long flags;
 	ssize_t ret;
 
 	/* Device is being removed */
@@ -839,15 +893,12 @@ static ssize_t store_protocols(struct device *device,
 
 	mutex_lock(&dev->lock);
 
-	if (dev->driver_type == RC_DRIVER_SCANCODE)
-		type = dev->rc_map.rc_type;
-	else if (dev->raw)
-		type = dev->raw->enabled_protocols;
-	else {
+	if (dev->driver_type != RC_DRIVER_SCANCODE && !dev->raw) {
 		IR_dprintk(1, "Protocol switching not supported\n");
 		ret = -EINVAL;
 		goto out;
 	}
+	type = dev->enabled_protocols;
 
 	while ((tmp = strsep((char **) &data, " \n")) != NULL) {
 		if (!*tmp)
@@ -866,25 +917,20 @@ static ssize_t store_protocols(struct device *device,
 			disable = false;
 		}
 
-		if (!enable && !disable && !strncasecmp(tmp, PROTO_NONE, sizeof(PROTO_NONE))) {
-			tmp += sizeof(PROTO_NONE);
-			mask = 0;
-			count++;
-		} else {
-			for (i = 0; i < ARRAY_SIZE(proto_names); i++) {
-				if (!strcasecmp(tmp, proto_names[i].name)) {
-					tmp += strlen(proto_names[i].name);
-					mask = proto_names[i].type;
-					break;
-				}
+		for (i = 0; i < ARRAY_SIZE(proto_names); i++) {
+			if (!strcasecmp(tmp, proto_names[i].name)) {
+				mask = proto_names[i].type;
+				break;
 			}
-			if (i == ARRAY_SIZE(proto_names)) {
-				IR_dprintk(1, "Unknown protocol: '%s'\n", tmp);
-				ret = -EINVAL;
-				goto out;
-			}
-			count++;
 		}
+
+		if (i == ARRAY_SIZE(proto_names)) {
+			IR_dprintk(1, "Unknown protocol: '%s'\n", tmp);
+			ret = -EINVAL;
+			goto out;
+		}
+
+		count++;
 
 		if (enable)
 			type |= mask;
@@ -901,7 +947,7 @@ static ssize_t store_protocols(struct device *device,
 	}
 
 	if (dev->change_protocol) {
-		rc = dev->change_protocol(dev, type);
+		rc = dev->change_protocol(dev, &type);
 		if (rc < 0) {
 			IR_dprintk(1, "Error setting protocols to 0x%llx\n",
 				   (long long)type);
@@ -910,14 +956,7 @@ static ssize_t store_protocols(struct device *device,
 		}
 	}
 
-	if (dev->driver_type == RC_DRIVER_SCANCODE) {
-		spin_lock_irqsave(&dev->rc_map.lock, flags);
-		dev->rc_map.rc_type = type;
-		spin_unlock_irqrestore(&dev->rc_map.lock, flags);
-	} else {
-		dev->raw->enabled_protocols = type;
-	}
-
+	dev->enabled_protocols = type;
 	IR_dprintk(1, "Current protocol(s): 0x%llx\n",
 		   (long long)type);
 
@@ -1004,7 +1043,7 @@ struct rc_dev *rc_allocate_device(void)
 	setup_timer(&dev->timer_keyup, ir_timer_keyup, (unsigned long)dev);
 
 	dev->dev.type = &rc_dev_type;
-	dev->dev.class = &ir_input_class;
+	dev->dev.class = &rc_class;
 	device_initialize(&dev->dev);
 
 	__module_get(THIS_MODULE);
@@ -1029,10 +1068,10 @@ EXPORT_SYMBOL_GPL(rc_free_device);
 
 int rc_register_device(struct rc_dev *dev)
 {
-	static atomic_t devno = ATOMIC_INIT(0);
+	static bool raw_init = false; /* raw decoders loaded? */
 	struct rc_map *rc_map;
 	const char *path;
-	int rc;
+	int rc, devno;
 
 	if (!dev || !dev->map_name)
 		return -EINVAL;
@@ -1055,13 +1094,20 @@ int rc_register_device(struct rc_dev *dev)
 	/*
 	 * Take the lock here, as the device sysfs node will appear
 	 * when device_add() is called, which may trigger an ir-keytable udev
-	 * rule, which will in turn call show_protocols and access either
-	 * dev->rc_map.rc_type or dev->raw->enabled_protocols before it has
-	 * been initialized.
+	 * rule, which will in turn call show_protocols and access
+	 * dev->enabled_protocols before it has been initialized.
 	 */
 	mutex_lock(&dev->lock);
 
-	dev->devno = (unsigned long)(atomic_inc_return(&devno) - 1);
+	do {
+		devno = find_first_zero_bit(ir_core_dev_number,
+					    IRRCV_NUM_DEVICES);
+		/* No free device slots */
+		if (devno >= IRRCV_NUM_DEVICES)
+			return -ENOMEM;
+	} while (test_and_set_bit(devno, ir_core_dev_number));
+
+	dev->devno = devno;
 	dev_set_name(&dev->dev, "rc%ld", dev->devno);
 	dev_set_drvdata(&dev->dev, dev);
 	rc = device_add(&dev->dev);
@@ -1076,7 +1122,14 @@ int rc_register_device(struct rc_dev *dev)
 	memcpy(&dev->input_dev->id, &dev->input_id, sizeof(dev->input_id));
 	dev->input_dev->phys = dev->input_phys;
 	dev->input_dev->name = dev->input_name;
+
+	/* input_register_device can call ir_open, so unlock mutex here */
+	mutex_unlock(&dev->lock);
+
 	rc = input_register_device(dev->input_dev);
+
+	mutex_lock(&dev->lock);
+
 	if (rc)
 		goto out_table;
 
@@ -1103,15 +1156,23 @@ int rc_register_device(struct rc_dev *dev)
 	kfree(path);
 
 	if (dev->driver_type == RC_DRIVER_IR_RAW) {
+		/* Load raw decoders, if they aren't already */
+		if (!raw_init) {
+			IR_dprintk(1, "Loading raw decoders\n");
+			ir_raw_init();
+			raw_init = true;
+		}
 		rc = ir_raw_event_register(dev);
 		if (rc < 0)
 			goto out_input;
 	}
 
 	if (dev->change_protocol) {
-		rc = dev->change_protocol(dev, rc_map->rc_type);
+		u64 rc_type = (1 << rc_map->rc_type);
+		rc = dev->change_protocol(dev, &rc_type);
 		if (rc < 0)
 			goto out_raw;
+		dev->enabled_protocols = rc_type;
 	}
 
 	mutex_unlock(&dev->lock);
@@ -1136,6 +1197,7 @@ out_dev:
 	device_del(&dev->dev);
 out_unlock:
 	mutex_unlock(&dev->lock);
+	clear_bit(dev->devno, ir_core_dev_number);
 	return rc;
 }
 EXPORT_SYMBOL_GPL(rc_register_device);
@@ -1146,6 +1208,8 @@ void rc_unregister_device(struct rc_dev *dev)
 		return;
 
 	del_timer_sync(&dev->timer_keyup);
+
+	clear_bit(dev->devno, ir_core_dev_number);
 
 	if (dev->driver_type == RC_DRIVER_IR_RAW)
 		ir_raw_event_unregister(dev);
@@ -1170,14 +1234,13 @@ EXPORT_SYMBOL_GPL(rc_unregister_device);
 
 static int __init rc_core_init(void)
 {
-	int rc = class_register(&ir_input_class);
+	int rc = class_register(&rc_class);
 	if (rc) {
 		printk(KERN_ERR "rc_core: unable to register rc class\n");
 		return rc;
 	}
 
-	/* Initialize/load the decoders/keymap code that will be used */
-	ir_raw_init();
+	led_trigger_register_simple("rc-feedback", &led_feedback);
 	rc_map_register(&empty_map);
 
 	return 0;
@@ -1185,11 +1248,12 @@ static int __init rc_core_init(void)
 
 static void __exit rc_core_exit(void)
 {
-	class_unregister(&ir_input_class);
+	class_unregister(&rc_class);
+	led_trigger_unregister_simple(led_feedback);
 	rc_map_unregister(&empty_map);
 }
 
-module_init(rc_core_init);
+subsys_initcall(rc_core_init);
 module_exit(rc_core_exit);
 
 int rc_core_debug;    /* ir_debug level (0,1,2) */

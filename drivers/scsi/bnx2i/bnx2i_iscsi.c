@@ -1,7 +1,7 @@
 /*
  * bnx2i_iscsi.c: Broadcom NetXtreme II iSCSI driver.
  *
- * Copyright (c) 2006 - 2011 Broadcom Corporation
+ * Copyright (c) 2006 - 2013 Broadcom Corporation
  * Copyright (c) 2007, 2008 Red Hat, Inc.  All rights reserved.
  * Copyright (c) 2007, 2008 Mike Christie
  *
@@ -525,7 +525,7 @@ static int bnx2i_setup_mp_bdt(struct bnx2i_hba *hba)
 	struct iscsi_bd *mp_bdt;
 	u64 addr;
 
-	hba->mp_bd_tbl = dma_alloc_coherent(&hba->pcidev->dev, PAGE_SIZE,
+	hba->mp_bd_tbl = dma_alloc_coherent(&hba->pcidev->dev, CNIC_PAGE_SIZE,
 					    &hba->mp_bd_dma, GFP_KERNEL);
 	if (!hba->mp_bd_tbl) {
 		printk(KERN_ERR "unable to allocate Middle Path BDT\n");
@@ -533,11 +533,12 @@ static int bnx2i_setup_mp_bdt(struct bnx2i_hba *hba)
 		goto out;
 	}
 
-	hba->dummy_buffer = dma_alloc_coherent(&hba->pcidev->dev, PAGE_SIZE,
+	hba->dummy_buffer = dma_alloc_coherent(&hba->pcidev->dev,
+					       CNIC_PAGE_SIZE,
 					       &hba->dummy_buf_dma, GFP_KERNEL);
 	if (!hba->dummy_buffer) {
 		printk(KERN_ERR "unable to alloc Middle Path Dummy Buffer\n");
-		dma_free_coherent(&hba->pcidev->dev, PAGE_SIZE,
+		dma_free_coherent(&hba->pcidev->dev, CNIC_PAGE_SIZE,
 				  hba->mp_bd_tbl, hba->mp_bd_dma);
 		hba->mp_bd_tbl = NULL;
 		rc = -1;
@@ -548,7 +549,7 @@ static int bnx2i_setup_mp_bdt(struct bnx2i_hba *hba)
 	addr = (unsigned long) hba->dummy_buf_dma;
 	mp_bdt->buffer_addr_lo = addr & 0xffffffff;
 	mp_bdt->buffer_addr_hi = addr >> 32;
-	mp_bdt->buffer_length = PAGE_SIZE;
+	mp_bdt->buffer_length = CNIC_PAGE_SIZE;
 	mp_bdt->flags = ISCSI_BD_LAST_IN_BD_CHAIN |
 			ISCSI_BD_FIRST_IN_BD_CHAIN;
 out:
@@ -565,12 +566,12 @@ out:
 static void bnx2i_free_mp_bdt(struct bnx2i_hba *hba)
 {
 	if (hba->mp_bd_tbl) {
-		dma_free_coherent(&hba->pcidev->dev, PAGE_SIZE,
+		dma_free_coherent(&hba->pcidev->dev, CNIC_PAGE_SIZE,
 				  hba->mp_bd_tbl, hba->mp_bd_dma);
 		hba->mp_bd_tbl = NULL;
 	}
 	if (hba->dummy_buffer) {
-		dma_free_coherent(&hba->pcidev->dev, PAGE_SIZE,
+		dma_free_coherent(&hba->pcidev->dev, CNIC_PAGE_SIZE,
 				  hba->dummy_buffer, hba->dummy_buf_dma);
 		hba->dummy_buffer = NULL;
 	}
@@ -596,7 +597,7 @@ void bnx2i_drop_session(struct iscsi_cls_session *cls_session)
 /**
  * bnx2i_ep_destroy_list_add - add an entry to EP destroy list
  * @hba:	pointer to adapter instance
- * @ep:		pointer to endpoint (transport indentifier) structure
+ * @ep:		pointer to endpoint (transport identifier) structure
  *
  * EP destroy queue manager
  */
@@ -613,7 +614,7 @@ static int bnx2i_ep_destroy_list_add(struct bnx2i_hba *hba,
  * bnx2i_ep_destroy_list_del - add an entry to EP destroy list
  *
  * @hba: 		pointer to adapter instance
- * @ep: 		pointer to endpoint (transport indentifier) structure
+ * @ep: 		pointer to endpoint (transport identifier) structure
  *
  * EP destroy queue manager
  */
@@ -630,7 +631,7 @@ static int bnx2i_ep_destroy_list_del(struct bnx2i_hba *hba,
 /**
  * bnx2i_ep_ofld_list_add - add an entry to ep offload pending list
  * @hba:	pointer to adapter instance
- * @ep:		pointer to endpoint (transport indentifier) structure
+ * @ep:		pointer to endpoint (transport identifier) structure
  *
  * pending conn offload completion queue manager
  */
@@ -646,7 +647,7 @@ static int bnx2i_ep_ofld_list_add(struct bnx2i_hba *hba,
 /**
  * bnx2i_ep_ofld_list_del - add an entry to ep offload pending list
  * @hba: 		pointer to adapter instance
- * @ep: 		pointer to endpoint (transport indentifier) structure
+ * @ep: 		pointer to endpoint (transport identifier) structure
  *
  * pending conn offload completion queue manager
  */
@@ -721,7 +722,7 @@ bnx2i_find_ep_in_destroy_list(struct bnx2i_hba *hba, u32 iscsi_cid)
 /**
  * bnx2i_ep_active_list_add - add an entry to ep active list
  * @hba:	pointer to adapter instance
- * @ep:		pointer to endpoint (transport indentifier) structure
+ * @ep:		pointer to endpoint (transport identifier) structure
  *
  * current active conn queue manager
  */
@@ -737,7 +738,7 @@ static void bnx2i_ep_active_list_add(struct bnx2i_hba *hba,
 /**
  * bnx2i_ep_active_list_del - deletes an entry to ep active list
  * @hba:	pointer to adapter instance
- * @ep:		pointer to endpoint (transport indentifier) structure
+ * @ep:		pointer to endpoint (transport identifier) structure
  *
  * current active conn queue manager
  */
@@ -808,16 +809,16 @@ struct bnx2i_hba *bnx2i_alloc_hba(struct cnic_dev *cnic)
 	hba->pci_func = PCI_FUNC(hba->pcidev->devfn);
 	hba->pci_devno = PCI_SLOT(hba->pcidev->devfn);
 
-	bnx2i_identify_device(hba);
+	bnx2i_identify_device(hba, cnic);
 	bnx2i_setup_host_queue_size(hba, shost);
 
+	hba->reg_base = pci_resource_start(hba->pcidev, 0);
 	if (test_bit(BNX2I_NX2_DEV_5709, &hba->cnic_dev_type)) {
-		hba->regview = ioremap_nocache(hba->netdev->base_addr,
-					       BNX2_MQ_CONFIG2);
+		hba->regview = pci_iomap(hba->pcidev, 0, BNX2_MQ_CONFIG2);
 		if (!hba->regview)
 			goto ioreg_map_err;
 	} else if (test_bit(BNX2I_NX2_DEV_57710, &hba->cnic_dev_type)) {
-		hba->regview = ioremap_nocache(hba->netdev->base_addr, 4096);
+		hba->regview = pci_iomap(hba->pcidev, 0, 4096);
 		if (!hba->regview)
 			goto ioreg_map_err;
 	}
@@ -874,6 +875,11 @@ struct bnx2i_hba *bnx2i_alloc_hba(struct cnic_dev *cnic)
 		hba->conn_ctx_destroy_tmo = 2 * HZ;
 	}
 
+#ifdef CONFIG_32BIT
+	spin_lock_init(&hba->stat_lock);
+#endif
+	memset(&hba->stats, 0, sizeof(struct iscsi_stats_info));
+
 	if (iscsi_host_add(shost, &hba->pcidev->dev))
 		goto free_dump_mem;
 	return hba;
@@ -884,7 +890,7 @@ cid_que_err:
 	bnx2i_free_mp_bdt(hba);
 mp_bdt_mem_err:
 	if (hba->regview) {
-		iounmap(hba->regview);
+		pci_iounmap(hba->pcidev, hba->regview);
 		hba->regview = NULL;
 	}
 ioreg_map_err:
@@ -910,7 +916,7 @@ void bnx2i_free_hba(struct bnx2i_hba *hba)
 	pci_dev_put(hba->pcidev);
 
 	if (hba->regview) {
-		iounmap(hba->regview);
+		pci_iounmap(hba->pcidev, hba->regview);
 		hba->regview = NULL;
 	}
 	bnx2i_free_mp_bdt(hba);
@@ -929,14 +935,14 @@ static void bnx2i_conn_free_login_resources(struct bnx2i_hba *hba,
 					    struct bnx2i_conn *bnx2i_conn)
 {
 	if (bnx2i_conn->gen_pdu.resp_bd_tbl) {
-		dma_free_coherent(&hba->pcidev->dev, PAGE_SIZE,
+		dma_free_coherent(&hba->pcidev->dev, CNIC_PAGE_SIZE,
 				  bnx2i_conn->gen_pdu.resp_bd_tbl,
 				  bnx2i_conn->gen_pdu.resp_bd_dma);
 		bnx2i_conn->gen_pdu.resp_bd_tbl = NULL;
 	}
 
 	if (bnx2i_conn->gen_pdu.req_bd_tbl) {
-		dma_free_coherent(&hba->pcidev->dev, PAGE_SIZE,
+		dma_free_coherent(&hba->pcidev->dev, CNIC_PAGE_SIZE,
 				  bnx2i_conn->gen_pdu.req_bd_tbl,
 				  bnx2i_conn->gen_pdu.req_bd_dma);
 		bnx2i_conn->gen_pdu.req_bd_tbl = NULL;
@@ -993,13 +999,13 @@ static int bnx2i_conn_alloc_login_resources(struct bnx2i_hba *hba,
 	bnx2i_conn->gen_pdu.resp_wr_ptr = bnx2i_conn->gen_pdu.resp_buf;
 
 	bnx2i_conn->gen_pdu.req_bd_tbl =
-		dma_alloc_coherent(&hba->pcidev->dev, PAGE_SIZE,
+		dma_alloc_coherent(&hba->pcidev->dev, CNIC_PAGE_SIZE,
 				   &bnx2i_conn->gen_pdu.req_bd_dma, GFP_KERNEL);
 	if (bnx2i_conn->gen_pdu.req_bd_tbl == NULL)
 		goto login_req_bd_tbl_failure;
 
 	bnx2i_conn->gen_pdu.resp_bd_tbl =
-		dma_alloc_coherent(&hba->pcidev->dev, PAGE_SIZE,
+		dma_alloc_coherent(&hba->pcidev->dev, CNIC_PAGE_SIZE,
 				   &bnx2i_conn->gen_pdu.resp_bd_dma,
 				   GFP_KERNEL);
 	if (bnx2i_conn->gen_pdu.resp_bd_tbl == NULL)
@@ -1008,7 +1014,7 @@ static int bnx2i_conn_alloc_login_resources(struct bnx2i_hba *hba,
 	return 0;
 
 login_resp_bd_tbl_failure:
-	dma_free_coherent(&hba->pcidev->dev, PAGE_SIZE,
+	dma_free_coherent(&hba->pcidev->dev, CNIC_PAGE_SIZE,
 			  bnx2i_conn->gen_pdu.req_bd_tbl,
 			  bnx2i_conn->gen_pdu.req_bd_dma);
 	bnx2i_conn->gen_pdu.req_bd_tbl = NULL;
@@ -1181,12 +1187,18 @@ static int
 bnx2i_mtask_xmit(struct iscsi_conn *conn, struct iscsi_task *task)
 {
 	struct bnx2i_conn *bnx2i_conn = conn->dd_data;
+	struct bnx2i_hba *hba = bnx2i_conn->hba;
 	struct bnx2i_cmd *cmd = task->dd_data;
 
 	memset(bnx2i_conn->gen_pdu.req_buf, 0, ISCSI_DEF_MAX_RECV_SEG_LEN);
 
 	bnx2i_setup_cmd_wqe_template(cmd);
 	bnx2i_conn->gen_pdu.req_buf_size = task->data_count;
+
+	/* Tx PDU/data length count */
+	ADD_STATS_64(hba, tx_pdus, 1);
+	ADD_STATS_64(hba, tx_bytes, task->data_count);
+
 	if (task->data_count) {
 		memcpy(bnx2i_conn->gen_pdu.req_buf, task->data,
 		       task->data_count);
@@ -1684,7 +1696,7 @@ no_nx2_route:
 /**
  * bnx2i_tear_down_conn - tear down iscsi/tcp connection and free resources
  * @hba:	pointer to adapter instance
- * @ep:		endpoint (transport indentifier) structure
+ * @ep:		endpoint (transport identifier) structure
  *
  * destroys cm_sock structure and on chip iscsi context
  */
@@ -2244,6 +2256,7 @@ static struct scsi_host_template bnx2i_host_template = {
 	.eh_device_reset_handler = iscsi_eh_device_reset,
 	.eh_target_reset_handler = iscsi_eh_recover_target,
 	.change_queue_depth	= iscsi_change_queue_depth,
+	.target_alloc		= iscsi_target_alloc,
 	.can_queue		= 2048,
 	.max_sectors		= 127,
 	.cmd_per_lun		= 128,

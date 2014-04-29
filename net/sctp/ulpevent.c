@@ -22,25 +22,18 @@
  * See the GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with GNU CC; see the file COPYING.  If not, write to
- * the Free Software Foundation, 59 Temple Place - Suite 330,
- * Boston, MA 02111-1307, USA.
+ * along with GNU CC; see the file COPYING.  If not, see
+ * <http://www.gnu.org/licenses/>.
  *
  * Please send any bug reports or fixes you make to the
  * email address(es):
- *    lksctp developers <lksctp-developers@lists.sourceforge.net>
- *
- * Or submit a bug report through the following website:
- *    http://www.sf.net/projects/lksctp
+ *    lksctp developers <linux-sctp@vger.kernel.org>
  *
  * Written or modified by:
  *    Jon Grimm             <jgrimm@us.ibm.com>
  *    La Monte H.P. Yarroll <piggy@acm.org>
  *    Ardelle Fan	    <ardelle.fan@intel.com>
  *    Sridhar Samudrala     <sri@us.ibm.com>
- *
- * Any bugs reported given to us we will try to fix... any fixes shared will
- * be incorporated into the next SCTP release.
  */
 
 #include <linux/slab.h>
@@ -57,9 +50,9 @@ static void sctp_ulpevent_release_frag_data(struct sctp_ulpevent *event);
 
 
 /* Initialize an ULP event from an given skb.  */
-SCTP_STATIC void sctp_ulpevent_init(struct sctp_ulpevent *event,
-				    int msg_flags,
-				    unsigned int len)
+static void sctp_ulpevent_init(struct sctp_ulpevent *event,
+			       int msg_flags,
+			       unsigned int len)
 {
 	memset(event, 0, sizeof(struct sctp_ulpevent));
 	event->msg_flags = msg_flags;
@@ -67,8 +60,8 @@ SCTP_STATIC void sctp_ulpevent_init(struct sctp_ulpevent *event,
 }
 
 /* Create a new sctp_ulpevent.  */
-SCTP_STATIC struct sctp_ulpevent *sctp_ulpevent_new(int size, int msg_flags,
-						    gfp_t gfp)
+static struct sctp_ulpevent *sctp_ulpevent_new(int size, int msg_flags,
+					       gfp_t gfp)
 {
 	struct sctp_ulpevent *event;
 	struct sk_buff *skb;
@@ -702,7 +695,8 @@ struct sctp_ulpevent *sctp_ulpevent_make_rcvmsg(struct sctp_association *asoc,
 	if (rx_count >= asoc->base.sk->sk_rcvbuf) {
 
 		if ((asoc->base.sk->sk_userlocks & SOCK_RCVBUF_LOCK) ||
-		    (!sk_rmem_schedule(asoc->base.sk, chunk->skb->truesize)))
+		    (!sk_rmem_schedule(asoc->base.sk, chunk->skb,
+				       chunk->skb->truesize)))
 			goto fail;
 	}
 
@@ -715,7 +709,8 @@ struct sctp_ulpevent *sctp_ulpevent_make_rcvmsg(struct sctp_association *asoc,
 	 * can mark it as received so the tsn_map is updated correctly.
 	 */
 	if (sctp_tsnmap_mark(&asoc->peer.tsn_map,
-			     ntohl(chunk->subh.data_hdr->tsn)))
+			     ntohl(chunk->subh.data_hdr->tsn),
+			     chunk->transport))
 		goto fail_mark;
 
 	/* First calculate the padding, so we don't inadvertently
@@ -994,7 +989,7 @@ static void sctp_ulpevent_receive_data(struct sctp_ulpevent *event,
 	skb = sctp_event2skb(event);
 	/* Set the owner and charge rwnd for bytes received.  */
 	sctp_ulpevent_set_owner(event, asoc);
-	sctp_assoc_rwnd_decrease(asoc, skb_headlen(skb));
+	sctp_assoc_rwnd_update(asoc, false);
 
 	if (!skb->data_len)
 		return;
@@ -1016,6 +1011,7 @@ static void sctp_ulpevent_release_data(struct sctp_ulpevent *event)
 {
 	struct sk_buff *skb, *frag;
 	unsigned int	len;
+	struct sctp_association *asoc;
 
 	/* Current stack structures assume that the rcv buffer is
 	 * per socket.   For UDP style sockets this is not true as
@@ -1040,8 +1036,11 @@ static void sctp_ulpevent_release_data(struct sctp_ulpevent *event)
 	}
 
 done:
-	sctp_assoc_rwnd_increase(event->asoc, len);
+	asoc = event->asoc;
+	sctp_association_hold(asoc);
 	sctp_ulpevent_release_owner(event);
+	sctp_assoc_rwnd_update(asoc, true);
+	sctp_association_put(asoc);
 }
 
 static void sctp_ulpevent_release_frag_data(struct sctp_ulpevent *event)

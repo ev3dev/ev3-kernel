@@ -44,7 +44,7 @@ static int i2c_legoev3_xfer(struct i2c_adapter *i2c_adap,
 	struct i2c_legoev3_algo_data *adata = i2c_adap->algo_data;
 	int err;
 
-	INIT_COMPLETION(adata->done);
+	reinit_completion(&adata->done);
 	err = legoev3_fiq_start_xfer(adata->pdata->port_id, msgs, num,
 				     i2c_legoev3_complete, adata);
 	if (err)
@@ -67,7 +67,7 @@ static const struct i2c_algorithm i2c_legoev3_algo = {
 	.functionality	= i2c_legoev3_func,
 };
 
-static int __devinit i2c_legoev3_probe(struct platform_device *pdev)
+static int i2c_legoev3_probe(struct platform_device *pdev)
 {
 	struct i2c_legoev3_platform_data *pdata;
 	struct i2c_legoev3_algo_data *adata;
@@ -130,7 +130,7 @@ err_alloc_adap:
 	return ret;
 }
 
-static int __devexit i2c_legoev3_remove(struct platform_device *pdev)
+static int i2c_legoev3_remove(struct platform_device *pdev)
 {
 	struct i2c_adapter *adap = platform_get_drvdata(pdev);
 	struct i2c_legoev3_algo_data *adata = adap->algo_data;
@@ -151,7 +151,7 @@ static struct platform_driver i2c_legoev3_driver = {
 		.owner	= THIS_MODULE,
 	},
 	.probe		= i2c_legoev3_probe,
-	.remove		= __devexit_p(i2c_legoev3_remove),
+	.remove		= i2c_legoev3_remove,
 };
 module_platform_driver(i2c_legoev3_driver);
 

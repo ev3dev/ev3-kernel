@@ -25,6 +25,7 @@
 #include <linux/module.h>
 #include <linux/syscalls.h>
 #include <linux/rcupdate.h>
+#include <linux/binfmts.h>
 
 #include <asm/spu.h>
 
@@ -69,8 +70,6 @@ SYSCALL_DEFINE4(spu_create, const char __user *, name, unsigned int, flags,
 	umode_t, mode, int, neighbor_fd)
 {
 	long ret;
-	struct file *neighbor;
-	int fput_needed;
 	struct spufs_calls *calls;
 
 	calls = spufs_calls_get();
@@ -78,11 +77,11 @@ SYSCALL_DEFINE4(spu_create, const char __user *, name, unsigned int, flags,
 		return -ENOSYS;
 
 	if (flags & SPU_CREATE_AFFINITY_SPU) {
+		struct fd neighbor = fdget(neighbor_fd);
 		ret = -EBADF;
-		neighbor = fget_light(neighbor_fd, &fput_needed);
-		if (neighbor) {
-			ret = calls->create_thread(name, flags, mode, neighbor);
-			fput_light(neighbor, fput_needed);
+		if (neighbor.file) {
+			ret = calls->create_thread(name, flags, mode, neighbor.file);
+			fdput(neighbor);
 		}
 	} else
 		ret = calls->create_thread(name, flags, mode, NULL);
@@ -94,8 +93,7 @@ SYSCALL_DEFINE4(spu_create, const char __user *, name, unsigned int, flags,
 asmlinkage long sys_spu_run(int fd, __u32 __user *unpc, __u32 __user *ustatus)
 {
 	long ret;
-	struct file *filp;
-	int fput_needed;
+	struct fd arg;
 	struct spufs_calls *calls;
 
 	calls = spufs_calls_get();
@@ -103,10 +101,10 @@ asmlinkage long sys_spu_run(int fd, __u32 __user *unpc, __u32 __user *ustatus)
 		return -ENOSYS;
 
 	ret = -EBADF;
-	filp = fget_light(fd, &fput_needed);
-	if (filp) {
-		ret = calls->spu_run(filp, unpc, ustatus);
-		fput_light(filp, fput_needed);
+	arg = fdget(fd);
+	if (arg.file) {
+		ret = calls->spu_run(arg.file, unpc, ustatus);
+		fdput(arg);
 	}
 
 	spufs_calls_put(calls);
@@ -129,7 +127,7 @@ int elf_coredump_extra_notes_size(void)
 	return ret;
 }
 
-int elf_coredump_extra_notes_write(struct file *file, loff_t *foffset)
+int elf_coredump_extra_notes_write(struct coredump_params *cprm)
 {
 	struct spufs_calls *calls;
 	int ret;
@@ -138,7 +136,7 @@ int elf_coredump_extra_notes_write(struct file *file, loff_t *foffset)
 	if (!calls)
 		return 0;
 
-	ret = calls->coredump_extra_notes_write(file, foffset);
+	ret = calls->coredump_extra_notes_write(cprm);
 
 	spufs_calls_put(calls);
 

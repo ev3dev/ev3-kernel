@@ -34,16 +34,20 @@ static inline void pm_restore_console(void)
 typedef int __bitwise suspend_state_t;
 
 #define PM_SUSPEND_ON		((__force suspend_state_t) 0)
-#define PM_SUSPEND_STANDBY	((__force suspend_state_t) 1)
+#define PM_SUSPEND_FREEZE	((__force suspend_state_t) 1)
+#define PM_SUSPEND_STANDBY	((__force suspend_state_t) 2)
 #define PM_SUSPEND_MEM		((__force suspend_state_t) 3)
+#define PM_SUSPEND_MIN		PM_SUSPEND_FREEZE
 #define PM_SUSPEND_MAX		((__force suspend_state_t) 4)
 
 enum suspend_stat_step {
 	SUSPEND_FREEZE = 1,
 	SUSPEND_PREPARE,
 	SUSPEND_SUSPEND,
+	SUSPEND_SUSPEND_LATE,
 	SUSPEND_SUSPEND_NOIRQ,
 	SUSPEND_RESUME_NOIRQ,
+	SUSPEND_RESUME_EARLY,
 	SUSPEND_RESUME
 };
 
@@ -53,8 +57,10 @@ struct suspend_stats {
 	int	failed_freeze;
 	int	failed_prepare;
 	int	failed_suspend;
+	int	failed_suspend_late;
 	int	failed_suspend_noirq;
 	int	failed_resume;
+	int	failed_resume_early;
 	int	failed_resume_noirq;
 #define	REC_FAILED_NUM	2
 	int	last_failed_dev;
@@ -188,6 +194,7 @@ struct platform_suspend_ops {
  */
 extern void suspend_set_ops(const struct platform_suspend_ops *ops);
 extern int suspend_valid_only_mem(suspend_state_t state);
+extern void freeze_wake(void);
 
 /**
  * arch_suspend_disable_irqs - disable IRQs for suspend
@@ -213,6 +220,7 @@ extern int pm_suspend(suspend_state_t state);
 
 static inline void suspend_set_ops(const struct platform_suspend_ops *ops) {}
 static inline int pm_suspend(suspend_state_t state) { return -ENOSYS; }
+static inline void freeze_wake(void) {}
 #endif /* !CONFIG_SUSPEND */
 
 /* struct pbe is used for creating lists of pages that should be restored
@@ -352,8 +360,10 @@ extern int unregister_pm_notifier(struct notifier_block *nb);
 extern bool events_check_enabled;
 
 extern bool pm_wakeup_pending(void);
-extern bool pm_get_wakeup_count(unsigned int *count);
+extern bool pm_get_wakeup_count(unsigned int *count, bool block);
 extern bool pm_save_wakeup_count(unsigned int count);
+extern void pm_wakep_autosleep_enabled(bool set);
+extern void pm_print_active_wakeup_sources(void);
 
 static inline void lock_system_sleep(void)
 {
@@ -402,6 +412,23 @@ static inline void lock_system_sleep(void) {}
 static inline void unlock_system_sleep(void) {}
 
 #endif /* !CONFIG_PM_SLEEP */
+
+#ifdef CONFIG_PM_SLEEP_DEBUG
+extern bool pm_print_times_enabled;
+#else
+#define pm_print_times_enabled	(false)
+#endif
+
+#ifdef CONFIG_PM_AUTOSLEEP
+
+/* kernel/power/autosleep.c */
+void queue_up_suspend_work(void);
+
+#else /* !CONFIG_PM_AUTOSLEEP */
+
+static inline void queue_up_suspend_work(void) {}
+
+#endif /* !CONFIG_PM_AUTOSLEEP */
 
 #ifdef CONFIG_ARCH_SAVE_PAGE_KEYS
 /*

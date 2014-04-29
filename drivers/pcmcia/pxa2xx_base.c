@@ -29,7 +29,6 @@
 #include <mach/smemc.h>
 #include <asm/io.h>
 #include <asm/irq.h>
-#include <asm/system.h>
 #include <mach/pxa2xx-regs.h>
 #include <asm/mach-types.h>
 
@@ -298,7 +297,7 @@ static int pxa2xx_drv_pcmcia_probe(struct platform_device *dev)
 	}
 
 	clk = clk_get(&dev->dev, NULL);
-	if (!clk)
+	if (IS_ERR(clk))
 		return -ENODEV;
 
 	pxa2xx_drv_pcmcia_ops(ops);
@@ -318,10 +317,7 @@ static int pxa2xx_drv_pcmcia_probe(struct platform_device *dev)
 
 		skt->nr = ops->first + i;
 		skt->clk = clk;
-		skt->ops = ops;
-		skt->socket.owner = ops->owner;
-		skt->socket.dev.parent = &dev->dev;
-		skt->socket.pci_irq = NO_IRQ;
+		soc_pcmcia_init_one(skt, ops, &dev->dev);
 
 		ret = pxa2xx_drv_pcmcia_add_one(skt);
 		if (ret)

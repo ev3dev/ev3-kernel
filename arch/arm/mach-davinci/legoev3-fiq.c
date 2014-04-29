@@ -19,11 +19,13 @@
  */
 
 #include <linux/init.h>
+#include <linux/io.h>
 #include <linux/module.h>
 #include <linux/interrupt.h>
 #include <linux/platform_device.h>
 #include <linux/gpio.h>
 
+#include <asm/io.h>
 #include <asm/fiq.h>
 #include <mach/legoev3-fiq.h>
 
@@ -777,7 +779,7 @@ void legoev3_fiq_ehrpwm_set_volume(int volume)
 }
 EXPORT_SYMBOL_GPL(legoev3_fiq_ehrpwm_set_volume);
 
-static int __devinit legoev3_fiq_probe(struct platform_device *pdev)
+static int legoev3_fiq_probe(struct platform_device *pdev)
 {
 	struct legoev3_fiq_data *fiq_data;
 	struct legoev3_fiq_platform_data *pdata;
@@ -814,7 +816,7 @@ static int __devinit legoev3_fiq_probe(struct platform_device *pdev)
 
 	ret = gpio_request_one(pdata->status_gpio, GPIOF_INIT_LOW, "fiq status");
 	if (ret < 0) {
-		dev_err(&legoev3_fiq_data->pdev->dev,
+		dev_err(&pdev->dev,
 			"Unable to request GPIO %d, error %d\n",
 			pdata->status_gpio, ret);
 		return ret;
@@ -823,7 +825,7 @@ static int __devinit legoev3_fiq_probe(struct platform_device *pdev)
 
 	ret = gpio_to_irq(pdata->status_gpio);
 	if (ret < 0) {
-		dev_err(&legoev3_fiq_data->pdev->dev,
+		dev_err(&pdev->dev,
 			"Unable to get irq number for GPIO %d, error %d\n",
 			pdata->status_gpio, ret);
 		goto err_gpio_to_irq;

@@ -62,7 +62,8 @@ static struct page *get_mapping_page(struct super_block *sb, pgoff_t index,
 		page = read_cache_page(mapping, index, filler, sb);
 	else {
 		page = find_or_create_page(mapping, index, GFP_NOFS);
-		unlock_page(page);
+		if (page)
+			unlock_page(page);
 	}
 	return page;
 }
@@ -543,9 +544,9 @@ void move_page_to_btree(struct page *page)
 		BUG_ON(!item); /* mempool empty */
 		memset(item, 0, sizeof(*item));
 
-		child = kmap_atomic(page, KM_USER0);
+		child = kmap_atomic(page);
 		item->val = child[pos];
-		kunmap_atomic(child, KM_USER0);
+		kunmap_atomic(child);
 		item->child_no = pos;
 		list_add(&item->list, &block->item_list);
 	}
@@ -884,9 +885,10 @@ static struct logfs_area *alloc_area(struct super_block *sb)
 	return area;
 }
 
-static void map_invalidatepage(struct page *page, unsigned long l)
+static void map_invalidatepage(struct page *page, unsigned int o,
+			       unsigned int l)
 {
-	BUG();
+	return;
 }
 
 static int map_releasepage(struct page *page, gfp_t g)

@@ -4,8 +4,8 @@
 static void read_int_callback(struct urb *urb/*, struct pt_regs *regs*/)
 {
 	int		status = urb->status;
-	PS_INTERFACE_ADAPTER psIntfAdapter = (PS_INTERFACE_ADAPTER)urb->context;
-	PMINI_ADAPTER Adapter = psIntfAdapter->psAdapter ;
+	struct bcm_interface_adapter *psIntfAdapter = (struct bcm_interface_adapter *)urb->context;
+	struct bcm_mini_adapter *Adapter = psIntfAdapter->psAdapter ;
 
 	if (netif_msg_intr(Adapter))
 		pr_info(PFX "%s: interrupt status %d\n",
@@ -60,7 +60,7 @@ static void read_int_callback(struct urb *urb/*, struct pt_regs *regs*/)
 				psIntfAdapter->psAdapter->downloadDDR +=1;
 				wake_up(&Adapter->tx_packet_wait_queue);
 			}
-			if(FALSE == Adapter->waiting_to_fw_download_done)
+			if(false == Adapter->waiting_to_fw_download_done)
 			{
 				Adapter->waiting_to_fw_download_done = TRUE;
 				wake_up(&Adapter->ioctl_fw_dnld_wait_queue);
@@ -114,7 +114,7 @@ static void read_int_callback(struct urb *urb/*, struct pt_regs *regs*/)
 
 }
 
-int CreateInterruptUrb(PS_INTERFACE_ADAPTER psIntfAdapter)
+int CreateInterruptUrb(struct bcm_interface_adapter *psIntfAdapter)
 {
 	psIntfAdapter->psInterruptUrb = usb_alloc_urb(0, GFP_KERNEL);
 	if (!psIntfAdapter->psInterruptUrb)
@@ -143,15 +143,15 @@ int CreateInterruptUrb(PS_INTERFACE_ADAPTER psIntfAdapter)
 }
 
 
-INT StartInterruptUrb(PS_INTERFACE_ADAPTER psIntfAdapter)
+INT StartInterruptUrb(struct bcm_interface_adapter *psIntfAdapter)
 {
 	INT status = 0;
 
-	if( FALSE == psIntfAdapter->psAdapter->device_removed &&
-		FALSE == psIntfAdapter->psAdapter->bEndPointHalted &&
-		FALSE == psIntfAdapter->bSuspended &&
-		FALSE == psIntfAdapter->bPreparingForBusSuspend &&
-		FALSE == psIntfAdapter->psAdapter->StopAllXaction)
+	if( false == psIntfAdapter->psAdapter->device_removed &&
+		false == psIntfAdapter->psAdapter->bEndPointHalted &&
+		false == psIntfAdapter->bSuspended &&
+		false == psIntfAdapter->bPreparingForBusSuspend &&
+		false == psIntfAdapter->psAdapter->StopAllXaction)
 	{
 		status = usb_submit_urb(psIntfAdapter->psInterruptUrb, GFP_ATOMIC);
 		if (status)

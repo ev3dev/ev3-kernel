@@ -125,59 +125,6 @@ static const struct oaktrail_hdmi_limit oaktrail_hdmi_limit = {
 	.nf  = { .min = NF_MIN,			.max = NF_MAX  },
 };
 
-static void wait_for_vblank(struct drm_device *dev)
-{
-	/* FIXME: Can we do this as a sleep ? */
-	/* Wait for 20ms, i.e. one cycle at 50hz. */
-	mdelay(20);
-}
-
-static void scu_busy_loop(void *scu_base)
-{
-	u32 status = 0;
-	u32 loop_count = 0;
-
-	status = readl(scu_base + 0x04);
-	while (status & 1) {
-		udelay(1); /* scu processing time is in few u secods */
-		status = readl(scu_base + 0x04);
-		loop_count++;
-		/* break if scu doesn't reset busy bit after huge retry */
-		if (loop_count > 1000) {
-			DRM_DEBUG_KMS("SCU IPC timed out");
-			return;
-		}
-	}
-}
-
-static void oaktrail_hdmi_reset(struct drm_device *dev)
-{
-	void *base;
-	/* FIXME: at least make these defines */
-	unsigned int scu_ipc_mmio = 0xff11c000;
-	int scu_len = 1024;
-
-	base = ioremap((resource_size_t)scu_ipc_mmio, scu_len);
-	if (base == NULL) {
-		DRM_ERROR("failed to map SCU mmio\n");
-		return;
-	}
-
-	/* scu ipc: assert hdmi controller reset */
-	writel(0xff11d118, base + 0x0c);
-	writel(0x7fffffdf, base + 0x80);
-	writel(0x42005, base + 0x0);
-	scu_busy_loop(base);
-
-	/* scu ipc: de-assert hdmi controller reset */
-	writel(0xff11d118, base + 0x0c);
-	writel(0x7fffffff, base + 0x80);
-	writel(0x42005, base + 0x0);
-	scu_busy_loop(base);
-
-	iounmap(base);
-}
-
 static void oaktrail_hdmi_audio_enable(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
@@ -208,125 +155,6 @@ static void oaktrail_hdmi_audio_disable(struct drm_device *dev)
 	HDMI_READ(HDMI_HCR);
 }
 
-void oaktrail_crtc_hdmi_dpms(struct drm_crtc *crtc, int mode)
-{
-	struct drm_device *dev = crtc->dev;
-	u32 temp;
-
-	switch (mode) {
-	case DRM_MODE_DPMS_OFF:
-		/* Disable VGACNTRL */
-		REG_WRITE(VGACNTRL, 0x80000000);
-
-		/* Disable plane */
-		temp = REG_READ(DSPBCNTR);
-		if ((temp & DISPLAY_PLANE_ENABLE) != 0) {
-			REG_WRITE(DSPBCNTR, temp & ~DISPLAY_PLANE_ENABLE);
-			REG_READ(DSPBCNTR);
-			/* Flush the plane changes */
-			REG_WRITE(DSPBSURF, REG_READ(DSPBSURF));
-			REG_READ(DSPBSURF);
-		}
-
-		/* Disable pipe B */
-		temp = REG_READ(PIPEBCONF);
-		if ((temp & PIPEACONF_ENABLE) != 0) {
-			REG_WRITE(PIPEBCONF, temp & ~PIPEACONF_ENABLE);
-			REG_READ(PIPEBCONF);
-		}
-
-		/* Disable LNW Pipes, etc */
-		temp = REG_READ(PCH_PIPEBCONF);
-		if ((temp & PIPEACONF_ENABLE) != 0) {
-			REG_WRITE(PCH_PIPEBCONF, temp & ~PIPEACONF_ENABLE);
-			REG_READ(PCH_PIPEBCONF);
-		}
-		/* wait for pipe off */
-		udelay(150);
-		/* Disable dpll */
-		temp = REG_READ(DPLL_CTRL);
-		if ((temp & DPLL_PWRDN) == 0) {
-			REG_WRITE(DPLL_CTRL, temp | (DPLL_PWRDN | DPLL_RESET));
-			REG_WRITE(DPLL_STATUS, 0x1);
-		}
-		/* wait for dpll off */
-		udelay(150);
-		break;
-	case DRM_MODE_DPMS_ON:
-	case DRM_MODE_DPMS_STANDBY:
-	case DRM_MODE_DPMS_SUSPEND:
-		/* Enable dpll */
-		temp = REG_READ(DPLL_CTRL);
-		if ((temp & DPLL_PWRDN) != 0) {
-			REG_WRITE(DPLL_CTRL, temp & ~(DPLL_PWRDN | DPLL_RESET));
-			temp = REG_READ(DPLL_CLK_ENABLE);
-			REG_WRITE(DPLL_CLK_ENABLE, temp | DPLL_EN_DISP | DPLL_SEL_HDMI | DPLL_EN_HDMI);
-			REG_READ(DPLL_CLK_ENABLE);
-		}
-		/* wait for dpll warm up */
-		udelay(150);
-
-		/* Enable pipe B */
-		temp = REG_READ(PIPEBCONF);
-		if ((temp & PIPEACONF_ENABLE) == 0) {
-			REG_WRITE(PIPEBCONF, temp | PIPEACONF_ENABLE);
-			REG_READ(PIPEBCONF);
-		}
-
-		/* Enable LNW Pipe B */
-		temp = REG_READ(PCH_PIPEBCONF);
-		if ((temp & PIPEACONF_ENABLE) == 0) {
-			REG_WRITE(PCH_PIPEBCONF, temp | PIPEACONF_ENABLE);
-			REG_READ(PCH_PIPEBCONF);
-		}
-		wait_for_vblank(dev);
-
-		/* Enable plane */
-		temp = REG_READ(DSPBCNTR);
-		if ((temp & DISPLAY_PLANE_ENABLE) == 0) {
-			REG_WRITE(DSPBCNTR, temp | DISPLAY_PLANE_ENABLE);
-			/* Flush the plane changes */
-			REG_WRITE(DSPBSURF, REG_READ(DSPBSURF));
-			REG_READ(DSPBSURF);
-		}
-		psb_intel_crtc_load_lut(crtc);
-	}
-	/* DSPARB */
-	REG_WRITE(DSPARB, 0x00003fbf);
-	/* FW1 */
-	REG_WRITE(0x70034, 0x3f880a0a);
-	/* FW2 */
-	REG_WRITE(0x70038, 0x0b060808);
-	/* FW4 */
-	REG_WRITE(0x70050, 0x08030404);
-	/* FW5 */
-	REG_WRITE(0x70054, 0x04040404);
-	/* LNC Chicken Bits */
-	REG_WRITE(0x70400, 0x4000);
-}
-
-
-static void oaktrail_hdmi_dpms(struct drm_encoder *encoder, int mode)
-{
-	static int dpms_mode = -1;
-
-	struct drm_device *dev = encoder->dev;
-	struct drm_psb_private *dev_priv = dev->dev_private;
-	struct oaktrail_hdmi_dev *hdmi_dev = dev_priv->hdmi_priv;
-	u32 temp;
-
-	if (dpms_mode == mode)
-		return;
-
-	if (mode != DRM_MODE_DPMS_ON)
-		temp = 0x0;
-	else
-		temp = 0x99;
-
-	dpms_mode = mode;
-	HDMI_WRITE(HDMI_VIDEO_REG, temp);
-}
-
 static unsigned int htotal_calculate(struct drm_display_mode *mode)
 {
 	u32 htotal, new_crtc_htotal;
@@ -339,6 +167,7 @@ static unsigned int htotal_calculate(struct drm_display_mode *mode)
 	 */
 	new_crtc_htotal = (mode->crtc_htotal - 1) * 200 * 1000 / mode->clock;
 
+	DRM_DEBUG_KMS("new crtc htotal 0x%4x\n", new_crtc_htotal);
 	return (mode->crtc_hdisplay - 1) | (new_crtc_htotal << 16);
 }
 
@@ -376,6 +205,57 @@ static void oaktrail_hdmi_find_dpll(struct drm_crtc *crtc, int target,
 	best_clock->nf = (nf << 14);
 }
 
+static void scu_busy_loop(void __iomem *scu_base)
+{
+	u32 status = 0;
+	u32 loop_count = 0;
+
+	status = readl(scu_base + 0x04);
+	while (status & 1) {
+		udelay(1); /* scu processing time is in few u secods */
+		status = readl(scu_base + 0x04);
+		loop_count++;
+		/* break if scu doesn't reset busy bit after huge retry */
+		if (loop_count > 1000) {
+			DRM_DEBUG_KMS("SCU IPC timed out");
+			return;
+		}
+	}
+}
+
+/*
+ *	You don't want to know, you really really don't want to know....
+ *
+ *	This is magic. However it's safe magic because of the way the platform
+ *	works and it is necessary magic.
+ */
+static void oaktrail_hdmi_reset(struct drm_device *dev)
+{
+	void __iomem *base;
+	unsigned long scu_ipc_mmio = 0xff11c000UL;
+	int scu_len = 1024;
+
+	base = ioremap((resource_size_t)scu_ipc_mmio, scu_len);
+	if (base == NULL) {
+		DRM_ERROR("failed to map scu mmio\n");
+		return;
+	}
+
+	/* scu ipc: assert hdmi controller reset */
+	writel(0xff11d118, base + 0x0c);
+	writel(0x7fffffdf, base + 0x80);
+	writel(0x42005, base + 0x0);
+	scu_busy_loop(base);
+
+	/* scu ipc: de-assert hdmi controller reset */
+	writel(0xff11d118, base + 0x0c);
+	writel(0x7fffffff, base + 0x80);
+	writel(0x42005, base + 0x0);
+	scu_busy_loop(base);
+
+	iounmap(base);
+}
+
 int oaktrail_crtc_hdmi_mode_set(struct drm_crtc *crtc,
 			    struct drm_display_mode *mode,
 			    struct drm_display_mode *adjusted_mode,
@@ -401,10 +281,11 @@ int oaktrail_crtc_hdmi_mode_set(struct drm_crtc *crtc,
 	u32 dspcntr, pipeconf, dpll, temp;
 	int dspcntr_reg = DSPBCNTR;
 
+	if (!gma_power_begin(dev, true))
+		return 0;
+
 	/* Disable the VGA plane that we never use */
 	REG_WRITE(VGACNTRL, VGA_DISP_DISABLE);
-
-	/* XXX: Disable the panel fitter if it was on our pipe */
 
 	/* Disable dpll if necessary */
 	dpll = REG_READ(DPLL_CTRL);
@@ -415,15 +296,14 @@ int oaktrail_crtc_hdmi_mode_set(struct drm_crtc *crtc,
 	}
 	udelay(150);
 
-	/* reset controller: FIXME - can we sort out the ioremap mess ? */
-	iounmap(hdmi_dev->regs);
+	/* Reset controller */
 	oaktrail_hdmi_reset(dev);
 
 	/* program and enable dpll */
 	refclk = 25000;
 	oaktrail_hdmi_find_dpll(crtc, adjusted_mode->clock, refclk, &clock);
 
-	/* Setting DPLL */
+	/* Set the DPLL */
 	dpll = REG_READ(DPLL_CTRL);
 	dpll &= ~DPLL_PDIV_MASK;
 	dpll &= ~(DPLL_PWRDN | DPLL_RESET);
@@ -434,12 +314,6 @@ int oaktrail_crtc_hdmi_mode_set(struct drm_crtc *crtc,
 	REG_WRITE(DPLL_UPDATE, 0x80000000);
 	REG_WRITE(DPLL_CLK_ENABLE, 0x80050102);
 	udelay(150);
-
-	hdmi_dev->regs = ioremap(hdmi_dev->mmio, hdmi_dev->mmio_len);
-	if (hdmi_dev->regs == NULL) {
-		DRM_ERROR("failed to do hdmi mmio mapping\n");
-		return -ENOMEM;
-	}
 
 	/* configure HDMI */
 	HDMI_WRITE(0x1004, 0x1fd);
@@ -455,8 +329,7 @@ int oaktrail_crtc_hdmi_mode_set(struct drm_crtc *crtc,
 	REG_WRITE(vtot_reg, (adjusted_mode->crtc_vdisplay - 1) | ((adjusted_mode->crtc_vtotal - 1) << 16));
 	REG_WRITE(vblank_reg, (adjusted_mode->crtc_vblank_start - 1) | ((adjusted_mode->crtc_vblank_end - 1) << 16));
 	REG_WRITE(vsync_reg, (adjusted_mode->crtc_vsync_start - 1) | ((adjusted_mode->crtc_vsync_end - 1) << 16));
-	REG_WRITE(pipesrc_reg,
-		((mode->crtc_hdisplay - 1) << 16) |  (mode->crtc_vdisplay - 1));
+	REG_WRITE(pipesrc_reg, ((mode->crtc_hdisplay - 1) << 16) |  (mode->crtc_vdisplay - 1));
 
 	REG_WRITE(PCH_HTOTAL_B, (adjusted_mode->crtc_hdisplay - 1) | ((adjusted_mode->crtc_htotal - 1) << 16));
 	REG_WRITE(PCH_HBLANK_B, (adjusted_mode->crtc_hblank_start - 1) | ((adjusted_mode->crtc_hblank_end - 1) << 16));
@@ -464,14 +337,12 @@ int oaktrail_crtc_hdmi_mode_set(struct drm_crtc *crtc,
 	REG_WRITE(PCH_VTOTAL_B, (adjusted_mode->crtc_vdisplay - 1) | ((adjusted_mode->crtc_vtotal - 1) << 16));
 	REG_WRITE(PCH_VBLANK_B, (adjusted_mode->crtc_vblank_start - 1) | ((adjusted_mode->crtc_vblank_end - 1) << 16));
 	REG_WRITE(PCH_VSYNC_B, (adjusted_mode->crtc_vsync_start - 1) | ((adjusted_mode->crtc_vsync_end - 1) << 16));
-	REG_WRITE(PCH_PIPEBSRC,
-		((mode->crtc_hdisplay - 1) << 16) |  (mode->crtc_vdisplay - 1));
+	REG_WRITE(PCH_PIPEBSRC, ((mode->crtc_hdisplay - 1) << 16) |  (mode->crtc_vdisplay - 1));
 
 	temp = adjusted_mode->crtc_hblank_end - adjusted_mode->crtc_hblank_start;
 	HDMI_WRITE(HDMI_HBLANK_A, ((adjusted_mode->crtc_hdisplay - 1) << 16) |  temp);
 
-	REG_WRITE(dspsize_reg,
-			((mode->vdisplay - 1) << 16) | (mode->hdisplay - 1));
+	REG_WRITE(dspsize_reg, ((mode->vdisplay - 1) << 16) | (mode->hdisplay - 1));
 	REG_WRITE(dsppos_reg, 0);
 
 	/* Flush the plane changes */
@@ -495,18 +366,152 @@ int oaktrail_crtc_hdmi_mode_set(struct drm_crtc *crtc,
 
 	REG_WRITE(PCH_PIPEBCONF, pipeconf);
 	REG_READ(PCH_PIPEBCONF);
-	wait_for_vblank(dev);
+	gma_wait_for_vblank(dev);
 
 	REG_WRITE(dspcntr_reg, dspcntr);
-	wait_for_vblank(dev);
+	gma_wait_for_vblank(dev);
+
+	gma_power_end(dev);
 
 	return 0;
+}
+
+void oaktrail_crtc_hdmi_dpms(struct drm_crtc *crtc, int mode)
+{
+	struct drm_device *dev = crtc->dev;
+	u32 temp;
+
+	DRM_DEBUG_KMS("%s %d\n", __func__, mode);
+
+	switch (mode) {
+	case DRM_MODE_DPMS_OFF:
+		REG_WRITE(VGACNTRL, 0x80000000);
+
+		/* Disable plane */
+		temp = REG_READ(DSPBCNTR);
+		if ((temp & DISPLAY_PLANE_ENABLE) != 0) {
+			REG_WRITE(DSPBCNTR, temp & ~DISPLAY_PLANE_ENABLE);
+			REG_READ(DSPBCNTR);
+			/* Flush the plane changes */
+			REG_WRITE(DSPBSURF, REG_READ(DSPBSURF));
+			REG_READ(DSPBSURF);
+		}
+
+		/* Disable pipe B */
+		temp = REG_READ(PIPEBCONF);
+		if ((temp & PIPEACONF_ENABLE) != 0) {
+			REG_WRITE(PIPEBCONF, temp & ~PIPEACONF_ENABLE);
+			REG_READ(PIPEBCONF);
+		}
+
+		/* Disable LNW Pipes, etc */
+		temp = REG_READ(PCH_PIPEBCONF);
+		if ((temp & PIPEACONF_ENABLE) != 0) {
+			REG_WRITE(PCH_PIPEBCONF, temp & ~PIPEACONF_ENABLE);
+			REG_READ(PCH_PIPEBCONF);
+		}
+
+		/* wait for pipe off */
+		udelay(150);
+
+		/* Disable dpll */
+		temp = REG_READ(DPLL_CTRL);
+		if ((temp & DPLL_PWRDN) == 0) {
+			REG_WRITE(DPLL_CTRL, temp | (DPLL_PWRDN | DPLL_RESET));
+			REG_WRITE(DPLL_STATUS, 0x1);
+		}
+
+		/* wait for dpll off */
+		udelay(150);
+
+		break;
+	case DRM_MODE_DPMS_ON:
+	case DRM_MODE_DPMS_STANDBY:
+	case DRM_MODE_DPMS_SUSPEND:
+		/* Enable dpll */
+		temp = REG_READ(DPLL_CTRL);
+		if ((temp & DPLL_PWRDN) != 0) {
+			REG_WRITE(DPLL_CTRL, temp & ~(DPLL_PWRDN | DPLL_RESET));
+			temp = REG_READ(DPLL_CLK_ENABLE);
+			REG_WRITE(DPLL_CLK_ENABLE, temp | DPLL_EN_DISP | DPLL_SEL_HDMI | DPLL_EN_HDMI);
+			REG_READ(DPLL_CLK_ENABLE);
+		}
+		/* wait for dpll warm up */
+		udelay(150);
+
+		/* Enable pipe B */
+		temp = REG_READ(PIPEBCONF);
+		if ((temp & PIPEACONF_ENABLE) == 0) {
+			REG_WRITE(PIPEBCONF, temp | PIPEACONF_ENABLE);
+			REG_READ(PIPEBCONF);
+		}
+
+		/* Enable LNW Pipe B */
+		temp = REG_READ(PCH_PIPEBCONF);
+		if ((temp & PIPEACONF_ENABLE) == 0) {
+			REG_WRITE(PCH_PIPEBCONF, temp | PIPEACONF_ENABLE);
+			REG_READ(PCH_PIPEBCONF);
+		}
+
+		gma_wait_for_vblank(dev);
+
+		/* Enable plane */
+		temp = REG_READ(DSPBCNTR);
+		if ((temp & DISPLAY_PLANE_ENABLE) == 0) {
+			REG_WRITE(DSPBCNTR, temp | DISPLAY_PLANE_ENABLE);
+			/* Flush the plane changes */
+			REG_WRITE(DSPBSURF, REG_READ(DSPBSURF));
+			REG_READ(DSPBSURF);
+		}
+
+		gma_crtc_load_lut(crtc);
+	}
+
+	/* DSPARB */
+	REG_WRITE(DSPARB, 0x00003fbf);
+
+	/* FW1 */
+	REG_WRITE(0x70034, 0x3f880a0a);
+
+	/* FW2 */
+	REG_WRITE(0x70038, 0x0b060808);
+
+	/* FW4 */
+	REG_WRITE(0x70050, 0x08030404);
+
+	/* FW5 */
+	REG_WRITE(0x70054, 0x04040404);
+
+	/* LNC Chicken Bits - Squawk! */
+	REG_WRITE(0x70400, 0x4000);
+
+	return;
+}
+
+static void oaktrail_hdmi_dpms(struct drm_encoder *encoder, int mode)
+{
+	static int dpms_mode = -1;
+
+	struct drm_device *dev = encoder->dev;
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct oaktrail_hdmi_dev *hdmi_dev = dev_priv->hdmi_priv;
+	u32 temp;
+
+	if (dpms_mode == mode)
+		return;
+
+	if (mode != DRM_MODE_DPMS_ON)
+		temp = 0x0;
+	else
+		temp = 0x99;
+
+	dpms_mode = mode;
+	HDMI_WRITE(HDMI_VIDEO_REG, temp);
 }
 
 static int oaktrail_hdmi_mode_valid(struct drm_connector *connector,
 				struct drm_display_mode *mode)
 {
-	struct drm_psb_private *dev_priv = connector->dev->dev_private;
 	if (mode->clock > 165000)
 		return MODE_CLOCK_HIGH;
 	if (mode->clock < 20000)
@@ -515,16 +520,11 @@ static int oaktrail_hdmi_mode_valid(struct drm_connector *connector,
 	if (mode->flags & DRM_MODE_FLAG_DBLSCAN)
 		return MODE_NO_DBLESCAN;
 
-	/* We assume worst case scenario of 32 bpp here, since we don't know */
-	if ((ALIGN(mode->hdisplay * 4, 64) * mode->vdisplay) >
-	    dev_priv->vram_stolen_size)
-		return MODE_MEM;
-
 	return MODE_OK;
 }
 
 static bool oaktrail_hdmi_mode_fixup(struct drm_encoder *encoder,
-				 struct drm_display_mode *mode,
+				 const struct drm_display_mode *mode,
 				 struct drm_display_mode *adjusted_mode)
 {
 	return true;
@@ -566,13 +566,15 @@ static const unsigned char raw_edid[] = {
 
 static int oaktrail_hdmi_get_modes(struct drm_connector *connector)
 {
-	struct drm_device *dev = connector->dev;
-	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct i2c_adapter *i2c_adap;
 	struct edid *edid;
-	struct drm_display_mode *mode, *t;
-	int i = 0, ret = 0;
+	int ret = 0;
 
+	/*
+	 *	FIXME: We need to figure this lot out. In theory we can
+	 *	read the EDID somehow but I've yet to find working reference
+	 *	code.
+	 */
 	i2c_adap = i2c_get_adapter(3);
 	if (i2c_adap == NULL) {
 		DRM_ERROR("No ddc adapter available!\n");
@@ -585,19 +587,8 @@ static int oaktrail_hdmi_get_modes(struct drm_connector *connector)
 	if (edid) {
 		drm_mode_connector_update_edid_property(connector, edid);
 		ret = drm_add_edid_modes(connector, edid);
-		connector->display_info.raw_edid = NULL;
 	}
-
-	/*
-	 * prune modes that require frame buffer bigger than stolen mem
-	 */
-	list_for_each_entry_safe(mode, t, &connector->probed_modes, head) {
-		if ((mode->hdisplay * mode->vdisplay * 4) >= dev_priv->vram_stolen_size) {
-			i++;
-			drm_mode_remove(connector, mode);
-		}
-	}
-	return ret - i;
+	return ret;
 }
 
 static void oaktrail_hdmi_mode_set(struct drm_encoder *encoder,
@@ -618,16 +609,16 @@ static void oaktrail_hdmi_destroy(struct drm_connector *connector)
 static const struct drm_encoder_helper_funcs oaktrail_hdmi_helper_funcs = {
 	.dpms = oaktrail_hdmi_dpms,
 	.mode_fixup = oaktrail_hdmi_mode_fixup,
-	.prepare = psb_intel_encoder_prepare,
+	.prepare = gma_encoder_prepare,
 	.mode_set = oaktrail_hdmi_mode_set,
-	.commit = psb_intel_encoder_commit,
+	.commit = gma_encoder_commit,
 };
 
 static const struct drm_connector_helper_funcs
 					oaktrail_hdmi_connector_helper_funcs = {
 	.get_modes = oaktrail_hdmi_get_modes,
 	.mode_valid = oaktrail_hdmi_mode_valid,
-	.best_encoder = psb_intel_best_encoder,
+	.best_encoder = gma_best_encoder,
 };
 
 static const struct drm_connector_funcs oaktrail_hdmi_connector_funcs = {
@@ -649,21 +640,21 @@ static const struct drm_encoder_funcs oaktrail_hdmi_enc_funcs = {
 void oaktrail_hdmi_init(struct drm_device *dev,
 					struct psb_intel_mode_device *mode_dev)
 {
-	struct psb_intel_encoder *psb_intel_encoder;
-	struct psb_intel_connector *psb_intel_connector;
+	struct gma_encoder *gma_encoder;
+	struct gma_connector *gma_connector;
 	struct drm_connector *connector;
 	struct drm_encoder *encoder;
 
-	psb_intel_encoder = kzalloc(sizeof(struct psb_intel_encoder), GFP_KERNEL);
-	if (!psb_intel_encoder)
+	gma_encoder = kzalloc(sizeof(struct gma_encoder), GFP_KERNEL);
+	if (!gma_encoder)
 		return;
 
-	psb_intel_connector = kzalloc(sizeof(struct psb_intel_connector), GFP_KERNEL);
-	if (!psb_intel_connector)
+	gma_connector = kzalloc(sizeof(struct gma_connector), GFP_KERNEL);
+	if (!gma_connector)
 		goto failed_connector;
 
-	connector = &psb_intel_connector->base;
-	encoder = &psb_intel_encoder->base;
+	connector = &gma_connector->base;
+	encoder = &gma_encoder->base;
 	drm_connector_init(dev, connector,
 			   &oaktrail_hdmi_connector_funcs,
 			   DRM_MODE_CONNECTOR_DVID);
@@ -672,10 +663,9 @@ void oaktrail_hdmi_init(struct drm_device *dev,
 			 &oaktrail_hdmi_enc_funcs,
 			 DRM_MODE_ENCODER_TMDS);
 
-	psb_intel_connector_attach_encoder(psb_intel_connector,
-					   psb_intel_encoder);
+	gma_connector_attach_encoder(gma_connector, gma_encoder);
 
-	psb_intel_encoder->type = INTEL_OUTPUT_HDMI;
+	gma_encoder->type = INTEL_OUTPUT_HDMI;
 	drm_encoder_helper_add(encoder, &oaktrail_hdmi_helper_funcs);
 	drm_connector_helper_add(connector, &oaktrail_hdmi_connector_helper_funcs);
 
@@ -683,16 +673,17 @@ void oaktrail_hdmi_init(struct drm_device *dev,
 	connector->interlace_allowed = false;
 	connector->doublescan_allowed = false;
 	drm_sysfs_connector_add(connector);
+	dev_info(dev->dev, "HDMI initialised.\n");
 
 	return;
 
 failed_connector:
-	kfree(psb_intel_encoder);
+	kfree(gma_encoder);
 }
 
 static DEFINE_PCI_DEVICE_TABLE(hdmi_ids) = {
 	{ PCI_DEVICE(PCI_VENDOR_ID_INTEL, 0x080d) },
-	{}
+	{ 0 }
 };
 
 void oaktrail_hdmi_setup(struct drm_device *dev)
@@ -737,6 +728,9 @@ void oaktrail_hdmi_setup(struct drm_device *dev)
 
 	dev_priv->hdmi_priv = hdmi_dev;
 	oaktrail_hdmi_audio_disable(dev);
+
+	dev_info(dev->dev, "HDMI hardware present.\n");
+
 	return;
 
 free:
@@ -766,6 +760,8 @@ void oaktrail_hdmi_save(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct oaktrail_hdmi_dev *hdmi_dev = dev_priv->hdmi_priv;
+	struct psb_state *regs = &dev_priv->regs.psb;
+	struct psb_pipe *pipeb = &dev_priv->regs.pipe[1];
 	int i;
 
 	/* dpll */
@@ -776,14 +772,14 @@ void oaktrail_hdmi_save(struct drm_device *dev)
 	hdmi_dev->saveDPLL_CLK_ENABLE = PSB_RVDC32(DPLL_CLK_ENABLE);
 
 	/* pipe B */
-	dev_priv->savePIPEBCONF = PSB_RVDC32(PIPEBCONF);
-	dev_priv->savePIPEBSRC  = PSB_RVDC32(PIPEBSRC);
-	dev_priv->saveHTOTAL_B  = PSB_RVDC32(HTOTAL_B);
-	dev_priv->saveHBLANK_B  = PSB_RVDC32(HBLANK_B);
-	dev_priv->saveHSYNC_B   = PSB_RVDC32(HSYNC_B);
-	dev_priv->saveVTOTAL_B  = PSB_RVDC32(VTOTAL_B);
-	dev_priv->saveVBLANK_B  = PSB_RVDC32(VBLANK_B);
-	dev_priv->saveVSYNC_B   = PSB_RVDC32(VSYNC_B);
+	pipeb->conf = PSB_RVDC32(PIPEBCONF);
+	pipeb->src = PSB_RVDC32(PIPEBSRC);
+	pipeb->htotal = PSB_RVDC32(HTOTAL_B);
+	pipeb->hblank = PSB_RVDC32(HBLANK_B);
+	pipeb->hsync = PSB_RVDC32(HSYNC_B);
+	pipeb->vtotal = PSB_RVDC32(VTOTAL_B);
+	pipeb->vblank = PSB_RVDC32(VBLANK_B);
+	pipeb->vsync = PSB_RVDC32(VSYNC_B);
 
 	hdmi_dev->savePCH_PIPEBCONF = PSB_RVDC32(PCH_PIPEBCONF);
 	hdmi_dev->savePCH_PIPEBSRC = PSB_RVDC32(PCH_PIPEBSRC);
@@ -795,21 +791,21 @@ void oaktrail_hdmi_save(struct drm_device *dev)
 	hdmi_dev->savePCH_VSYNC_B  = PSB_RVDC32(PCH_VSYNC_B);
 
 	/* plane */
-	dev_priv->saveDSPBCNTR = PSB_RVDC32(DSPBCNTR);
-	dev_priv->saveDSPBSTRIDE = PSB_RVDC32(DSPBSTRIDE);
-	dev_priv->saveDSPBADDR = PSB_RVDC32(DSPBBASE);
-	dev_priv->saveDSPBSURF = PSB_RVDC32(DSPBSURF);
-	dev_priv->saveDSPBLINOFF = PSB_RVDC32(DSPBLINOFF);
-	dev_priv->saveDSPBTILEOFF = PSB_RVDC32(DSPBTILEOFF);
+	pipeb->cntr = PSB_RVDC32(DSPBCNTR);
+	pipeb->stride = PSB_RVDC32(DSPBSTRIDE);
+	pipeb->addr = PSB_RVDC32(DSPBBASE);
+	pipeb->surf = PSB_RVDC32(DSPBSURF);
+	pipeb->linoff = PSB_RVDC32(DSPBLINOFF);
+	pipeb->tileoff = PSB_RVDC32(DSPBTILEOFF);
 
 	/* cursor B */
-	dev_priv->saveDSPBCURSOR_CTRL = PSB_RVDC32(CURBCNTR);
-	dev_priv->saveDSPBCURSOR_BASE = PSB_RVDC32(CURBBASE);
-	dev_priv->saveDSPBCURSOR_POS = PSB_RVDC32(CURBPOS);
+	regs->saveDSPBCURSOR_CTRL = PSB_RVDC32(CURBCNTR);
+	regs->saveDSPBCURSOR_BASE = PSB_RVDC32(CURBBASE);
+	regs->saveDSPBCURSOR_POS = PSB_RVDC32(CURBPOS);
 
 	/* save palette */
 	for (i = 0; i < 256; i++)
-		dev_priv->save_palette_b[i] = PSB_RVDC32(PALETTE_B + (i << 2));
+		pipeb->palette[i] = PSB_RVDC32(PALETTE_B + (i << 2));
 }
 
 /* restore HDMI register state */
@@ -817,6 +813,8 @@ void oaktrail_hdmi_restore(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct oaktrail_hdmi_dev *hdmi_dev = dev_priv->hdmi_priv;
+	struct psb_state *regs = &dev_priv->regs.psb;
+	struct psb_pipe *pipeb = &dev_priv->regs.pipe[1];
 	int i;
 
 	/* dpll */
@@ -828,13 +826,13 @@ void oaktrail_hdmi_restore(struct drm_device *dev)
 	DRM_UDELAY(150);
 
 	/* pipe */
-	PSB_WVDC32(dev_priv->savePIPEBSRC, PIPEBSRC);
-	PSB_WVDC32(dev_priv->saveHTOTAL_B, HTOTAL_B);
-	PSB_WVDC32(dev_priv->saveHBLANK_B, HBLANK_B);
-	PSB_WVDC32(dev_priv->saveHSYNC_B,  HSYNC_B);
-	PSB_WVDC32(dev_priv->saveVTOTAL_B, VTOTAL_B);
-	PSB_WVDC32(dev_priv->saveVBLANK_B, VBLANK_B);
-	PSB_WVDC32(dev_priv->saveVSYNC_B,  VSYNC_B);
+	PSB_WVDC32(pipeb->src, PIPEBSRC);
+	PSB_WVDC32(pipeb->htotal, HTOTAL_B);
+	PSB_WVDC32(pipeb->hblank, HBLANK_B);
+	PSB_WVDC32(pipeb->hsync,  HSYNC_B);
+	PSB_WVDC32(pipeb->vtotal, VTOTAL_B);
+	PSB_WVDC32(pipeb->vblank, VBLANK_B);
+	PSB_WVDC32(pipeb->vsync,  VSYNC_B);
 
 	PSB_WVDC32(hdmi_dev->savePCH_PIPEBSRC, PCH_PIPEBSRC);
 	PSB_WVDC32(hdmi_dev->savePCH_HTOTAL_B, PCH_HTOTAL_B);
@@ -844,22 +842,22 @@ void oaktrail_hdmi_restore(struct drm_device *dev)
 	PSB_WVDC32(hdmi_dev->savePCH_VBLANK_B, PCH_VBLANK_B);
 	PSB_WVDC32(hdmi_dev->savePCH_VSYNC_B,  PCH_VSYNC_B);
 
-	PSB_WVDC32(dev_priv->savePIPEBCONF, PIPEBCONF);
+	PSB_WVDC32(pipeb->conf, PIPEBCONF);
 	PSB_WVDC32(hdmi_dev->savePCH_PIPEBCONF, PCH_PIPEBCONF);
 
 	/* plane */
-	PSB_WVDC32(dev_priv->saveDSPBLINOFF, DSPBLINOFF);
-	PSB_WVDC32(dev_priv->saveDSPBSTRIDE, DSPBSTRIDE);
-	PSB_WVDC32(dev_priv->saveDSPBTILEOFF, DSPBTILEOFF);
-	PSB_WVDC32(dev_priv->saveDSPBCNTR, DSPBCNTR);
-	PSB_WVDC32(dev_priv->saveDSPBSURF, DSPBSURF);
+	PSB_WVDC32(pipeb->linoff, DSPBLINOFF);
+	PSB_WVDC32(pipeb->stride, DSPBSTRIDE);
+	PSB_WVDC32(pipeb->tileoff, DSPBTILEOFF);
+	PSB_WVDC32(pipeb->cntr, DSPBCNTR);
+	PSB_WVDC32(pipeb->surf, DSPBSURF);
 
 	/* cursor B */
-	PSB_WVDC32(dev_priv->saveDSPBCURSOR_CTRL, CURBCNTR);
-	PSB_WVDC32(dev_priv->saveDSPBCURSOR_POS, CURBPOS);
-	PSB_WVDC32(dev_priv->saveDSPBCURSOR_BASE, CURBBASE);
+	PSB_WVDC32(regs->saveDSPBCURSOR_CTRL, CURBCNTR);
+	PSB_WVDC32(regs->saveDSPBCURSOR_POS, CURBPOS);
+	PSB_WVDC32(regs->saveDSPBCURSOR_BASE, CURBBASE);
 
 	/* restore palette */
 	for (i = 0; i < 256; i++)
-		PSB_WVDC32(dev_priv->save_palette_b[i], PALETTE_B + (i << 2));
+		PSB_WVDC32(pipeb->palette[i], PALETTE_B + (i << 2));
 }

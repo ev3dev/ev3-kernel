@@ -74,8 +74,8 @@ struct autofs_info {
 	unsigned long last_used;
 	atomic_t count;
 
-	uid_t uid;
-	gid_t gid;
+	kuid_t uid;
+	kgid_t gid;
 };
 
 #define AUTOFS_INF_EXPIRING	(1<<0) /* dentry is in the process of expiring */
@@ -89,8 +89,8 @@ struct autofs_wait_queue {
 	struct qstr name;
 	u32 dev;
 	u64 ino;
-	uid_t uid;
-	gid_t gid;
+	kuid_t uid;
+	kgid_t gid;
 	pid_t pid;
 	pid_t tgid;
 	/* This is for status reporting upon return */
@@ -104,13 +104,12 @@ struct autofs_sb_info {
 	u32 magic;
 	int pipefd;
 	struct file *pipe;
-	pid_t oz_pgrp;
+	struct pid *oz_pgrp;
 	int catatonic;
 	int version;
 	int sub_version;
 	int min_proto;
 	int max_proto;
-	int compat_daemon;
 	unsigned long exp_timeout;
 	unsigned int type;
 	int reghost_enabled;
@@ -123,6 +122,7 @@ struct autofs_sb_info {
 	spinlock_t lookup_lock;
 	struct list_head active_list;
 	struct list_head expiring_list;
+	struct rcu_head rcu;
 };
 
 static inline struct autofs_sb_info *autofs4_sbi(struct super_block *sb)
@@ -140,7 +140,7 @@ static inline struct autofs_info *autofs4_dentry_ino(struct dentry *dentry)
    filesystem without "magic".) */
 
 static inline int autofs4_oz_mode(struct autofs_sb_info *sbi) {
-	return sbi->catatonic || task_pgrp_nr(current) == sbi->oz_pgrp;
+	return sbi->catatonic || task_pgrp(current) == sbi->oz_pgrp;
 }
 
 /* Does a dentry have some pending activity? */
@@ -269,6 +269,17 @@ static inline void managed_dentry_clear_managed(struct dentry *dentry)
 int autofs4_fill_super(struct super_block *, void *, int);
 struct autofs_info *autofs4_new_ino(struct autofs_sb_info *);
 void autofs4_clean_ino(struct autofs_info *);
+
+static inline int autofs_prepare_pipe(struct file *pipe)
+{
+	if (!pipe->f_op->write)
+		return -EINVAL;
+	if (!S_ISFIFO(file_inode(pipe)->i_mode))
+		return -EINVAL;
+	/* We want a packet pipe */
+	pipe->f_flags |= O_DIRECT;
+	return 0;
+}
 
 /* Queue management functions */
 

@@ -19,8 +19,6 @@
 #define DM_MSG_PREFIX "io"
 
 #define DM_IO_MAX_REGIONS	BITS_PER_LONG
-#define MIN_IOS		16
-#define MIN_BIOS	16
 
 struct dm_io_client {
 	mempool_t *pool;
@@ -50,16 +48,17 @@ static struct kmem_cache *_dm_io_cache;
 struct dm_io_client *dm_io_client_create(void)
 {
 	struct dm_io_client *client;
+	unsigned min_ios = dm_get_reserved_bio_based_ios();
 
 	client = kmalloc(sizeof(*client), GFP_KERNEL);
 	if (!client)
 		return ERR_PTR(-ENOMEM);
 
-	client->pool = mempool_create_slab_pool(MIN_IOS, _dm_io_cache);
+	client->pool = mempool_create_slab_pool(min_ios, _dm_io_cache);
 	if (!client->pool)
 		goto bad;
 
-	client->bios = bioset_create(MIN_BIOS, 0);
+	client->bios = bioset_create(min_ios, 0);
 	if (!client->bios)
 		goto bad;
 
@@ -202,26 +201,28 @@ static void list_dp_init(struct dpages *dp, struct page_list *pl, unsigned offse
 /*
  * Functions for getting the pages from a bvec.
  */
-static void bvec_get_page(struct dpages *dp,
-		  struct page **p, unsigned long *len, unsigned *offset)
+static void bio_get_page(struct dpages *dp, struct page **p,
+			 unsigned long *len, unsigned *offset)
 {
-	struct bio_vec *bvec = (struct bio_vec *) dp->context_ptr;
+	struct bio_vec *bvec = dp->context_ptr;
 	*p = bvec->bv_page;
-	*len = bvec->bv_len;
-	*offset = bvec->bv_offset;
+	*len = bvec->bv_len - dp->context_u;
+	*offset = bvec->bv_offset + dp->context_u;
 }
 
-static void bvec_next_page(struct dpages *dp)
+static void bio_next_page(struct dpages *dp)
 {
-	struct bio_vec *bvec = (struct bio_vec *) dp->context_ptr;
+	struct bio_vec *bvec = dp->context_ptr;
 	dp->context_ptr = bvec + 1;
+	dp->context_u = 0;
 }
 
-static void bvec_dp_init(struct dpages *dp, struct bio_vec *bvec)
+static void bio_dp_init(struct dpages *dp, struct bio *bio)
 {
-	dp->get_page = bvec_get_page;
-	dp->next_page = bvec_next_page;
-	dp->context_ptr = bvec;
+	dp->get_page = bio_get_page;
+	dp->next_page = bio_next_page;
+	dp->context_ptr = __bvec_iter_bvec(bio->bi_io_vec, bio->bi_iter);
+	dp->context_u = bio->bi_iter.bi_bvec_done;
 }
 
 /*
@@ -247,16 +248,6 @@ static void vm_dp_init(struct dpages *dp, void *data)
 	dp->next_page = vm_next_page;
 	dp->context_u = ((unsigned long) data) & (PAGE_SIZE - 1);
 	dp->context_ptr = data;
-}
-
-static void dm_bio_destructor(struct bio *bio)
-{
-	unsigned region;
-	struct io *io;
-
-	retrieve_io_and_region_from_bio(bio, &io, &region);
-
-	bio_free(bio, io->client->bios);
 }
 
 /*
@@ -297,7 +288,8 @@ static void do_region(int rw, unsigned region, struct dm_io_region *where,
 	unsigned num_bvecs;
 	sector_t remaining = where->count;
 	struct request_queue *q = bdev_get_queue(where->bdev);
-	sector_t discard_sectors;
+	unsigned short logical_block_size = queue_logical_block_size(q);
+	sector_t num_sectors;
 
 	/*
 	 * where->count may be zero if rw holds a flush and we need to
@@ -307,23 +299,34 @@ static void do_region(int rw, unsigned region, struct dm_io_region *where,
 		/*
 		 * Allocate a suitably sized-bio.
 		 */
-		if (rw & REQ_DISCARD)
+		if ((rw & REQ_DISCARD) || (rw & REQ_WRITE_SAME))
 			num_bvecs = 1;
 		else
 			num_bvecs = min_t(int, bio_get_nr_vecs(where->bdev),
 					  dm_sector_div_up(remaining, (PAGE_SIZE >> SECTOR_SHIFT)));
 
 		bio = bio_alloc_bioset(GFP_NOIO, num_bvecs, io->client->bios);
-		bio->bi_sector = where->sector + (where->count - remaining);
+		bio->bi_iter.bi_sector = where->sector + (where->count - remaining);
 		bio->bi_bdev = where->bdev;
 		bio->bi_end_io = endio;
-		bio->bi_destructor = dm_bio_destructor;
 		store_io_and_region_in_bio(bio, io, region);
 
 		if (rw & REQ_DISCARD) {
-			discard_sectors = min_t(sector_t, q->limits.max_discard_sectors, remaining);
-			bio->bi_size = discard_sectors << SECTOR_SHIFT;
-			remaining -= discard_sectors;
+			num_sectors = min_t(sector_t, q->limits.max_discard_sectors, remaining);
+			bio->bi_iter.bi_size = num_sectors << SECTOR_SHIFT;
+			remaining -= num_sectors;
+		} else if (rw & REQ_WRITE_SAME) {
+			/*
+			 * WRITE SAME only uses a single page.
+			 */
+			dp->get_page(dp, &page, &len, &offset);
+			bio_add_page(bio, page, logical_block_size, offset);
+			num_sectors = min_t(sector_t, q->limits.max_write_same_sectors, remaining);
+			bio->bi_iter.bi_size = num_sectors << SECTOR_SHIFT;
+
+			offset = 0;
+			remaining -= num_sectors;
+			dp->next_page(dp);
 		} else while (remaining) {
 			/*
 			 * Try and add as many pages as possible.
@@ -456,8 +459,8 @@ static int dp_init(struct dm_io_request *io_req, struct dpages *dp,
 		list_dp_init(dp, io_req->mem.ptr.pl, io_req->mem.offset);
 		break;
 
-	case DM_IO_BVEC:
-		bvec_dp_init(dp, io_req->mem.ptr.bvec);
+	case DM_IO_BIO:
+		bio_dp_init(dp, io_req->mem.ptr.bio);
 		break;
 
 	case DM_IO_VMA:

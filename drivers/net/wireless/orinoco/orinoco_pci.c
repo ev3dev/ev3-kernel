@@ -184,7 +184,6 @@ static int orinoco_pci_init_one(struct pci_dev *pdev,
 	free_irq(pdev->irq, priv);
 
  fail_irq:
-	pci_set_drvdata(pdev, NULL);
 	free_orinocodev(priv);
 
  fail_alloc:
@@ -199,13 +198,12 @@ static int orinoco_pci_init_one(struct pci_dev *pdev,
 	return err;
 }
 
-static void __devexit orinoco_pci_remove_one(struct pci_dev *pdev)
+static void orinoco_pci_remove_one(struct pci_dev *pdev)
 {
 	struct orinoco_private *priv = pci_get_drvdata(pdev);
 
 	orinoco_if_del(priv);
 	free_irq(pdev->irq, priv);
-	pci_set_drvdata(pdev, NULL);
 	free_orinocodev(priv);
 	pci_iounmap(pdev, priv->hw.iobase);
 	pci_release_regions(pdev);
@@ -228,7 +226,7 @@ static struct pci_driver orinoco_pci_driver = {
 	.name		= DRIVER_NAME,
 	.id_table	= orinoco_pci_id_table,
 	.probe		= orinoco_pci_init_one,
-	.remove		= __devexit_p(orinoco_pci_remove_one),
+	.remove		= orinoco_pci_remove_one,
 	.suspend	= orinoco_pci_suspend,
 	.resume		= orinoco_pci_resume,
 };

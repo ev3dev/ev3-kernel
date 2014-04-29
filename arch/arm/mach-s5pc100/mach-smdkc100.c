@@ -25,7 +25,6 @@
 #include <linux/input.h>
 #include <linux/pwm_backlight.h>
 
-#include <asm/hardware/vic.h>
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
 
@@ -33,6 +32,7 @@
 #include <mach/regs-gpio.h>
 
 #include <video/platform_lcd.h>
+#include <video/samsung_fimd.h>
 
 #include <asm/irq.h>
 #include <asm/mach-types.h>
@@ -44,14 +44,14 @@
 #include <plat/devs.h>
 #include <plat/cpu.h>
 #include <plat/fb.h>
-#include <plat/iic.h>
-#include <plat/ata.h>
+#include <linux/platform_data/i2c-s3c2410.h>
+#include <linux/platform_data/ata-samsung_cf.h>
 #include <plat/adc.h>
 #include <plat/keypad.h>
-#include <plat/ts.h>
-#include <plat/audio.h>
+#include <linux/platform_data/touchscreen-s3c2410.h>
+#include <linux/platform_data/asoc-s3c.h>
 #include <plat/backlight.h>
-#include <plat/regs-fb-v4.h>
+#include <plat/samsung-time.h>
 
 #include "common.h"
 
@@ -136,24 +136,27 @@ static struct platform_device smdkc100_lcd_powerdev = {
 
 /* Frame Buffer */
 static struct s3c_fb_pd_win smdkc100_fb_win0 = {
-	/* this is to ensure we use win0 */
-	.win_mode	= {
-		.left_margin	= 8,
-		.right_margin	= 13,
-		.upper_margin	= 7,
-		.lower_margin	= 5,
-		.hsync_len	= 3,
-		.vsync_len	= 1,
-		.xres		= 800,
-		.yres		= 480,
-		.refresh	= 80,
-	},
 	.max_bpp	= 32,
 	.default_bpp	= 16,
+	.xres		= 800,
+	.yres		= 480,
+};
+
+static struct fb_videomode smdkc100_lcd_timing = {
+	.left_margin	= 8,
+	.right_margin	= 13,
+	.upper_margin	= 7,
+	.lower_margin	= 5,
+	.hsync_len	= 3,
+	.vsync_len	= 1,
+	.xres		= 800,
+	.yres		= 480,
+	.refresh	= 80,
 };
 
 static struct s3c_fb_platdata smdkc100_lcd_pdata __initdata = {
 	.win[0]		= &smdkc100_fb_win0,
+	.vtiming	= &smdkc100_lcd_timing,
 	.vidcon0	= VIDCON0_VIDOUT_RGB | VIDCON0_PNRMODE_RGB,
 	.vidcon1	= VIDCON1_INV_HSYNC | VIDCON1_INV_VSYNC,
 	.setup_gpio	= s5pc100_fb_gpio_setup_24bpp,
@@ -191,10 +194,10 @@ static struct platform_device *smdkc100_devices[] __initdata = {
 	&s3c_device_hsmmc0,
 	&s3c_device_hsmmc1,
 	&s3c_device_hsmmc2,
+	&samsung_device_pwm,
 	&s3c_device_ts,
 	&s3c_device_wdt,
 	&smdkc100_lcd_powerdev,
-	&samsung_asoc_dma,
 	&s5pc100_device_iis0,
 	&samsung_device_keypad,
 	&s5pc100_device_ac97,
@@ -213,6 +216,7 @@ static struct samsung_bl_gpio_info smdkc100_bl_gpio_info = {
 
 static struct platform_pwm_backlight_data smdkc100_bl_data = {
 	.pwm_id = 0,
+	.enable_gpio = -1,
 };
 
 static void __init smdkc100_map_io(void)
@@ -220,6 +224,7 @@ static void __init smdkc100_map_io(void)
 	s5pc100_init_io(NULL, 0);
 	s3c24xx_init_clocks(12000000);
 	s3c24xx_init_uarts(smdkc100_uartcfgs, ARRAY_SIZE(smdkc100_uartcfgs));
+	samsung_set_timer_source(SAMSUNG_PWM3, SAMSUNG_PWM4);
 }
 
 static void __init smdkc100_machine_init(void)
@@ -243,18 +248,17 @@ static void __init smdkc100_machine_init(void)
 	gpio_request(S5PC100_GPH0(6), "GPH0");
 	smdkc100_lcd_power_set(&smdkc100_lcd_power_data, 0);
 
-	samsung_bl_set(&smdkc100_bl_gpio_info, &smdkc100_bl_data);
-
 	platform_add_devices(smdkc100_devices, ARRAY_SIZE(smdkc100_devices));
+
+	samsung_bl_set(&smdkc100_bl_gpio_info, &smdkc100_bl_data);
 }
 
 MACHINE_START(SMDKC100, "SMDKC100")
 	/* Maintainer: Byungho Min <bhmin@samsung.com> */
 	.atag_offset	= 0x100,
 	.init_irq	= s5pc100_init_irq,
-	.handle_irq	= vic_handle_irq,
 	.map_io		= smdkc100_map_io,
 	.init_machine	= smdkc100_machine_init,
-	.timer		= &s3c24xx_timer,
+	.init_time	= samsung_timer_init,
 	.restart	= s5pc100_restart,
 MACHINE_END

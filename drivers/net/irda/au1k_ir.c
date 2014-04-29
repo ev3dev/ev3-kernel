@@ -15,11 +15,9 @@
  *  for more details.
  *
  *  You should have received a copy of the GNU General Public License along
- *  with this program; if not, write to the Free Software Foundation, Inc.,
- *  59 Temple Place - Suite 330, Boston MA 02111-1307, USA.
+ *  with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <linux/init.h>
 #include <linux/module.h>
 #include <linux/netdevice.h>
 #include <linux/interrupt.h>
@@ -27,6 +25,7 @@
 #include <linux/slab.h>
 #include <linux/time.h>
 #include <linux/types.h>
+#include <linux/ioport.h>
 
 #include <net/irda/irda.h>
 #include <net/irda/irmod.h>
@@ -760,7 +759,7 @@ static const struct net_device_ops au1k_irda_netdev_ops = {
 	.ndo_do_ioctl		= au1k_irda_ioctl,
 };
 
-static int __devinit au1k_irda_net_init(struct net_device *dev)
+static int au1k_irda_net_init(struct net_device *dev)
 {
 	struct au1k_private *aup = netdev_priv(dev);
 	struct db_dest *pDB, *pDBfree;
@@ -794,7 +793,7 @@ static int __devinit au1k_irda_net_init(struct net_device *dev)
 
 	/* allocate the data buffers */
 	aup->db[0].vaddr =
-		(void *)dma_alloc(MAX_BUF_SIZE * 2 * NUM_IR_DESC, &temp);
+		dma_alloc(MAX_BUF_SIZE * 2 * NUM_IR_DESC, &temp);
 	if (!aup->db[0].vaddr)
 		goto out3;
 
@@ -849,7 +848,7 @@ out1:
 	return retval;
 }
 
-static int __devinit au1k_irda_probe(struct platform_device *pdev)
+static int au1k_irda_probe(struct platform_device *pdev)
 {
 	struct au1k_private *aup;
 	struct net_device *dev;
@@ -882,12 +881,12 @@ static int __devinit au1k_irda_probe(struct platform_device *pdev)
 		goto out;
 
 	err = -EBUSY;
-	aup->ioarea = request_mem_region(r->start, r->end - r->start + 1,
+	aup->ioarea = request_mem_region(r->start, resource_size(r),
 					 pdev->name);
 	if (!aup->ioarea)
 		goto out;
 
-	aup->iobase = ioremap_nocache(r->start, r->end - r->start + 1);
+	aup->iobase = ioremap_nocache(r->start, resource_size(r));
 	if (!aup->iobase)
 		goto out2;
 
@@ -921,7 +920,7 @@ out:
 	return err;
 }
 
-static int __devexit au1k_irda_remove(struct platform_device *pdev)
+static int au1k_irda_remove(struct platform_device *pdev)
 {
 	struct net_device *dev = platform_get_drvdata(pdev);
 	struct au1k_private *aup = netdev_priv(dev);
@@ -949,21 +948,10 @@ static struct platform_driver au1k_irda_driver = {
 		.owner	= THIS_MODULE,
 	},
 	.probe		= au1k_irda_probe,
-	.remove		= __devexit_p(au1k_irda_remove),
+	.remove		= au1k_irda_remove,
 };
 
-static int __init au1k_irda_load(void)
-{
-	return platform_driver_register(&au1k_irda_driver);
-}
-
-static void __exit au1k_irda_unload(void)
-{
-	return platform_driver_unregister(&au1k_irda_driver);
-}
+module_platform_driver(au1k_irda_driver);
 
 MODULE_AUTHOR("Pete Popov <ppopov@mvista.com>");
 MODULE_DESCRIPTION("Au1000 IrDA Device Driver");
-
-module_init(au1k_irda_load);
-module_exit(au1k_irda_unload);

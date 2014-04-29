@@ -12,30 +12,42 @@
 #ifndef __ARCH_ARM_MACH_EXYNOS_COMMON_H
 #define __ARCH_ARM_MACH_EXYNOS_COMMON_H
 
-void exynos_init_io(struct map_desc *mach_desc, int size);
-void exynos4_init_irq(void);
+#include <linux/reboot.h>
+#include <linux/of.h>
 
-void exynos4_register_clocks(void);
-void exynos4_setup_clocks(void);
+void mct_init(void __iomem *base, int irq_g0, int irq_l0, int irq_l1);
 
-void exynos4210_register_clocks(void);
-void exynos4212_register_clocks(void);
+struct map_desc;
+void exynos_init_io(void);
+void exynos4_restart(enum reboot_mode mode, const char *cmd);
+void exynos5_restart(enum reboot_mode mode, const char *cmd);
+void exynos_cpuidle_init(void);
+void exynos_cpufreq_init(void);
+void exynos_init_late(void);
 
-void exynos4_restart(char mode, const char *cmd);
+void exynos_firmware_init(void);
 
-extern struct sys_timer exynos4_timer;
+extern struct smp_operations exynos_smp_ops;
 
-#ifdef CONFIG_ARCH_EXYNOS
-extern  int exynos_init(void);
-extern void exynos4_map_io(void);
-extern void exynos4_init_clocks(int xtal);
-extern void exynos4_init_uarts(struct s3c2410_uartcfg *cfg, int no);
+extern void exynos_cpu_die(unsigned int cpu);
 
-#else
-#define exynos4_init_clocks NULL
-#define exynos4_init_uarts NULL
-#define exynos4_map_io NULL
-#define exynos_init NULL
-#endif
+/* PMU(Power Management Unit) support */
+
+#define PMU_TABLE_END	NULL
+
+enum sys_powerdown {
+	SYS_AFTR,
+	SYS_LPA,
+	SYS_SLEEP,
+	NUM_SYS_POWERDOWN,
+};
+
+extern unsigned long l2x0_regs_phys;
+struct exynos_pmu_conf {
+	void __iomem *reg;
+	unsigned int val[NUM_SYS_POWERDOWN];
+};
+
+extern void exynos_sys_powerdown_conf(enum sys_powerdown mode);
 
 #endif /* __ARCH_ARM_MACH_EXYNOS_COMMON_H */

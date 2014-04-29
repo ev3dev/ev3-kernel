@@ -14,7 +14,6 @@
  */
 
 #include <linux/module.h>
-#include <linux/init.h>
 #include <linux/i2c.h>
 #include <linux/i2c/mcs.h>
 #include <linux/interrupt.h>
@@ -187,14 +186,14 @@ static void mcs5000_ts_phys_init(struct mcs5000_ts_data *data)
 			OP_MODE_ACTIVE | REPORT_RATE_80);
 }
 
-static int __devinit mcs5000_ts_probe(struct i2c_client *client,
+static int mcs5000_ts_probe(struct i2c_client *client,
 		const struct i2c_device_id *id)
 {
 	struct mcs5000_ts_data *data;
 	struct input_dev *input_dev;
 	int ret;
 
-	if (!client->dev.platform_data)
+	if (!dev_get_platdata(&client->dev))
 		return -EINVAL;
 
 	data = kzalloc(sizeof(struct mcs5000_ts_data), GFP_KERNEL);
@@ -207,7 +206,7 @@ static int __devinit mcs5000_ts_probe(struct i2c_client *client,
 
 	data->client = client;
 	data->input_dev = input_dev;
-	data->platform_data = client->dev.platform_data;
+	data->platform_data = dev_get_platdata(&client->dev);
 
 	input_dev->name = "MELPAS MCS-5000 Touchscreen";
 	input_dev->id.bustype = BUS_I2C;
@@ -249,7 +248,7 @@ err_free_mem:
 	return ret;
 }
 
-static int __devexit mcs5000_ts_remove(struct i2c_client *client)
+static int mcs5000_ts_remove(struct i2c_client *client)
 {
 	struct mcs5000_ts_data *data = i2c_get_clientdata(client);
 
@@ -292,7 +291,7 @@ MODULE_DEVICE_TABLE(i2c, mcs5000_ts_id);
 
 static struct i2c_driver mcs5000_ts_driver = {
 	.probe		= mcs5000_ts_probe,
-	.remove		= __devexit_p(mcs5000_ts_remove),
+	.remove		= mcs5000_ts_remove,
 	.driver = {
 		.name = "mcs5000_ts",
 #ifdef CONFIG_PM
@@ -302,18 +301,7 @@ static struct i2c_driver mcs5000_ts_driver = {
 	.id_table	= mcs5000_ts_id,
 };
 
-static int __init mcs5000_ts_init(void)
-{
-	return i2c_add_driver(&mcs5000_ts_driver);
-}
-
-static void __exit mcs5000_ts_exit(void)
-{
-	i2c_del_driver(&mcs5000_ts_driver);
-}
-
-module_init(mcs5000_ts_init);
-module_exit(mcs5000_ts_exit);
+module_i2c_driver(mcs5000_ts_driver);
 
 /* Module information */
 MODULE_AUTHOR("Joonyoung Shim <jy0922.shim@samsung.com>");

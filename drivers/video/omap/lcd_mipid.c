@@ -25,7 +25,7 @@
 #include <linux/spi/spi.h>
 #include <linux/module.h>
 
-#include <plat/lcd_mipid.h>
+#include <linux/platform_data/lcd-mipid.h>
 
 #include "omapfb.h"
 
@@ -606,22 +606,10 @@ static struct spi_driver mipid_spi_driver = {
 		.owner	= THIS_MODULE,
 	},
 	.probe	= mipid_spi_probe,
-	.remove	= __devexit_p(mipid_spi_remove),
+	.remove	= mipid_spi_remove,
 };
 
-static int __init mipid_drv_init(void)
-{
-	spi_register_driver(&mipid_spi_driver);
-
-	return 0;
-}
-module_init(mipid_drv_init);
-
-static void __exit mipid_drv_cleanup(void)
-{
-	spi_unregister_driver(&mipid_spi_driver);
-}
-module_exit(mipid_drv_cleanup);
+module_spi_driver(mipid_spi_driver);
 
 MODULE_DESCRIPTION("MIPI display driver");
 MODULE_LICENSE("GPL");

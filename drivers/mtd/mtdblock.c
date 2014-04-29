@@ -32,6 +32,7 @@
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/blktrans.h>
 #include <linux/mutex.h>
+#include <linux/major.h>
 
 
 struct mtdblk_dev {
@@ -308,7 +309,7 @@ static int mtdblock_open(struct mtd_blktrans_dev *mbd)
 	return 0;
 }
 
-static int mtdblock_release(struct mtd_blktrans_dev *mbd)
+static void mtdblock_release(struct mtd_blktrans_dev *mbd)
 {
 	struct mtdblk_dev *mtdblk = container_of(mbd, struct mtdblk_dev, mbd);
 
@@ -321,16 +322,18 @@ static int mtdblock_release(struct mtd_blktrans_dev *mbd)
 	mutex_unlock(&mtdblk->cache_mutex);
 
 	if (!--mtdblk->count) {
-		/* It was the last usage. Free the cache */
-		mtd_sync(mbd->mtd);
+		/*
+		 * It was the last usage. Free the cache, but only sync if
+		 * opened for writing.
+		 */
+		if (mbd->file_mode & FMODE_WRITE)
+			mtd_sync(mbd->mtd);
 		vfree(mtdblk->cache_data);
 	}
 
 	mutex_unlock(&mtdblks_lock);
 
 	pr_debug("ok\n");
-
-	return 0;
 }
 
 static int mtdblock_flush(struct mtd_blktrans_dev *dev)
@@ -371,7 +374,7 @@ static void mtdblock_remove_dev(struct mtd_blktrans_dev *dev)
 
 static struct mtd_blktrans_ops mtdblock_tr = {
 	.name		= "mtdblock",
-	.major		= 31,
+	.major		= MTD_BLOCK_MAJOR,
 	.part_bits	= 0,
 	.blksize 	= 512,
 	.open		= mtdblock_open,

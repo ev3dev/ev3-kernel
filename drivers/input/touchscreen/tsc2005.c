@@ -555,7 +555,7 @@ static void tsc2005_close(struct input_dev *input)
 	mutex_unlock(&ts->mutex);
 }
 
-static void __devinit tsc2005_setup_spi_xfer(struct tsc2005 *ts)
+static void tsc2005_setup_spi_xfer(struct tsc2005 *ts)
 {
 	tsc2005_setup_read(&ts->spi_x, TSC2005_REG_X, false);
 	tsc2005_setup_read(&ts->spi_y, TSC2005_REG_Y, false);
@@ -569,9 +569,9 @@ static void __devinit tsc2005_setup_spi_xfer(struct tsc2005 *ts)
 	spi_message_add_tail(&ts->spi_z2.spi_xfer, &ts->spi_read_msg);
 }
 
-static int __devinit tsc2005_probe(struct spi_device *spi)
+static int tsc2005_probe(struct spi_device *spi)
 {
-	const struct tsc2005_platform_data *pdata = spi->dev.platform_data;
+	const struct tsc2005_platform_data *pdata = dev_get_platdata(&spi->dev);
 	struct tsc2005 *ts;
 	struct input_dev *input_dev;
 	unsigned int max_x, max_y, max_p;
@@ -650,7 +650,8 @@ static int __devinit tsc2005_probe(struct spi_device *spi)
 	tsc2005_stop_scan(ts);
 
 	error = request_threaded_irq(spi->irq, NULL, tsc2005_irq_thread,
-				     IRQF_TRIGGER_RISING, "tsc2005", ts);
+				     IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+				     "tsc2005", ts);
 	if (error) {
 		dev_err(&spi->dev, "Failed to request irq, err: %d\n", error);
 		goto err_free_mem;
@@ -677,7 +678,6 @@ static int __devinit tsc2005_probe(struct spi_device *spi)
 err_remove_sysfs:
 	sysfs_remove_group(&spi->dev.kobj, &tsc2005_attr_group);
 err_clear_drvdata:
-	spi_set_drvdata(spi, NULL);
 	free_irq(spi->irq, ts);
 err_free_mem:
 	input_free_device(input_dev);
@@ -685,7 +685,7 @@ err_free_mem:
 	return error;
 }
 
-static int __devexit tsc2005_remove(struct spi_device *spi)
+static int tsc2005_remove(struct spi_device *spi)
 {
 	struct tsc2005 *ts = spi_get_drvdata(spi);
 
@@ -695,7 +695,6 @@ static int __devexit tsc2005_remove(struct spi_device *spi)
 	input_unregister_device(ts->idev);
 	kfree(ts);
 
-	spi_set_drvdata(spi, NULL);
 	return 0;
 }
 
@@ -744,21 +743,12 @@ static struct spi_driver tsc2005_driver = {
 		.pm	= &tsc2005_pm_ops,
 	},
 	.probe	= tsc2005_probe,
-	.remove	= __devexit_p(tsc2005_remove),
+	.remove	= tsc2005_remove,
 };
 
-static int __init tsc2005_init(void)
-{
-	return spi_register_driver(&tsc2005_driver);
-}
-module_init(tsc2005_init);
-
-static void __exit tsc2005_exit(void)
-{
-	spi_unregister_driver(&tsc2005_driver);
-}
-module_exit(tsc2005_exit);
+module_spi_driver(tsc2005_driver);
 
 MODULE_AUTHOR("Lauri Leukkunen <lauri.leukkunen@nokia.com>");
 MODULE_DESCRIPTION("TSC2005 Touchscreen Driver");
 MODULE_LICENSE("GPL");
+MODULE_ALIAS("spi:tsc2005");

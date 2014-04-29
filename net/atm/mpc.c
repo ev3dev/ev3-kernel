@@ -478,7 +478,7 @@ static const uint8_t *copy_macs(struct mpoa_client *mpc,
 			return NULL;
 		}
 	}
-	memcpy(mpc->mps_macs, router_mac, ETH_ALEN);
+	ether_addr_copy(mpc->mps_macs, router_mac);
 	tlvs += 20; if (device_type == MPS_AND_MPC) tlvs += 20;
 	if (mps_macs > 0)
 		memcpy(mpc->mps_macs, tlvs, mps_macs*ETH_ALEN);
@@ -592,8 +592,7 @@ static netdev_tx_t mpc_send_packet(struct sk_buff *skb,
 		goto non_ip;
 
 	while (i < mpc->number_of_mps_macs) {
-		if (!compare_ether_addr(eth->h_dest,
-					(mpc->mps_macs + i*ETH_ALEN)))
+		if (ether_addr_equal(eth->h_dest, mpc->mps_macs + i * ETH_ALEN))
 			if (send_via_shortcut(skb, mpc) == 0) /* try shortcut */
 				return NETDEV_TX_OK;
 		i++;
@@ -999,13 +998,11 @@ int msg_to_mpoad(struct k_message *mesg, struct mpoa_client *mpc)
 }
 
 static int mpoa_event_listener(struct notifier_block *mpoa_notifier,
-			       unsigned long event, void *dev_ptr)
+			       unsigned long event, void *ptr)
 {
-	struct net_device *dev;
+	struct net_device *dev = netdev_notifier_info_to_dev(ptr);
 	struct mpoa_client *mpc;
 	struct lec_priv *priv;
-
-	dev = dev_ptr;
 
 	if (!net_eq(dev_net(dev), &init_net))
 		return NOTIFY_DONE;

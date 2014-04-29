@@ -1,5 +1,5 @@
 /*
- * drivers/net/gianfar_sysfs.c
+ * drivers/net/ethernet/freescale/gianfar_sysfs.c
  *
  * Gianfar Ethernet Driver
  * This driver is designed for the non-CPM ethernet controllers
@@ -24,7 +24,6 @@
 #include <linux/string.h>
 #include <linux/errno.h>
 #include <linux/unistd.h>
-#include <linux/init.h>
 #include <linux/delay.h>
 #include <linux/etherdevice.h>
 #include <linux/spinlock.h>
@@ -337,5 +336,5 @@ void gfar_init_sysfs(struct net_device *dev)
 	rc |= device_create_file(&dev->dev, &dev_attr_fifo_starve);
 	rc |= device_create_file(&dev->dev, &dev_attr_fifo_starve_off);
 	if (rc)
-		dev_err(&dev->dev, "Error creating gianfar sysfs files.\n");
+		dev_err(&dev->dev, "Error creating gianfar sysfs files\n");
 }

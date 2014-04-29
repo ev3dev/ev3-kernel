@@ -281,7 +281,6 @@ static void pc300_pci_remove_one(struct pci_dev *pdev)
 
 	pci_release_regions(pdev);
 	pci_disable_device(pdev);
-	pci_set_drvdata(pdev, NULL);
 	if (card->ports[0].netdev)
 		free_netdev(card->ports[0].netdev);
 	if (card->ports[1].netdev)
@@ -297,8 +296,8 @@ static const struct net_device_ops pc300_ops = {
 	.ndo_do_ioctl   = pc300_ioctl,
 };
 
-static int __devinit pc300_pci_init_one(struct pci_dev *pdev,
-					const struct pci_device_id *ent)
+static int pc300_pci_init_one(struct pci_dev *pdev,
+			      const struct pci_device_id *ent)
 {
 	card_t *card;
 	u32 __iomem *p;
@@ -320,7 +319,6 @@ static int __devinit pc300_pci_init_one(struct pci_dev *pdev,
 
 	card = kzalloc(sizeof(card_t), GFP_KERNEL);
 	if (card == NULL) {
-		pr_err("unable to allocate memory\n");
 		pci_release_regions(pdev);
 		pci_disable_device(pdev);
 		return -ENOBUFS;

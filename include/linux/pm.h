@@ -31,9 +31,21 @@
 /*
  * Callbacks for platform drivers to implement.
  */
-extern void (*pm_idle)(void);
 extern void (*pm_power_off)(void);
 extern void (*pm_power_off_prepare)(void);
+
+struct device; /* we have a circular dep with device.h */
+#ifdef CONFIG_VT_CONSOLE_SLEEP
+extern void pm_vt_switch_required(struct device *dev, bool required);
+extern void pm_vt_switch_unregister(struct device *dev);
+#else
+static inline void pm_vt_switch_required(struct device *dev, bool required)
+{
+}
+static inline void pm_vt_switch_unregister(struct device *dev)
+{
+}
+#endif /* CONFIG_VT_CONSOLE_SLEEP */
 
 /*
  * Device power management
@@ -110,6 +122,10 @@ typedef struct pm_message {
  *	Subsystem-level @suspend() is executed for all devices after invoking
  *	subsystem-level @prepare() for all of them.
  *
+ * @suspend_late: Continue operations started by @suspend().  For a number of
+ *	devices @suspend_late() may point to the same callback routine as the
+ *	runtime suspend callback.
+ *
  * @resume: Executed after waking the system up from a sleep state in which the
  *	contents of main memory were preserved.  The exact action to perform
  *	depends on the device's subsystem, but generally the driver is expected
@@ -122,6 +138,10 @@ typedef struct pm_message {
  *	Subsystem-level @resume() is executed for all devices after invoking
  *	subsystem-level @resume_noirq() for all of them.
  *
+ * @resume_early: Prepare to execute @resume().  For a number of devices
+ *	@resume_early() may point to the same callback routine as the runtime
+ *	resume callback.
+ *
  * @freeze: Hibernation-specific, executed before creating a hibernation image.
  *	Analogous to @suspend(), but it should not enable the device to signal
  *	wakeup events or change its power state.  The majority of subsystems
@@ -130,6 +150,10 @@ typedef struct pm_message {
  *	during the subsequent resume from hibernation.
  *	Subsystem-level @freeze() is executed for all devices after invoking
  *	subsystem-level @prepare() for all of them.
+ *
+ * @freeze_late: Continue operations started by @freeze().  Analogous to
+ *	@suspend_late(), but it should not enable the device to signal wakeup
+ *	events or change its power state.
  *
  * @thaw: Hibernation-specific, executed after creating a hibernation image OR
  *	if the creation of an image has failed.  Also executed after a failing
@@ -140,14 +164,22 @@ typedef struct pm_message {
  *	subsystem-level @thaw_noirq() for all of them.  It also may be executed
  *	directly after @freeze() in case of a transition error.
  *
+ * @thaw_early: Prepare to execute @thaw().  Undo the changes made by the
+ *	preceding @freeze_late().
+ *
  * @poweroff: Hibernation-specific, executed after saving a hibernation image.
  *	Analogous to @suspend(), but it need not save the device's settings in
  *	memory.
  *	Subsystem-level @poweroff() is executed for all devices after invoking
  *	subsystem-level @prepare() for all of them.
  *
+ * @poweroff_late: Continue operations started by @poweroff().  Analogous to
+ *	@suspend_late(), but it need not save the device's settings in memory.
+ *
  * @restore: Hibernation-specific, executed after restoring the contents of main
  *	memory from a hibernation image, analogous to @resume().
+ *
+ * @restore_early: Prepare to execute @restore(), analogous to @resume_early().
  *
  * @suspend_noirq: Complete the actions started by @suspend().  Carry out any
  *	additional operations required for suspending the device that might be
@@ -158,9 +190,10 @@ typedef struct pm_message {
  *	@suspend_noirq() has returned successfully.  If the device can generate
  *	system wakeup signals and is enabled to wake up the system, it should be
  *	configured to do so at that time.  However, depending on the platform
- *	and device's subsystem, @suspend() may be allowed to put the device into
- *	the low-power state and configure it to generate wakeup signals, in
- *	which case it generally is not necessary to define @suspend_noirq().
+ *	and device's subsystem, @suspend() or @suspend_late() may be allowed to
+ *	put the device into the low-power state and configure it to generate
+ *	wakeup signals, in which case it generally is not necessary to define
+ *	@suspend_noirq().
  *
  * @resume_noirq: Prepare for the execution of @resume() by carrying out any
  *	operations required for resuming the device that might be racing with
@@ -171,9 +204,9 @@ typedef struct pm_message {
  *	additional operations required for freezing the device that might be
  *	racing with its driver's interrupt handler, which is guaranteed not to
  *	run while @freeze_noirq() is being executed.
- *	The power state of the device should not be changed by either @freeze()
- *	or @freeze_noirq() and it should not be configured to signal system
- *	wakeup by any of these callbacks.
+ *	The power state of the device should not be changed by either @freeze(),
+ *	or @freeze_late(), or @freeze_noirq() and it should not be configured to
+ *	signal system wakeup by any of these callbacks.
  *
  * @thaw_noirq: Prepare for the execution of @thaw() by carrying out any
  *	operations required for thawing the device that might be racing with its
@@ -249,6 +282,12 @@ struct dev_pm_ops {
 	int (*thaw)(struct device *dev);
 	int (*poweroff)(struct device *dev);
 	int (*restore)(struct device *dev);
+	int (*suspend_late)(struct device *dev);
+	int (*resume_early)(struct device *dev);
+	int (*freeze_late)(struct device *dev);
+	int (*thaw_early)(struct device *dev);
+	int (*poweroff_late)(struct device *dev);
+	int (*restore_early)(struct device *dev);
 	int (*suspend_noirq)(struct device *dev);
 	int (*resume_noirq)(struct device *dev);
 	int (*freeze_noirq)(struct device *dev);
@@ -272,6 +311,18 @@ struct dev_pm_ops {
 #define SET_SYSTEM_SLEEP_PM_OPS(suspend_fn, resume_fn)
 #endif
 
+#ifdef CONFIG_PM_SLEEP
+#define SET_LATE_SYSTEM_SLEEP_PM_OPS(suspend_fn, resume_fn) \
+	.suspend_late = suspend_fn, \
+	.resume_early = resume_fn, \
+	.freeze_late = suspend_fn, \
+	.thaw_early = resume_fn, \
+	.poweroff_late = suspend_fn, \
+	.restore_early = resume_fn,
+#else
+#define SET_LATE_SYSTEM_SLEEP_PM_OPS(suspend_fn, resume_fn)
+#endif
+
 #ifdef CONFIG_PM_RUNTIME
 #define SET_RUNTIME_PM_OPS(suspend_fn, resume_fn, idle_fn) \
 	.runtime_suspend = suspend_fn, \
@@ -279,6 +330,15 @@ struct dev_pm_ops {
 	.runtime_idle = idle_fn,
 #else
 #define SET_RUNTIME_PM_OPS(suspend_fn, resume_fn, idle_fn)
+#endif
+
+#ifdef CONFIG_PM
+#define SET_PM_RUNTIME_PM_OPS(suspend_fn, resume_fn, idle_fn) \
+	.runtime_suspend = suspend_fn, \
+	.runtime_resume = resume_fn, \
+	.runtime_idle = idle_fn,
+#else
+#define SET_PM_RUNTIME_PM_OPS(suspend_fn, resume_fn, idle_fn)
 #endif
 
 /*
@@ -293,6 +353,15 @@ const struct dev_pm_ops name = { \
 /*
  * Use this for defining a set of PM operations to be used in all situations
  * (sustem suspend, hibernation or runtime PM).
+ * NOTE: In general, system suspend callbacks, .suspend() and .resume(), should
+ * be different from the corresponding runtime PM callbacks, .runtime_suspend(),
+ * and .runtime_resume(), because .runtime_suspend() always works on an already
+ * quiescent device, while .suspend() should assume that the device may be doing
+ * something when it is called (it should ensure that the device will be
+ * quiescent after it has returned).  Therefore it's better to point the "late"
+ * suspend and "early" resume callback pointers, .suspend_late() and
+ * .resume_early(), to the same routines as .runtime_suspend() and
+ * .runtime_resume(), respectively (and analogously for hibernation).
  */
 #define UNIVERSAL_DEV_PM_OPS(name, suspend_fn, resume_fn, idle_fn) \
 const struct dev_pm_ops name = { \
@@ -474,12 +543,14 @@ struct dev_pm_info {
 	bool			is_prepared:1;	/* Owned by the PM core */
 	bool			is_suspended:1;	/* Ditto */
 	bool			ignore_children:1;
+	bool			early_init:1;	/* Owned by the PM core */
 	spinlock_t		lock;
 #ifdef CONFIG_PM_SLEEP
 	struct list_head	entry;
 	struct completion	completion;
 	struct wakeup_source	*wakeup;
 	bool			wakeup_path:1;
+	bool			syscore:1;
 #else
 	unsigned int		should_wakeup:1;
 #endif
@@ -500,6 +571,7 @@ struct dev_pm_info {
 	unsigned int		irq_safe:1;
 	unsigned int		use_autosuspend:1;
 	unsigned int		timer_autosuspends:1;
+	unsigned int		memalloc_noio:1;
 	enum rpm_request	request;
 	enum rpm_status		runtime_status;
 	int			runtime_error;
@@ -508,11 +580,9 @@ struct dev_pm_info {
 	unsigned long		active_jiffies;
 	unsigned long		suspended_jiffies;
 	unsigned long		accounting_timestamp;
-	ktime_t			suspend_time;
-	s64			max_time_suspended_ns;
 #endif
 	struct pm_subsys_data	*subsys_data;  /* Owned by the subsystem. */
-	struct pm_qos_constraints *constraints;
+	struct dev_pm_qos	*qos;
 };
 
 extern void update_pm_runtime_accounting(struct device *dev);
@@ -584,13 +654,13 @@ struct dev_pm_domain {
 
 #ifdef CONFIG_PM_SLEEP
 extern void device_pm_lock(void);
-extern void dpm_resume_noirq(pm_message_t state);
+extern void dpm_resume_start(pm_message_t state);
 extern void dpm_resume_end(pm_message_t state);
 extern void dpm_resume(pm_message_t state);
 extern void dpm_complete(pm_message_t state);
 
 extern void device_pm_unlock(void);
-extern int dpm_suspend_noirq(pm_message_t state);
+extern int dpm_suspend_end(pm_message_t state);
 extern int dpm_suspend_start(pm_message_t state);
 extern int dpm_suspend(pm_message_t state);
 extern int dpm_prepare(pm_message_t state);
@@ -603,19 +673,26 @@ extern void __suspend_report_result(const char *function, void *fn, int ret);
 	} while (0)
 
 extern int device_pm_wait_for_dev(struct device *sub, struct device *dev);
+extern void dpm_for_each_dev(void *data, void (*fn)(struct device *, void *));
 
 extern int pm_generic_prepare(struct device *dev);
+extern int pm_generic_suspend_late(struct device *dev);
 extern int pm_generic_suspend_noirq(struct device *dev);
 extern int pm_generic_suspend(struct device *dev);
+extern int pm_generic_resume_early(struct device *dev);
 extern int pm_generic_resume_noirq(struct device *dev);
 extern int pm_generic_resume(struct device *dev);
 extern int pm_generic_freeze_noirq(struct device *dev);
+extern int pm_generic_freeze_late(struct device *dev);
 extern int pm_generic_freeze(struct device *dev);
 extern int pm_generic_thaw_noirq(struct device *dev);
+extern int pm_generic_thaw_early(struct device *dev);
 extern int pm_generic_thaw(struct device *dev);
 extern int pm_generic_restore_noirq(struct device *dev);
+extern int pm_generic_restore_early(struct device *dev);
 extern int pm_generic_restore(struct device *dev);
 extern int pm_generic_poweroff_noirq(struct device *dev);
+extern int pm_generic_poweroff_late(struct device *dev);
 extern int pm_generic_poweroff(struct device *dev);
 extern void pm_generic_complete(struct device *dev);
 
@@ -634,6 +711,10 @@ static inline int dpm_suspend_start(pm_message_t state)
 static inline int device_pm_wait_for_dev(struct device *a, struct device *b)
 {
 	return 0;
+}
+
+static inline void dpm_for_each_dev(void *data, void (*fn)(struct device *, void *))
+{
 }
 
 #define pm_generic_prepare	NULL

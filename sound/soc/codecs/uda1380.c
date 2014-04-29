@@ -502,8 +502,7 @@ static int uda1380_set_dai_fmt_capture(struct snd_soc_dai *codec_dai,
 static int uda1380_trigger(struct snd_pcm_substream *substream, int cmd,
 		struct snd_soc_dai *dai)
 {
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_codec *codec = rtd->codec;
+	struct snd_soc_codec *codec = dai->codec;
 	struct uda1380_priv *uda1380 = snd_soc_codec_get_drvdata(codec);
 	int mixer = uda1380_read_reg_cache(codec, UDA1380_MIXER);
 
@@ -528,8 +527,7 @@ static int uda1380_pcm_hw_params(struct snd_pcm_substream *substream,
 				 struct snd_pcm_hw_params *params,
 				 struct snd_soc_dai *dai)
 {
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_codec *codec = rtd->codec;
+	struct snd_soc_codec *codec = dai->codec;
 	u16 clk = uda1380_read_reg_cache(codec, UDA1380_CLK);
 
 	/* set WSPLL power and divider if running from this clock */
@@ -796,9 +794,9 @@ static struct snd_soc_codec_driver soc_codec_dev_uda1380 = {
 	.num_dapm_routes = ARRAY_SIZE(uda1380_dapm_routes),
 };
 
-#if defined(CONFIG_I2C) || defined(CONFIG_I2C_MODULE)
-static __devinit int uda1380_i2c_probe(struct i2c_client *i2c,
-				      const struct i2c_device_id *id)
+#if IS_ENABLED(CONFIG_I2C)
+static int uda1380_i2c_probe(struct i2c_client *i2c,
+			     const struct i2c_device_id *id)
 {
 	struct uda1380_priv *uda1380;
 	int ret;
@@ -816,7 +814,7 @@ static __devinit int uda1380_i2c_probe(struct i2c_client *i2c,
 	return ret;
 }
 
-static int __devexit uda1380_i2c_remove(struct i2c_client *i2c)
+static int uda1380_i2c_remove(struct i2c_client *i2c)
 {
 	snd_soc_unregister_codec(&i2c->dev);
 	return 0;
@@ -834,7 +832,7 @@ static struct i2c_driver uda1380_i2c_driver = {
 		.owner = THIS_MODULE,
 	},
 	.probe =    uda1380_i2c_probe,
-	.remove =   __devexit_p(uda1380_i2c_remove),
+	.remove =   uda1380_i2c_remove,
 	.id_table = uda1380_i2c_id,
 };
 #endif
@@ -842,7 +840,7 @@ static struct i2c_driver uda1380_i2c_driver = {
 static int __init uda1380_modinit(void)
 {
 	int ret = 0;
-#if defined(CONFIG_I2C) || defined(CONFIG_I2C_MODULE)
+#if IS_ENABLED(CONFIG_I2C)
 	ret = i2c_add_driver(&uda1380_i2c_driver);
 	if (ret != 0)
 		pr_err("Failed to register UDA1380 I2C driver: %d\n", ret);
@@ -853,7 +851,7 @@ module_init(uda1380_modinit);
 
 static void __exit uda1380_exit(void)
 {
-#if defined(CONFIG_I2C) || defined(CONFIG_I2C_MODULE)
+#if IS_ENABLED(CONFIG_I2C)
 	i2c_del_driver(&uda1380_i2c_driver);
 #endif
 }

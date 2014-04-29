@@ -1,7 +1,6 @@
 /*
  * Copyright (C) ST-Ericsson AB 2010
- * Contact: Sjur Brendeland / sjur.brandeland@stericsson.com
- * Author:  Daniel Martensson / Daniel.Martensson@stericsson.com
+ * Author:  Daniel Martensson
  * License terms: GNU General Public License (GPL) version 2.
  */
 
@@ -29,7 +28,7 @@
 #endif /* CONFIG_CAIF_SPI_SYNC */
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Daniel Martensson<daniel.martensson@stericsson.com>");
+MODULE_AUTHOR("Daniel Martensson");
 MODULE_DESCRIPTION("CAIF SPI driver");
 
 /* Returns the number of padding bytes for alignment. */
@@ -125,12 +124,6 @@ static inline void dev_debugfs_rem(struct cfspi *cfspi)
 	debugfs_remove(cfspi->dbgfs_frame);
 	debugfs_remove(cfspi->dbgfs_state);
 	debugfs_remove(cfspi->dbgfs_dir);
-}
-
-static int dbgfs_open(struct inode *inode, struct file *file)
-{
-	file->private_data = inode->i_private;
-	return 0;
 }
 
 static ssize_t dbgfs_state(struct file *file, char __user *user_buf,
@@ -243,13 +236,13 @@ static ssize_t dbgfs_frame(struct file *file, char __user *user_buf,
 }
 
 static const struct file_operations dbgfs_state_fops = {
-	.open = dbgfs_open,
+	.open = simple_open,
 	.read = dbgfs_state,
 	.owner = THIS_MODULE
 };
 
 static const struct file_operations dbgfs_frame_fops = {
-	.open = dbgfs_open,
+	.open = simple_open,
 	.read = dbgfs_frame,
 	.owner = THIS_MODULE
 };
@@ -870,6 +863,7 @@ static int __init cfspi_init_module(void)
 	driver_remove_file(&cfspi_spi_driver.driver,
 			   &driver_attr_up_head_align);
  err_create_up_head_align:
+	platform_driver_unregister(&cfspi_spi_driver);
  err_dev_register:
 	return result;
 }

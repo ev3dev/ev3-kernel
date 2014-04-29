@@ -9,8 +9,7 @@
  *   GNU General Public License for more details.
  *
  *   You should have received a copy of the GNU General Public License
- *   along with this program; if not, write to the Free Software
- *   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
+ *   along with this program; if not, see <http://www.gnu.org/licenses/>.
  *
  *   Copyright (C) 2011 John Crispin <blogic@openwrt.org>
  */
@@ -114,7 +113,7 @@ struct ltq_etop_priv {
 static int
 ltq_etop_alloc_skb(struct ltq_etop_chan *ch)
 {
-	ch->skb[ch->dma.desc] = dev_alloc_skb(MAX_DMA_DATA_LEN);
+	ch->skb[ch->dma.desc] = netdev_alloc_skb(ch->netdev, MAX_DMA_DATA_LEN);
 	if (!ch->skb[ch->dma.desc])
 		return -ENOMEM;
 	ch->dma.desc_base[ch->dma.desc].addr = dma_map_single(NULL,
@@ -149,7 +148,6 @@ ltq_etop_hw_receive(struct ltq_etop_chan *ch)
 	spin_unlock_irqrestore(&priv->lock, flags);
 
 	skb_put(skb, len);
-	skb->dev = ch->netdev;
 	skb->protocol = eth_type_trans(skb, ch->netdev);
 	netif_receive_skb(skb);
 }
@@ -283,8 +281,7 @@ ltq_etop_hw_init(struct net_device *dev)
 
 		if (IS_TX(i)) {
 			ltq_dma_alloc_tx(&ch->dma);
-			request_irq(irq, ltq_etop_dma_irq, IRQF_DISABLED,
-				"etop_tx", priv);
+			request_irq(irq, ltq_etop_dma_irq, 0, "etop_tx", priv);
 		} else if (IS_RX(i)) {
 			ltq_dma_alloc_rx(&ch->dma);
 			for (ch->dma.desc = 0; ch->dma.desc < LTQ_DESC_NUM;
@@ -292,8 +289,7 @@ ltq_etop_hw_init(struct net_device *dev)
 				if (ltq_etop_alloc_skb(ch))
 					return -ENOMEM;
 			ch->dma.desc = 0;
-			request_irq(irq, ltq_etop_dma_irq, IRQF_DISABLED,
-				"etop_rx", priv);
+			request_irq(irq, ltq_etop_dma_irq, 0, "etop_rx", priv);
 		}
 		ch->dma.irq = irq;
 	}
@@ -303,9 +299,9 @@ ltq_etop_hw_init(struct net_device *dev)
 static void
 ltq_etop_get_drvinfo(struct net_device *dev, struct ethtool_drvinfo *info)
 {
-	strcpy(info->driver, "Lantiq ETOP");
-	strcpy(info->bus_info, "internal");
-	strcpy(info->version, DRV_VERSION);
+	strlcpy(info->driver, "Lantiq ETOP", sizeof(info->driver));
+	strlcpy(info->bus_info, "internal", sizeof(info->bus_info));
+	strlcpy(info->version, DRV_VERSION, sizeof(info->version));
 }
 
 static int
@@ -394,8 +390,8 @@ ltq_etop_mdio_probe(struct net_device *dev)
 		return -ENODEV;
 	}
 
-	phydev = phy_connect(dev, dev_name(&phydev->dev), &ltq_etop_mdio_link,
-			0, priv->pldata->mii_mode);
+	phydev = phy_connect(dev, dev_name(&phydev->dev),
+			     &ltq_etop_mdio_link, priv->pldata->mii_mode);
 
 	if (IS_ERR(phydev)) {
 		netdev_err(dev, "Could not attach to PHY\n");
@@ -622,7 +618,8 @@ ltq_etop_set_multicast_list(struct net_device *dev)
 }
 
 static u16
-ltq_etop_select_queue(struct net_device *dev, struct sk_buff *skb)
+ltq_etop_select_queue(struct net_device *dev, struct sk_buff *skb,
+		      void *accel_priv, select_queue_fallback_t fallback)
 {
 	/* we are currently only using the first queue */
 	return 0;
@@ -634,6 +631,7 @@ ltq_etop_init(struct net_device *dev)
 	struct ltq_etop_priv *priv = netdev_priv(dev);
 	struct sockaddr mac;
 	int err;
+	bool random_mac = false;
 
 	ether_setup(dev);
 	dev->watchdog_timeo = 10 * HZ;
@@ -645,12 +643,18 @@ ltq_etop_init(struct net_device *dev)
 	memcpy(&mac, &priv->pldata->mac, sizeof(struct sockaddr));
 	if (!is_valid_ether_addr(mac.sa_data)) {
 		pr_warn("etop: invalid MAC, using random\n");
-		random_ether_addr(mac.sa_data);
+		eth_random_addr(mac.sa_data);
+		random_mac = true;
 	}
 
 	err = ltq_etop_set_mac_address(dev, &mac);
 	if (err)
 		goto err_netdev;
+
+	/* Set addr_assign_type here, ltq_etop_set_mac_address would reset it. */
+	if (random_mac)
+		dev->addr_assign_type = NET_ADDR_RANDOM;
+
 	ltq_etop_set_multicast_list(dev);
 	err = ltq_etop_mdio_init(dev);
 	if (err)
@@ -731,6 +735,10 @@ ltq_etop_probe(struct platform_device *pdev)
 	}
 
 	dev = alloc_etherdev_mq(sizeof(struct ltq_etop_priv), 4);
+	if (!dev) {
+		err = -ENOMEM;
+		goto err_out;
+	}
 	strcpy(dev->name, "eth%d");
 	dev->netdev_ops = &ltq_eth_netdev_ops;
 	dev->ethtool_ops = &ltq_etop_ethtool_ops;
@@ -759,12 +767,12 @@ ltq_etop_probe(struct platform_device *pdev)
 	return 0;
 
 err_free:
-	kfree(dev);
+	free_netdev(dev);
 err_out:
 	return err;
 }
 
-static int __devexit
+static int
 ltq_etop_remove(struct platform_device *pdev)
 {
 	struct net_device *dev = platform_get_drvdata(pdev);
@@ -779,7 +787,7 @@ ltq_etop_remove(struct platform_device *pdev)
 }
 
 static struct platform_driver ltq_mii_driver = {
-	.remove = __devexit_p(ltq_etop_remove),
+	.remove = ltq_etop_remove,
 	.driver = {
 		.name = "ltq_etop",
 		.owner = THIS_MODULE,
@@ -792,7 +800,7 @@ init_ltq_etop(void)
 	int ret = platform_driver_probe(&ltq_mii_driver, ltq_etop_probe);
 
 	if (ret)
-		pr_err("ltq_etop: Error registering platfom driver!");
+		pr_err("ltq_etop: Error registering platform driver!");
 	return ret;
 }
 

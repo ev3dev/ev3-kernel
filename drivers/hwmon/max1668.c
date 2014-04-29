@@ -1,23 +1,23 @@
 /*
-    Copyright (c) 2011 David George <david.george@ska.ac.za>
-
-    based on adm1021.c
-    some credit to Christoph Scheurer, but largely a rewrite
-
-    This program is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 2 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program; if not, write to the Free Software
-    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-*/
+ * Copyright (c) 2011 David George <david.george@ska.ac.za>
+ *
+ * based on adm1021.c
+ * some credit to Christoph Scheurer, but largely a rewrite
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ */
 
 #include <linux/module.h>
 #include <linux/init.h>
@@ -215,7 +215,7 @@ static ssize_t set_temp_max(struct device *dev,
 		return ret;
 
 	mutex_lock(&data->update_lock);
-	data->temp_max[index] = SENSORS_LIMIT(temp/1000, -128, 127);
+	data->temp_max[index] = clamp_val(temp/1000, -128, 127);
 	if (i2c_smbus_write_byte_data(client,
 					MAX1668_REG_LIMH_WR(index),
 					data->temp_max[index]))
@@ -240,10 +240,10 @@ static ssize_t set_temp_min(struct device *dev,
 		return ret;
 
 	mutex_lock(&data->update_lock);
-	data->temp_min[index] = SENSORS_LIMIT(temp/1000, -128, 127);
+	data->temp_min[index] = clamp_val(temp/1000, -128, 127);
 	if (i2c_smbus_write_byte_data(client,
 					MAX1668_REG_LIML_WR(index),
-					data->temp_max[index]))
+					data->temp_min[index]))
 		count = -EIO;
 	mutex_unlock(&data->update_lock);
 
@@ -411,7 +411,8 @@ static int max1668_probe(struct i2c_client *client,
 	if (!i2c_check_functionality(adapter, I2C_FUNC_SMBUS_BYTE_DATA))
 		return -ENODEV;
 
-	data = kzalloc(sizeof(struct max1668_data), GFP_KERNEL);
+	data = devm_kzalloc(&client->dev, sizeof(struct max1668_data),
+			    GFP_KERNEL);
 	if (!data)
 		return -ENOMEM;
 
@@ -422,7 +423,7 @@ static int max1668_probe(struct i2c_client *client,
 	/* Register sysfs hooks */
 	err = sysfs_create_group(&client->dev.kobj, &max1668_group_common);
 	if (err)
-		goto error_free;
+		return err;
 
 	if (data->type == max1668 || data->type == max1989) {
 		err = sysfs_create_group(&client->dev.kobj,
@@ -444,8 +445,6 @@ error_sysrem1:
 		sysfs_remove_group(&client->dev.kobj, &max1668_group_unique);
 error_sysrem0:
 	sysfs_remove_group(&client->dev.kobj, &max1668_group_common);
-error_free:
-	kfree(data);
 	return err;
 }
 
@@ -459,7 +458,6 @@ static int max1668_remove(struct i2c_client *client)
 
 	sysfs_remove_group(&client->dev.kobj, &max1668_group_common);
 
-	kfree(data);
 	return 0;
 }
 
@@ -484,19 +482,8 @@ static struct i2c_driver max1668_driver = {
 	.address_list = max1668_addr_list,
 };
 
-static int __init sensors_max1668_init(void)
-{
-	return i2c_add_driver(&max1668_driver);
-}
-
-static void __exit sensors_max1668_exit(void)
-{
-	i2c_del_driver(&max1668_driver);
-}
+module_i2c_driver(max1668_driver);
 
 MODULE_AUTHOR("David George <david.george@ska.ac.za>");
 MODULE_DESCRIPTION("MAX1668 remote temperature sensor driver");
 MODULE_LICENSE("GPL");
-
-module_init(sensors_max1668_init)
-module_exit(sensors_max1668_exit)

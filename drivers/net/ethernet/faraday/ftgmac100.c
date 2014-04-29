@@ -24,7 +24,6 @@
 #include <linux/dma-mapping.h>
 #include <linux/etherdevice.h>
 #include <linux/ethtool.h>
-#include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/io.h>
 #include <linux/module.h>
@@ -479,9 +478,14 @@ static bool ftgmac100_rx_packet(struct ftgmac100 *priv, int *processed)
 		rxdes = ftgmac100_current_rxdes(priv);
 	} while (!done);
 
-	if (skb->len <= 64)
+	/* Small frames are copied into linear part of skb to free one page */
+	if (skb->len <= 128) {
 		skb->truesize -= PAGE_SIZE;
-	__pskb_pull_tail(skb, min(skb->len, 64U));
+		__pskb_pull_tail(skb, skb->len);
+	} else {
+		/* We pull the minimum amount into linear part */
+		__pskb_pull_tail(skb, ETH_HLEN);
+	}
 	skb->protocol = eth_type_trans(skb, netdev);
 
 	netdev->stats.rx_packets++;
@@ -762,7 +766,7 @@ static void ftgmac100_free_buffers(struct ftgmac100 *priv)
 			continue;
 
 		dma_unmap_single(priv->dev, map, skb_headlen(skb), DMA_TO_DEVICE);
-		dev_kfree_skb(skb);
+		kfree_skb(skb);
 	}
 
 	dma_free_coherent(priv->dev, sizeof(struct ftgmac100_descs),
@@ -773,13 +777,11 @@ static int ftgmac100_alloc_buffers(struct ftgmac100 *priv)
 {
 	int i;
 
-	priv->descs = dma_alloc_coherent(priv->dev,
-					 sizeof(struct ftgmac100_descs),
-					 &priv->descs_dma_addr, GFP_KERNEL);
+	priv->descs = dma_zalloc_coherent(priv->dev,
+					  sizeof(struct ftgmac100_descs),
+					  &priv->descs_dma_addr, GFP_KERNEL);
 	if (!priv->descs)
 		return -ENOMEM;
-
-	memset(priv->descs, 0, sizeof(struct ftgmac100_descs));
 
 	/* initialize RX ring */
 	ftgmac100_rxdes_set_end_of_ring(&priv->descs->rxdes[RX_QUEUE_ENTRIES - 1]);
@@ -853,8 +855,7 @@ static int ftgmac100_mii_probe(struct ftgmac100 *priv)
 	}
 
 	phydev = phy_connect(netdev, dev_name(&phydev->dev),
-			     &ftgmac100_adjust_link, 0,
-			     PHY_INTERFACE_MODE_GMII);
+			     &ftgmac100_adjust_link, PHY_INTERFACE_MODE_GMII);
 
 	if (IS_ERR(phydev)) {
 		netdev_err(netdev, "%s: Could not attach to PHY\n", netdev->name);
@@ -950,9 +951,9 @@ static int ftgmac100_mdiobus_reset(struct mii_bus *bus)
 static void ftgmac100_get_drvinfo(struct net_device *netdev,
 				  struct ethtool_drvinfo *info)
 {
-	strcpy(info->driver, DRV_NAME);
-	strcpy(info->version, DRV_VERSION);
-	strcpy(info->bus_info, dev_name(&netdev->dev));
+	strlcpy(info->driver, DRV_NAME, sizeof(info->driver));
+	strlcpy(info->version, DRV_VERSION, sizeof(info->version));
+	strlcpy(info->bus_info, dev_name(&netdev->dev), sizeof(info->bus_info));
 }
 
 static int ftgmac100_get_settings(struct net_device *netdev,
@@ -1147,7 +1148,7 @@ static int ftgmac100_hard_start_xmit(struct sk_buff *skb,
 			netdev_dbg(netdev, "tx packet too big\n");
 
 		netdev->stats.tx_dropped++;
-		dev_kfree_skb(skb);
+		kfree_skb(skb);
 		return NETDEV_TX_OK;
 	}
 
@@ -1158,7 +1159,7 @@ static int ftgmac100_hard_start_xmit(struct sk_buff *skb,
 			netdev_err(netdev, "map socket buffer failed\n");
 
 		netdev->stats.tx_dropped++;
-		dev_kfree_skb(skb);
+		kfree_skb(skb);
 		return NETDEV_TX_OK;
 	}
 
@@ -1289,7 +1290,7 @@ static int ftgmac100_probe(struct platform_device *pdev)
 	netdev_info(netdev, "irq %d, mapped at %p\n", priv->irq, priv->base);
 
 	if (!is_valid_ether_addr(netdev->dev_addr)) {
-		random_ether_addr(netdev->dev_addr);
+		eth_hw_addr_random(netdev);
 		netdev_info(netdev, "generated random MAC address %pM\n",
 			    netdev->dev_addr);
 	}
@@ -1308,7 +1309,6 @@ err_ioremap:
 	release_resource(priv->res);
 err_req_mem:
 	netif_napi_del(&priv->napi);
-	platform_set_drvdata(pdev, NULL);
 	free_netdev(netdev);
 err_alloc_etherdev:
 	return err;
@@ -1332,7 +1332,6 @@ static int __exit ftgmac100_remove(struct platform_device *pdev)
 	release_resource(priv->res);
 
 	netif_napi_del(&priv->napi);
-	platform_set_drvdata(pdev, NULL);
 	free_netdev(netdev);
 	return 0;
 }
@@ -1346,22 +1345,7 @@ static struct platform_driver ftgmac100_driver = {
 	},
 };
 
-/******************************************************************************
- * initialization / finalization
- *****************************************************************************/
-static int __init ftgmac100_init(void)
-{
-	pr_info("Loading version " DRV_VERSION " ...\n");
-	return platform_driver_register(&ftgmac100_driver);
-}
-
-static void __exit ftgmac100_exit(void)
-{
-	platform_driver_unregister(&ftgmac100_driver);
-}
-
-module_init(ftgmac100_init);
-module_exit(ftgmac100_exit);
+module_platform_driver(ftgmac100_driver);
 
 MODULE_AUTHOR("Po-Yu Chuang <ratbert@faraday-tech.com>");
 MODULE_DESCRIPTION("FTGMAC100 driver");

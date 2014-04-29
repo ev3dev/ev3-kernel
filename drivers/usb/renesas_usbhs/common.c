@@ -14,12 +14,13 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  *
  */
+#include <linux/err.h>
 #include <linux/io.h>
 #include <linux/module.h>
 #include <linux/pm_runtime.h>
 #include <linux/slab.h>
 #include <linux/sysfs.h>
-#include "./common.h"
+#include "common.h"
 
 /*
  *		image of renesas_usbhs
@@ -130,6 +131,11 @@ void usbhs_sys_function_ctrl(struct usbhs_priv *priv, int enable)
 	 * - D+ Line Pull-up
 	 */
 	usbhs_bset(priv, SYSCFG, mask, enable ? val : 0);
+}
+
+void usbhs_sys_function_pullup(struct usbhs_priv *priv, int enable)
+{
+	usbhs_bset(priv, SYSCFG, DPRPU, enable ? DPRPU : 0);
 }
 
 void usbhs_sys_set_test_mode(struct usbhs_priv *priv, u16 mode)
@@ -410,11 +416,10 @@ static int usbhsc_drvcllbck_notify_hotplug(struct platform_device *pdev)
  */
 static int usbhs_probe(struct platform_device *pdev)
 {
-	struct renesas_usbhs_platform_info *info = pdev->dev.platform_data;
+	struct renesas_usbhs_platform_info *info = dev_get_platdata(&pdev->dev);
 	struct renesas_usbhs_driver_callback *dfunc;
 	struct usbhs_priv *priv;
-	struct resource *res;
-	unsigned int irq;
+	struct resource *res, *irq_res;
 	int ret;
 
 	/* check platform information */
@@ -426,25 +431,22 @@ static int usbhs_probe(struct platform_device *pdev)
 
 	/* platform data */
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	irq = platform_get_irq(pdev, 0);
-	if (!res || (int)irq <= 0) {
+	irq_res = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
+	if (!res || !irq_res) {
 		dev_err(&pdev->dev, "Not enough Renesas USB platform resources.\n");
 		return -ENODEV;
 	}
 
 	/* usb private data */
-	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
+	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv) {
 		dev_err(&pdev->dev, "Could not allocate priv\n");
 		return -ENOMEM;
 	}
 
-	priv->base = ioremap_nocache(res->start, resource_size(res));
-	if (!priv->base) {
-		dev_err(&pdev->dev, "ioremap error.\n");
-		ret = -ENOMEM;
-		goto probe_end_kfree;
-	}
+	priv->base = devm_ioremap_resource(&pdev->dev, res);
+	if (IS_ERR(priv->base))
+		return PTR_ERR(priv->base);
 
 	/*
 	 * care platform info
@@ -476,7 +478,9 @@ static int usbhs_probe(struct platform_device *pdev)
 	/*
 	 * priv settings
 	 */
-	priv->irq	= irq;
+	priv->irq	= irq_res->start;
+	if (irq_res->flags & IORESOURCE_IRQ_SHAREABLE)
+		priv->irqflags = IRQF_SHARED;
 	priv->pdev	= pdev;
 	INIT_DELAYED_WORK(&priv->notify_hotplug_work, usbhsc_notify_hotplug);
 	spin_lock_init(usbhs_priv_to_lock(priv));
@@ -484,7 +488,7 @@ static int usbhs_probe(struct platform_device *pdev)
 	/* call pipe and module init */
 	ret = usbhs_pipe_probe(priv);
 	if (ret < 0)
-		goto probe_end_iounmap;
+		return ret;
 
 	ret = usbhs_fifo_probe(priv);
 	if (ret < 0)
@@ -495,7 +499,7 @@ static int usbhs_probe(struct platform_device *pdev)
 		goto probe_end_fifo_exit;
 
 	/* dev_set_drvdata should be called after usbhs_mod_init */
-	dev_set_drvdata(&pdev->dev, priv);
+	platform_set_drvdata(pdev, priv);
 
 	/*
 	 * deviece reset here because
@@ -545,20 +549,16 @@ probe_end_fifo_exit:
 	usbhs_fifo_remove(priv);
 probe_end_pipe_exit:
 	usbhs_pipe_remove(priv);
-probe_end_iounmap:
-	iounmap(priv->base);
-probe_end_kfree:
-	kfree(priv);
 
 	dev_info(&pdev->dev, "probe failed\n");
 
 	return ret;
 }
 
-static int __devexit usbhs_remove(struct platform_device *pdev)
+static int usbhs_remove(struct platform_device *pdev)
 {
 	struct usbhs_priv *priv = usbhs_pdev_to_priv(pdev);
-	struct renesas_usbhs_platform_info *info = pdev->dev.platform_data;
+	struct renesas_usbhs_platform_info *info = dev_get_platdata(&pdev->dev);
 	struct renesas_usbhs_driver_callback *dfunc = &info->driver_callback;
 
 	dev_dbg(&pdev->dev, "usb remove\n");
@@ -575,8 +575,6 @@ static int __devexit usbhs_remove(struct platform_device *pdev)
 	usbhs_mod_remove(priv);
 	usbhs_fifo_remove(priv);
 	usbhs_pipe_remove(priv);
-	iounmap(priv->base);
-	kfree(priv);
 
 	return 0;
 }
@@ -602,12 +600,12 @@ static int usbhsc_resume(struct device *dev)
 	struct usbhs_priv *priv = dev_get_drvdata(dev);
 	struct platform_device *pdev = usbhs_priv_to_pdev(priv);
 
-	usbhs_platform_call(priv, phy_reset, pdev);
-
 	if (!usbhsc_flags_has(priv, USBHSF_RUNTIME_PWCTRL))
 		usbhsc_power_ctrl(priv, 1);
 
-	usbhsc_hotplug(priv);
+	usbhs_platform_call(priv, phy_reset, pdev);
+
+	usbhsc_drvcllbck_notify_hotplug(pdev);
 
 	return 0;
 }
@@ -637,7 +635,7 @@ static struct platform_driver renesas_usbhs_driver = {
 		.pm	= &usbhsc_pm_ops,
 	},
 	.probe		= usbhs_probe,
-	.remove		= __devexit_p(usbhs_remove),
+	.remove		= usbhs_remove,
 };
 
 module_platform_driver(renesas_usbhs_driver);

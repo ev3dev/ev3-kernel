@@ -12,8 +12,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <linux/kernel.h>
@@ -34,6 +33,7 @@
 
 MODULE_AUTHOR("Sascha Hauer <s.hauer@pengutronix.de>");
 MODULE_DESCRIPTION("Socket-CAN driver for SJA1000 on the platform bus");
+MODULE_ALIAS("platform:" DRV_NAME);
 MODULE_LICENSE("GPL v2");
 
 static u8 sp_read_reg8(const struct sja1000_priv *priv, int reg)
@@ -75,7 +75,7 @@ static int sp_probe(struct platform_device *pdev)
 	struct resource *res_mem, *res_irq;
 	struct sja1000_platform_data *pdata;
 
-	pdata = pdev->dev.platform_data;
+	pdata = dev_get_platdata(&pdev->dev);
 	if (!pdata) {
 		dev_err(&pdev->dev, "No platform data provided!\n");
 		err = -ENODEV;
@@ -109,7 +109,9 @@ static int sp_probe(struct platform_device *pdev)
 	priv = netdev_priv(dev);
 
 	dev->irq = res_irq->start;
-	priv->irq_flags = res_irq->flags & (IRQF_TRIGGER_MASK | IRQF_SHARED);
+	priv->irq_flags = res_irq->flags & IRQF_TRIGGER_MASK;
+	if (res_irq->flags & IORESOURCE_IRQ_SHAREABLE)
+		priv->irq_flags |= IRQF_SHARED;
 	priv->reg_base = addr;
 	/* The CAN clock frequency is half the oscillator clock frequency */
 	priv->can.clock.freq = pdata->osc_freq / 2;
@@ -132,7 +134,7 @@ static int sp_probe(struct platform_device *pdev)
 		break;
 	}
 
-	dev_set_drvdata(&pdev->dev, dev);
+	platform_set_drvdata(pdev, dev);
 	SET_NETDEV_DEV(dev, &pdev->dev);
 
 	err = register_sja1000dev(dev);
@@ -158,12 +160,11 @@ static int sp_probe(struct platform_device *pdev)
 
 static int sp_remove(struct platform_device *pdev)
 {
-	struct net_device *dev = dev_get_drvdata(&pdev->dev);
+	struct net_device *dev = platform_get_drvdata(pdev);
 	struct sja1000_priv *priv = netdev_priv(dev);
 	struct resource *res;
 
 	unregister_sja1000dev(dev);
-	dev_set_drvdata(&pdev->dev, NULL);
 
 	if (priv->reg_base)
 		iounmap(priv->reg_base);

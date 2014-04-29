@@ -35,7 +35,7 @@ extern void __add_wrong_size(void)
 
 /* 
  * An exchange-type operation, which takes a value and a pointer, and
- * returns a the old value.
+ * returns the old value.
  */
 #define __xchg_op(ptr, arg, op, lock)					\
 	({								\
@@ -43,7 +43,7 @@ extern void __add_wrong_size(void)
 		switch (sizeof(*(ptr))) {				\
 		case __X86_CASE_B:					\
 			asm volatile (lock #op "b %b0, %1\n"		\
-				      : "+r" (__ret), "+m" (*(ptr))	\
+				      : "+q" (__ret), "+m" (*(ptr))	\
 				      : : "memory", "cc");		\
 			break;						\
 		case __X86_CASE_W:					\
@@ -138,9 +138,9 @@ extern void __add_wrong_size(void)
 	__raw_cmpxchg((ptr), (old), (new), (size), "")
 
 #ifdef CONFIG_X86_32
-# include "cmpxchg_32.h"
+# include <asm/cmpxchg_32.h>
 #else
-# include "cmpxchg_64.h"
+# include <asm/cmpxchg_64.h>
 #endif
 
 #ifdef __HAVE_ARCH_CMPXCHG
@@ -173,7 +173,7 @@ extern void __add_wrong_size(void)
 		switch (sizeof(*(ptr))) {				\
 		case __X86_CASE_B:					\
 			asm volatile (lock "addb %b1, %0\n"		\
-				      : "+m" (*(ptr)) : "ri" (inc)	\
+				      : "+m" (*(ptr)) : "qi" (inc)	\
 				      : "memory", "cc");		\
 			break;						\
 		case __X86_CASE_W:					\

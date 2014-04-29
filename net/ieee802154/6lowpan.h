@@ -53,9 +53,6 @@
 #ifndef __6LOWPAN_H__
 #define __6LOWPAN_H__
 
-/* need to know address length to manipulate with it */
-#define IEEE802154_ALEN		8
-
 #define UIP_802154_SHORTADDR_LEN	2  /* compressed ipv6 address length */
 #define UIP_IPH_LEN			40 /* ipv6 fixed header size */
 #define UIP_PROTO_UDP			17 /* ipv6 next header value for UDP */
@@ -87,7 +84,7 @@
 	(memcmp(addr1, addr2, length >> 3) == 0)
 
 /* local link, i.e. FE80::/10 */
-#define is_addr_link_local(a) (((a)->s6_addr16[0]) == 0x80FE)
+#define is_addr_link_local(a) (((a)->s6_addr16[0]) == htons(0xFE80))
 
 /*
  * check whether we can compress the IID to 16 bits,
@@ -95,9 +92,10 @@
  */
 #define lowpan_is_iid_16_bit_compressable(a)	\
 	((((a)->s6_addr16[4]) == 0) &&		\
-	 (((a)->s6_addr16[5]) == 0) &&		\
-	 (((a)->s6_addr16[6]) == 0) &&		\
-	 ((((a)->s6_addr[14]) & 0x80) == 0))
+	 (((a)->s6_addr[10]) == 0) &&		\
+	 (((a)->s6_addr[11]) == 0xff) &&	\
+	 (((a)->s6_addr[12]) == 0xfe) &&	\
+	 (((a)->s6_addr[13]) == 0))
 
 /* multicast address */
 #define is_addr_mcast(a) (((a)->s6_addr[0]) == 0xFF)
@@ -195,10 +193,12 @@
 /* Values of fields within the IPHC encoding second byte */
 #define LOWPAN_IPHC_CID		0x80
 
+#define LOWPAN_IPHC_ADDR_00	0x00
+#define LOWPAN_IPHC_ADDR_01	0x01
+#define LOWPAN_IPHC_ADDR_02	0x02
+#define LOWPAN_IPHC_ADDR_03	0x03
+
 #define LOWPAN_IPHC_SAC		0x40
-#define LOWPAN_IPHC_SAM_00	0x00
-#define LOWPAN_IPHC_SAM_01	0x10
-#define LOWPAN_IPHC_SAM_10	0x20
 #define LOWPAN_IPHC_SAM		0x30
 
 #define LOWPAN_IPHC_SAM_BIT	4
@@ -231,5 +231,89 @@
 #define LOWPAN_NHC_UDP_CS_P_10	0xF2 /* source = 0xF0 + 8bit inline,
 					dest = 16 bit inline */
 #define LOWPAN_NHC_UDP_CS_P_11	0xF3 /* source & dest = 0xF0B + 4bit inline */
+#define LOWPAN_NHC_UDP_CS_C	0x04 /* checksum elided */
+
+#ifdef DEBUG
+/* print data in line */
+static inline void raw_dump_inline(const char *caller, char *msg,
+				   unsigned char *buf, int len)
+{
+	if (msg)
+		pr_debug("%s():%s: ", caller, msg);
+
+	print_hex_dump_debug("", DUMP_PREFIX_NONE, 16, 1, buf, len, false);
+}
+
+/* print data in a table format:
+ *
+ * addr: xx xx xx xx xx xx
+ * addr: xx xx xx xx xx xx
+ * ...
+ */
+static inline void raw_dump_table(const char *caller, char *msg,
+				  unsigned char *buf, int len)
+{
+	if (msg)
+		pr_debug("%s():%s:\n", caller, msg);
+
+	print_hex_dump_debug("\t", DUMP_PREFIX_OFFSET, 16, 1, buf, len, false);
+}
+#else
+static inline void raw_dump_table(const char *caller, char *msg,
+				  unsigned char *buf, int len) { }
+static inline void raw_dump_inline(const char *caller, char *msg,
+				   unsigned char *buf, int len) { }
+#endif
+
+static inline int lowpan_fetch_skb_u8(struct sk_buff *skb, u8 *val)
+{
+	if (unlikely(!pskb_may_pull(skb, 1)))
+		return -EINVAL;
+
+	*val = skb->data[0];
+	skb_pull(skb, 1);
+
+	return 0;
+}
+
+static inline int lowpan_fetch_skb_u16(struct sk_buff *skb, u16 *val)
+{
+	if (unlikely(!pskb_may_pull(skb, 2)))
+		return -EINVAL;
+
+	*val = (skb->data[0] << 8) | skb->data[1];
+	skb_pull(skb, 2);
+
+	return 0;
+}
+
+static inline bool lowpan_fetch_skb(struct sk_buff *skb,
+		void *data, const unsigned int len)
+{
+	if (unlikely(!pskb_may_pull(skb, len)))
+		return true;
+
+	skb_copy_from_linear_data(skb, data, len);
+	skb_pull(skb, len);
+
+	return false;
+}
+
+static inline void lowpan_push_hc_data(u8 **hc_ptr, const void *data,
+				       const size_t len)
+{
+	memcpy(*hc_ptr, data, len);
+	*hc_ptr += len;
+}
+
+typedef int (*skb_delivery_cb)(struct sk_buff *skb, struct net_device *dev);
+
+int lowpan_process_data(struct sk_buff *skb, struct net_device *dev,
+		const u8 *saddr, const u8 saddr_type, const u8 saddr_len,
+		const u8 *daddr, const u8 daddr_type, const u8 daddr_len,
+		u8 iphc0, u8 iphc1, skb_delivery_cb skb_deliver);
+int lowpan_header_compress(struct sk_buff *skb, struct net_device *dev,
+			unsigned short type, const void *_daddr,
+			const void *_saddr, unsigned int len);
 
 #endif /* __6LOWPAN_H__ */

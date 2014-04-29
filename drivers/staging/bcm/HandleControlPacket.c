@@ -11,13 +11,13 @@
  * Enqueue the control packet for Application.
  * @return None
  */
-static VOID handle_rx_control_packet(PMINI_ADAPTER Adapter, struct sk_buff *skb)
+static VOID handle_rx_control_packet(struct bcm_mini_adapter *Adapter, struct sk_buff *skb)
 {
-	PPER_TARANG_DATA pTarang = NULL;
-	BOOLEAN HighPriorityMessage = FALSE;
+	struct bcm_tarang_data *pTarang = NULL;
+	bool HighPriorityMessage = false;
 	struct sk_buff *newPacket = NULL;
 	CHAR cntrl_msg_mask_bit = 0;
-	BOOLEAN drop_pkt_flag = TRUE;
+	bool drop_pkt_flag = TRUE;
 	USHORT usStatus = *(PUSHORT)(skb->data);
 
 	if (netif_msg_pktdata(Adapter))
@@ -91,13 +91,13 @@ static VOID handle_rx_control_packet(PMINI_ADAPTER Adapter, struct sk_buff *skb)
 		 *	cntrl_msg_mask_bit);
 		 */
 		if (pTarang->RxCntrlMsgBitMask & (1 << cntrl_msg_mask_bit))
-			drop_pkt_flag = FALSE;
+			drop_pkt_flag = false;
 
 		if ((drop_pkt_flag == TRUE) ||
 				(pTarang->AppCtrlQueueLen > MAX_APP_QUEUE_LEN)
 				|| ((pTarang->AppCtrlQueueLen >
 					MAX_APP_QUEUE_LEN / 2) &&
-				    (HighPriorityMessage == FALSE))) {
+				    (HighPriorityMessage == false))) {
 			/*
 			 * Assumption:-
 			 * 1. every tarang manages it own dropped pkt
@@ -154,7 +154,7 @@ static VOID handle_rx_control_packet(PMINI_ADAPTER Adapter, struct sk_buff *skb)
  * @ingroup ctrl_pkt_functions
  * Thread to handle control pkt reception
  */
-int control_packet_handler(PMINI_ADAPTER Adapter /* pointer to adapter object*/)
+int control_packet_handler(struct bcm_mini_adapter *Adapter /* pointer to adapter object*/)
 {
 	struct sk_buff *ctrl_packet = NULL;
 	unsigned long flags = 0;
@@ -175,8 +175,8 @@ int control_packet_handler(PMINI_ADAPTER Adapter /* pointer to adapter object*/)
 			return 0;
 		}
 		if (TRUE == Adapter->bWakeUpDevice) {
-			Adapter->bWakeUpDevice = FALSE;
-			if ((FALSE == Adapter->bTriedToWakeUpFromlowPowerMode)
+			Adapter->bWakeUpDevice = false;
+			if ((false == Adapter->bTriedToWakeUpFromlowPowerMode)
 					&& ((TRUE == Adapter->IdleMode) ||
 					    (TRUE == Adapter->bShutStatus))) {
 				BCM_DEBUG_PRINT(Adapter, DBG_TYPE_OTHERS,
@@ -213,8 +213,8 @@ int control_packet_handler(PMINI_ADAPTER Adapter /* pointer to adapter object*/)
 
 INT flushAllAppQ(void)
 {
-	PMINI_ADAPTER Adapter = GET_BCM_ADAPTER(gblpnetdev);
-	PPER_TARANG_DATA pTarang = NULL;
+	struct bcm_mini_adapter *Adapter = GET_BCM_ADAPTER(gblpnetdev);
+	struct bcm_tarang_data *pTarang = NULL;
 	struct sk_buff *PacketToDrop = NULL;
 	for (pTarang = Adapter->pTarangs; pTarang; pTarang = pTarang->next) {
 		while (pTarang->RxAppControlHead != NULL) {
@@ -226,7 +226,7 @@ INT flushAllAppQ(void)
 		pTarang->AppCtrlQueueLen = 0;
 		/* dropped contrl packet statistics also should be reset. */
 		memset((PVOID)&pTarang->stDroppedAppCntrlMsgs, 0,
-			sizeof(S_MIBS_DROPPED_APP_CNTRL_MESSAGES));
+			sizeof(struct bcm_mibs_dropped_cntrl_msg));
 
 	}
 	return STATUS_SUCCESS;

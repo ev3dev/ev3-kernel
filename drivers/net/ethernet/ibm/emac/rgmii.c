@@ -1,5 +1,5 @@
 /*
- * drivers/net/ibm_newemac/rgmii.c
+ * drivers/net/ethernet/ibm/emac/rgmii.c
  *
  * Driver for PowerPC 4xx on-chip ethernet controller, RGMII bridge support.
  *
@@ -24,6 +24,7 @@
 #include <linux/slab.h>
 #include <linux/kernel.h>
 #include <linux/ethtool.h>
+#include <linux/of_address.h>
 #include <asm/io.h>
 
 #include "emac.h"
@@ -93,9 +94,9 @@ static inline u32 rgmii_mode_mask(int mode, int input)
 	}
 }
 
-int __devinit rgmii_attach(struct platform_device *ofdev, int input, int mode)
+int rgmii_attach(struct platform_device *ofdev, int input, int mode)
 {
-	struct rgmii_instance *dev = dev_get_drvdata(&ofdev->dev);
+	struct rgmii_instance *dev = platform_get_drvdata(ofdev);
 	struct rgmii_regs __iomem *p = dev->base;
 
 	RGMII_DBG(dev, "attach(%d)" NL, input);
@@ -124,7 +125,7 @@ int __devinit rgmii_attach(struct platform_device *ofdev, int input, int mode)
 
 void rgmii_set_speed(struct platform_device *ofdev, int input, int speed)
 {
-	struct rgmii_instance *dev = dev_get_drvdata(&ofdev->dev);
+	struct rgmii_instance *dev = platform_get_drvdata(ofdev);
 	struct rgmii_regs __iomem *p = dev->base;
 	u32 ssr;
 
@@ -146,7 +147,7 @@ void rgmii_set_speed(struct platform_device *ofdev, int input, int speed)
 
 void rgmii_get_mdio(struct platform_device *ofdev, int input)
 {
-	struct rgmii_instance *dev = dev_get_drvdata(&ofdev->dev);
+	struct rgmii_instance *dev = platform_get_drvdata(ofdev);
 	struct rgmii_regs __iomem *p = dev->base;
 	u32 fer;
 
@@ -167,7 +168,7 @@ void rgmii_get_mdio(struct platform_device *ofdev, int input)
 
 void rgmii_put_mdio(struct platform_device *ofdev, int input)
 {
-	struct rgmii_instance *dev = dev_get_drvdata(&ofdev->dev);
+	struct rgmii_instance *dev = platform_get_drvdata(ofdev);
 	struct rgmii_regs __iomem *p = dev->base;
 	u32 fer;
 
@@ -188,7 +189,7 @@ void rgmii_put_mdio(struct platform_device *ofdev, int input)
 
 void rgmii_detach(struct platform_device *ofdev, int input)
 {
-	struct rgmii_instance *dev = dev_get_drvdata(&ofdev->dev);
+	struct rgmii_instance *dev = platform_get_drvdata(ofdev);
 	struct rgmii_regs __iomem *p;
 
 	BUG_ON(!dev || dev->users == 0);
@@ -214,7 +215,7 @@ int rgmii_get_regs_len(struct platform_device *ofdev)
 
 void *rgmii_dump_regs(struct platform_device *ofdev, void *buf)
 {
-	struct rgmii_instance *dev = dev_get_drvdata(&ofdev->dev);
+	struct rgmii_instance *dev = platform_get_drvdata(ofdev);
 	struct emac_ethtool_regs_subhdr *hdr = buf;
 	struct rgmii_regs *regs = (struct rgmii_regs *)(hdr + 1);
 
@@ -228,7 +229,7 @@ void *rgmii_dump_regs(struct platform_device *ofdev, void *buf)
 }
 
 
-static int __devinit rgmii_probe(struct platform_device *ofdev)
+static int rgmii_probe(struct platform_device *ofdev)
 {
 	struct device_node *np = ofdev->dev.of_node;
 	struct rgmii_instance *dev;
@@ -237,11 +238,8 @@ static int __devinit rgmii_probe(struct platform_device *ofdev)
 
 	rc = -ENOMEM;
 	dev = kzalloc(sizeof(struct rgmii_instance), GFP_KERNEL);
-	if (dev == NULL) {
-		printk(KERN_ERR "%s: could not allocate RGMII device!\n",
-		       np->full_name);
+	if (dev == NULL)
 		goto err_gone;
-	}
 
 	mutex_init(&dev->lock);
 	dev->ofdev = ofdev;
@@ -282,7 +280,7 @@ static int __devinit rgmii_probe(struct platform_device *ofdev)
 	       (dev->flags & EMAC_RGMII_FLAG_HAS_MDIO) ? "" : "out");
 
 	wmb();
-	dev_set_drvdata(&ofdev->dev, dev);
+	platform_set_drvdata(ofdev, dev);
 
 	return 0;
 
@@ -292,11 +290,9 @@ static int __devinit rgmii_probe(struct platform_device *ofdev)
 	return rc;
 }
 
-static int __devexit rgmii_remove(struct platform_device *ofdev)
+static int rgmii_remove(struct platform_device *ofdev)
 {
-	struct rgmii_instance *dev = dev_get_drvdata(&ofdev->dev);
-
-	dev_set_drvdata(&ofdev->dev, NULL);
+	struct rgmii_instance *dev = platform_get_drvdata(ofdev);
 
 	WARN_ON(dev->users != 0);
 

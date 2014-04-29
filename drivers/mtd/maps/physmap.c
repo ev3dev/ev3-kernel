@@ -20,8 +20,6 @@
 #include <linux/mtd/physmap.h>
 #include <linux/mtd/concat.h>
 #include <linux/io.h>
-#include <linux/mfd/davinci_aemif.h>
-#include <linux/cpufreq.h>
 
 #define MAX_RESOURCES		4
 
@@ -29,55 +27,9 @@ struct physmap_flash_info {
 	struct mtd_info		*mtd[MAX_RESOURCES];
 	struct mtd_info		*cmtd;
 	struct map_info		map[MAX_RESOURCES];
-	unsigned int			cs;
-	struct davinci_aemif_timing	*timing;
-#ifdef CONFIG_CPU_FREQ
-	struct notifier_block	freq_transition;
-#endif
+	spinlock_t		vpp_lock;
+	int			vpp_refcnt;
 };
-
-#ifdef CONFIG_CPU_FREQ
-static int nor_davinci_cpufreq_transition(struct notifier_block *nb,
-		unsigned long val, void *data)
-{
-	struct physmap_flash_info *info;
-
-	info = container_of(nb, struct physmap_flash_info, freq_transition);
-
-	if (val == CPUFREQ_POSTCHANGE)
-		davinci_aemif_setup_timing(info->timing, info->map[0].virt,
-				info->cs);
-	return 0;
-}
-
-static inline int nor_davinci_cpufreq_register(struct physmap_flash_info
-			*info)
-{
-	info->freq_transition.notifier_call = nor_davinci_cpufreq_transition;
-	return cpufreq_register_notifier(&info->freq_transition,
-			CPUFREQ_TRANSITION_NOTIFIER);
-}
-
-static inline void nor_davinci_cpufreq_deregister(struct physmap_flash_info
-			*info)
-{
-	cpufreq_unregister_notifier(&info->freq_transition,
-			CPUFREQ_TRANSITION_NOTIFIER);
-}
-#else
-static inline int nor_davinci_cpufreq_register(struct physmap_flash_info
-			*info)
-{
-	return 0;
-}
-
-static inline void nor_davinci_cpufreq_deregister(struct physmap_flash_info
-			*info)
-{
-	return;
-}
-#endif
-
 
 static int physmap_flash_remove(struct platform_device *dev)
 {
@@ -88,9 +40,8 @@ static int physmap_flash_remove(struct platform_device *dev)
 	info = platform_get_drvdata(dev);
 	if (info == NULL)
 		return 0;
-	platform_set_drvdata(dev, NULL);
 
-	physmap_data = dev->dev.platform_data;
+	physmap_data = dev_get_platdata(&dev->dev);
 
 	if (info->cmtd) {
 		mtd_device_unregister(info->cmtd);
@@ -102,7 +53,6 @@ static int physmap_flash_remove(struct platform_device *dev)
 		if (info->mtd[i] != NULL)
 			map_destroy(info->mtd[i]);
 	}
-	nor_davinci_cpufreq_deregister(info);
 
 	if (physmap_data->exit)
 		physmap_data->exit(dev);
@@ -114,34 +64,45 @@ static void physmap_set_vpp(struct map_info *map, int state)
 {
 	struct platform_device *pdev;
 	struct physmap_flash_data *physmap_data;
+	struct physmap_flash_info *info;
+	unsigned long flags;
 
 	pdev = (struct platform_device *)map->map_priv_1;
-	physmap_data = pdev->dev.platform_data;
+	physmap_data = dev_get_platdata(&pdev->dev);
 
-	if (physmap_data->set_vpp)
-		physmap_data->set_vpp(pdev, state);
+	if (!physmap_data->set_vpp)
+		return;
+
+	info = platform_get_drvdata(pdev);
+
+	spin_lock_irqsave(&info->vpp_lock, flags);
+	if (state) {
+		if (++info->vpp_refcnt == 1)    /* first nested 'on' */
+			physmap_data->set_vpp(pdev, 1);
+	} else {
+		if (--info->vpp_refcnt == 0)    /* last nested 'off' */
+			physmap_data->set_vpp(pdev, 0);
+	}
+	spin_unlock_irqrestore(&info->vpp_lock, flags);
 }
 
-static const char *rom_probe_types[] = {
-					"cfi_probe",
-					"jedec_probe",
-					"qinfo_probe",
-					"map_rom",
-					NULL };
-static const char *part_probe_types[] = { "cmdlinepart", "RedBoot", "afs",
-					  NULL };
+static const char * const rom_probe_types[] = {
+	"cfi_probe", "jedec_probe", "qinfo_probe", "map_rom", NULL };
+
+static const char * const part_probe_types[] = {
+	"cmdlinepart", "RedBoot", "afs", NULL };
 
 static int physmap_flash_probe(struct platform_device *dev)
 {
 	struct physmap_flash_data *physmap_data;
 	struct physmap_flash_info *info;
-	const char **probe_type;
-	const char **part_types;
+	const char * const *probe_type;
+	const char * const *part_types;
 	int err = 0;
 	int i;
 	int devices_found = 0;
 
-	physmap_data = dev->dev.platform_data;
+	physmap_data = dev_get_platdata(&dev->dev);
 	if (physmap_data == NULL)
 		return -ENODEV;
 
@@ -209,8 +170,6 @@ static int physmap_flash_probe(struct platform_device *dev)
 		info->mtd[i]->owner = THIS_MODULE;
 		info->mtd[i]->dev.parent = &dev->dev;
 	}
-		info->cs = dev->id;
-		info->timing = physmap_data->timing;
 
 	if (devices_found == 1) {
 		info->cmtd = info->mtd[0];
@@ -225,28 +184,14 @@ static int physmap_flash_probe(struct platform_device *dev)
 	if (err)
 		goto err_out;
 
+	spin_lock_init(&info->vpp_lock);
+
 	part_types = physmap_data->part_probe_types ? : part_probe_types;
 
-	if (info->timing)
-		err = davinci_aemif_setup_timing(info->timing,
-				info->map[0].virt, info->cs);
-	if (err < 0) {
-		dev_dbg(&dev->dev, "NOR timing values setup fail\n");
-		goto err_timing;
-	}
-
-	err = nor_davinci_cpufreq_register(info);
-	if (err) {
-		dev_err(&dev->dev, "failed to register cpufreq\n");
-		goto err_cpu_freq_fail;
-	}
-
-	mtd_device_parse_register(info->cmtd, part_types, 0,
+	mtd_device_parse_register(info->cmtd, part_types, NULL,
 				  physmap_data->parts, physmap_data->nr_parts);
 	return 0;
 
-err_cpu_freq_fail:
-err_timing:
 err_out:
 	physmap_flash_remove(dev);
 	return err;

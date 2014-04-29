@@ -5,7 +5,6 @@
  *
  * Author:	Torsten Schenk <torsten.schenk@zoho.com>
  * Created:	Jan 01, 2011
- * Version:	0.3.0
  * Copyright:	(C) Torsten Schenk
  *
  * This program is free software; you can redistribute it and/or modify
@@ -29,9 +28,9 @@
 #include <sound/initval.h>
 
 MODULE_AUTHOR("Torsten Schenk <torsten.schenk@zoho.com>");
-MODULE_DESCRIPTION("TerraTec DMX 6Fire USB audio driver, version 0.3.0");
+MODULE_DESCRIPTION("TerraTec DMX 6Fire USB audio driver");
 MODULE_LICENSE("GPL v2");
-MODULE_SUPPORTED_DEVICE("{{TerraTec, DMX 6Fire USB}}");
+MODULE_SUPPORTED_DEVICE("{{TerraTec,DMX 6Fire USB}}");
 
 static int index[SNDRV_CARDS] = SNDRV_DEFAULT_IDX; /* Index 0-max */
 static char *id[SNDRV_CARDS] = SNDRV_DEFAULT_STR; /* Id for card */
@@ -83,8 +82,8 @@ static void usb6fire_chip_destroy(struct sfire_chip *chip)
 	}
 }
 
-static int __devinit usb6fire_chip_probe(struct usb_interface *intf,
-		const struct usb_device_id *usb_id)
+static int usb6fire_chip_probe(struct usb_interface *intf,
+			       const struct usb_device_id *usb_id)
 {
 	int ret;
 	int i;
@@ -102,7 +101,7 @@ static int __devinit usb6fire_chip_probe(struct usb_interface *intf,
 			usb_set_intfdata(intf, chips[i]);
 			mutex_unlock(&register_mutex);
 			return 0;
-		} else if (regidx < 0)
+		} else if (!devices[i] && regidx < 0)
 			regidx = i;
 	}
 	if (regidx < 0) {

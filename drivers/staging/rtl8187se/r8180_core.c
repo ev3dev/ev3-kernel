@@ -1,6 +1,6 @@
 /*
    This is part of rtl818x pci OpenSource driver - v 0.1
-   Copyright (C) Andrea Merello 2004-2005  <andreamrl@tiscali.it>
+   Copyright (C) Andrea Merello 2004-2005  <andrea.merello@gmail.com>
    Released under the terms of GPL (General Public License)
 
    Parts of this driver are based on the GPL part of the official
@@ -27,6 +27,8 @@
    Written by Mariusz Matuszek.
 */
 
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #undef RX_DONT_PASS_UL
 #undef DUMMY_RX
 
@@ -34,6 +36,8 @@
 #include <linux/syscalls.h>
 #include <linux/eeprom_93cx6.h>
 #include <linux/interrupt.h>
+#include <linux/proc_fs.h>
+#include <linux/seq_file.h>
 
 #include "r8180_hw.h"
 #include "r8180.h"
@@ -44,7 +48,7 @@
 
 #include "ieee80211/dot11d.h"
 
-static struct pci_device_id rtl8180_pci_id_tbl[] __devinitdata = {
+static struct pci_device_id rtl8180_pci_id_tbl[] = {
 	{
 		.vendor = PCI_VENDOR_ID_REALTEK,
 		.device = 0x8199,
@@ -61,33 +65,23 @@ static struct pci_device_id rtl8180_pci_id_tbl[] __devinitdata = {
 	}
 };
 
-
 static char ifname[IFNAMSIZ] = "wlan%d";
-static int hwseqnum = 0;
-static int hwwep = 0;
-static int channels = 0x3fff;
+static int hwwep;
 
 MODULE_LICENSE("GPL");
 MODULE_DEVICE_TABLE(pci, rtl8180_pci_id_tbl);
-MODULE_AUTHOR("Andrea Merello <andreamrl@tiscali.it>");
-MODULE_DESCRIPTION("Linux driver for Realtek RTL8180 / RTL8185 WiFi cards");
-
+MODULE_AUTHOR("Andrea Merello <andrea.merello@gmail.com>");
+MODULE_DESCRIPTION("Linux driver for Realtek RTL8187SE WiFi cards");
 
 module_param_string(ifname, ifname, sizeof(ifname), S_IRUGO|S_IWUSR);
-module_param(hwseqnum, int, S_IRUGO|S_IWUSR);
 module_param(hwwep, int, S_IRUGO|S_IWUSR);
-module_param(channels, int, S_IRUGO|S_IWUSR);
 
-MODULE_PARM_DESC(devname, " Net interface name, wlan%d=default");
-MODULE_PARM_DESC(hwseqnum, " Try to use hardware 802.11 header sequence numbers. Zero=default");
 MODULE_PARM_DESC(hwwep, " Try to use hardware WEP support. Still broken and not available on all cards");
-MODULE_PARM_DESC(channels, " Channel bitmask for specific locales. NYI");
 
+static int rtl8180_pci_probe(struct pci_dev *pdev,
+			     const struct pci_device_id *id);
 
-static int __devinit rtl8180_pci_probe(struct pci_dev *pdev,
-				       const struct pci_device_id *id);
-
-static void __devexit rtl8180_pci_remove(struct pci_dev *pdev);
+static void rtl8180_pci_remove(struct pci_dev *pdev);
 
 static void rtl8180_shutdown(struct pci_dev *pdev)
 {
@@ -126,8 +120,7 @@ static int rtl8180_resume(struct pci_dev *pdev)
 
 	err = pci_enable_device(pdev);
 	if (err) {
-		printk(KERN_ERR "%s: pci_enable_device failed on resume\n",
-				dev->name);
+		dev_err(&pdev->dev, "pci_enable_device failed on resume\n");
 
 		return err;
 	}
@@ -159,7 +152,7 @@ static struct pci_driver rtl8180_pci_driver = {
 	.name		= RTL8180_MODULE_NAME,
 	.id_table	= rtl8180_pci_id_tbl,
 	.probe		= rtl8180_pci_probe,
-	.remove		= __devexit_p(rtl8180_pci_remove),
+	.remove		= rtl8180_pci_remove,
 	.suspend	= rtl8180_suspend,
 	.resume		= rtl8180_resume,
 	.shutdown	= rtl8180_shutdown,
@@ -167,34 +160,34 @@ static struct pci_driver rtl8180_pci_driver = {
 
 u8 read_nic_byte(struct net_device *dev, int x)
 {
-	return 0xff&readb((u8 *)dev->mem_start + x);
+	return 0xff&readb((u8 __iomem *)dev->mem_start + x);
 }
 
 u32 read_nic_dword(struct net_device *dev, int x)
 {
-	return readl((u8 *)dev->mem_start + x);
+	return readl((u8 __iomem *)dev->mem_start + x);
 }
 
 u16 read_nic_word(struct net_device *dev, int x)
 {
-	return readw((u8 *)dev->mem_start + x);
+	return readw((u8 __iomem *)dev->mem_start + x);
 }
 
 void write_nic_byte(struct net_device *dev, int x, u8 y)
 {
-	writeb(y, (u8 *)dev->mem_start + x);
+	writeb(y, (u8 __iomem *)dev->mem_start + x);
 	udelay(20);
 }
 
 void write_nic_dword(struct net_device *dev, int x, u32 y)
 {
-	writel(y, (u8 *)dev->mem_start + x);
+	writel(y, (u8 __iomem *)dev->mem_start + x);
 	udelay(20);
 }
 
 void write_nic_word(struct net_device *dev, int x, u16 y)
 {
-	writew(y, (u8 *)dev->mem_start + x);
+	writew(y, (u8 __iomem *)dev->mem_start + x);
 	udelay(20);
 }
 
@@ -204,60 +197,44 @@ inline void force_pci_posting(struct net_device *dev)
 	mb();
 }
 
-irqreturn_t rtl8180_interrupt(int irq, void *netdev, struct pt_regs *regs);
+static irqreturn_t rtl8180_interrupt(int irq, void *netdev);
 void set_nic_rxring(struct net_device *dev);
 void set_nic_txring(struct net_device *dev);
 static struct net_device_stats *rtl8180_stats(struct net_device *dev);
 void rtl8180_commit(struct net_device *dev);
 void rtl8180_start_tx_beacon(struct net_device *dev);
 
-static struct proc_dir_entry *rtl8180_proc = NULL;
+static struct proc_dir_entry *rtl8180_proc;
 
-static int proc_get_registers(char *page, char **start,
-			  off_t offset, int count,
-			  int *eof, void *data)
+static int proc_get_registers(struct seq_file *m, void *v)
 {
-	struct net_device *dev = data;
-	int len = 0;
-	int i, n;
-	int max = 0xff;
+	struct net_device *dev = m->private;
+	int i, n, max = 0xff;
 
 	/* This dump the current register page */
 	for (n = 0; n <= max;) {
-		len += snprintf(page + len, count - len, "\nD:  %2x > ", n);
+		seq_printf(m, "\nD:  %2x > ", n);
 
 		for (i = 0; i < 16 && n <= max; i++, n++)
-			len += snprintf(page + len, count - len, "%2x ",
-					read_nic_byte(dev, n));
+			seq_printf(m, "%2x ", read_nic_byte(dev, n));
 	}
-	len += snprintf(page + len, count - len, "\n");
-
-	*eof = 1;
-	return len;
+	seq_putc(m, '\n');
+	return 0;
 }
 
 int get_curr_tx_free_desc(struct net_device *dev, int priority);
 
-static int proc_get_stats_hw(char *page, char **start,
-			  off_t offset, int count,
-			  int *eof, void *data)
+static int proc_get_stats_hw(struct seq_file *m, void *v)
 {
-	int len = 0;
-
-	*eof = 1;
-	return len;
+	return 0;
 }
 
-static int proc_get_stats_rx(char *page, char **start,
-			  off_t offset, int count,
-			  int *eof, void *data)
+static int proc_get_stats_rx(struct seq_file *m, void *v)
 {
-	struct net_device *dev = data;
+	struct net_device *dev = m->private;
 	struct r8180_priv *priv = (struct r8180_priv *)ieee80211_priv(dev);
 
-	int len = 0;
-
-	len += snprintf(page + len, count - len,
+	seq_printf(m,
 		"RX OK: %lu\n"
 		"RX Retry: %lu\n"
 		"RX CRC Error(0-500): %lu\n"
@@ -272,22 +249,17 @@ static int proc_get_stats_rx(char *page, char **start,
 		priv->stats.rxicverr
 		);
 
-	*eof = 1;
-	return len;
+	return 0;
 }
 
-static int proc_get_stats_tx(char *page, char **start,
-			  off_t offset, int count,
-			  int *eof, void *data)
+static int proc_get_stats_tx(struct seq_file *m, void *v)
 {
-	struct net_device *dev = data;
+	struct net_device *dev = m->private;
 	struct r8180_priv *priv = (struct r8180_priv *)ieee80211_priv(dev);
-
-	int len = 0;
 	unsigned long totalOK;
 
 	totalOK = priv->stats.txnpokint+priv->stats.txhpokint+priv->stats.txlpokint;
-	len += snprintf(page + len, count - len,
+	seq_printf(m,
 		"TX OK: %lu\n"
 		"TX Error: %lu\n"
 		"TX Retry: %lu\n"
@@ -300,77 +272,77 @@ static int proc_get_stats_tx(char *page, char **start,
 		priv->stats.txbeaconerr
 	);
 
-	*eof = 1;
-	return len;
+	return 0;
 }
 
-void rtl8180_proc_module_init(void)
+static void rtl8180_proc_module_init(void)
 {
 	DMESG("Initializing proc filesystem");
 	rtl8180_proc = proc_mkdir(RTL8180_MODULE_NAME, init_net.proc_net);
 }
 
-void rtl8180_proc_module_remove(void)
+static void rtl8180_proc_module_remove(void)
 {
 	remove_proc_entry(RTL8180_MODULE_NAME, init_net.proc_net);
 }
 
-void rtl8180_proc_remove_one(struct net_device *dev)
+static void rtl8180_proc_remove_one(struct net_device *dev)
 {
-	struct r8180_priv *priv = (struct r8180_priv *)ieee80211_priv(dev);
-	if (priv->dir_dev) {
-		remove_proc_entry("stats-hw", priv->dir_dev);
-		remove_proc_entry("stats-tx", priv->dir_dev);
-		remove_proc_entry("stats-rx", priv->dir_dev);
-		remove_proc_entry("registers", priv->dir_dev);
-		remove_proc_entry(dev->name, rtl8180_proc);
-		priv->dir_dev = NULL;
-	}
+	remove_proc_subtree(dev->name, rtl8180_proc);
 }
 
-void rtl8180_proc_init_one(struct net_device *dev)
+/*
+ * seq_file wrappers for procfile show routines.
+ */
+static int rtl8180_proc_open(struct inode *inode, struct file *file)
 {
-	struct proc_dir_entry *e;
-	struct r8180_priv *priv = (struct r8180_priv *)ieee80211_priv(dev);
+	struct net_device *dev = proc_get_parent_data(inode);
+	int (*show)(struct seq_file *, void *) = PDE_DATA(inode);
 
-	priv->dir_dev = rtl8180_proc;
-	if (!priv->dir_dev) {
-		DMESGE("Unable to initialize /proc/net/r8180/%s\n",
-		      dev->name);
+	return single_open(file, show, dev);
+}
+
+static const struct file_operations rtl8180_proc_fops = {
+	.open		= rtl8180_proc_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
+/*
+ * Table of proc files we need to create.
+ */
+struct rtl8180_proc_file {
+	char name[12];
+	int (*show)(struct seq_file *, void *);
+};
+
+static const struct rtl8180_proc_file rtl8180_proc_files[] = {
+	{ "stats-hw",	&proc_get_stats_hw },
+	{ "stats-rx",	&proc_get_stats_rx },
+	{ "stats-tx",	&proc_get_stats_tx },
+	{ "registers",	&proc_get_registers },
+	{ "" }
+};
+
+static void rtl8180_proc_init_one(struct net_device *dev)
+{
+	const struct rtl8180_proc_file *f;
+	struct proc_dir_entry *dir;
+
+	dir = proc_mkdir_data(dev->name, 0, rtl8180_proc, dev);
+	if (!dir) {
+		DMESGE("Unable to initialize /proc/net/r8180/%s\n", dev->name);
 		return;
 	}
 
-	e = create_proc_read_entry("stats-hw", S_IFREG | S_IRUGO,
-				   priv->dir_dev, proc_get_stats_hw, dev);
-	if (!e) {
-		DMESGE("Unable to initialize "
-		      "/proc/net/r8180/%s/stats-hw\n",
-		      dev->name);
-	}
-
-	e = create_proc_read_entry("stats-rx", S_IFREG | S_IRUGO,
-				   priv->dir_dev, proc_get_stats_rx, dev);
-	if (!e) {
-		DMESGE("Unable to initialize "
-		      "/proc/net/r8180/%s/stats-rx\n",
-		      dev->name);
-	}
-
-
-	e = create_proc_read_entry("stats-tx", S_IFREG | S_IRUGO,
-				   priv->dir_dev, proc_get_stats_tx, dev);
-	if (!e) {
-		DMESGE("Unable to initialize "
-		      "/proc/net/r8180/%s/stats-tx\n",
-		      dev->name);
-	}
-
-	e = create_proc_read_entry("registers", S_IFREG | S_IRUGO,
-				   priv->dir_dev, proc_get_registers, dev);
-	if (!e) {
-		DMESGE("Unable to initialize "
-		      "/proc/net/r8180/%s/registers\n",
-		      dev->name);
+	for (f = rtl8180_proc_files; f->name[0]; f++) {
+		if (!proc_create_data(f->name, S_IFREG | S_IRUGO, dir,
+				      &rtl8180_proc_fops, f->show)) {
+			DMESGE("Unable to initialize /proc/net/r8180/%s/%s\n",
+			       dev->name, f->name);
+			return;
+		}
 	}
 }
 
@@ -379,8 +351,8 @@ void rtl8180_proc_init_one(struct net_device *dev)
   data type+functions in kernel
 */
 
-short buffer_add(struct buffer **buffer, u32 *buf, dma_addr_t dma,
-		struct buffer **bufferhead)
+static short buffer_add(struct buffer **buffer, u32 *buf, dma_addr_t dma,
+			struct buffer **bufferhead)
 {
 	struct buffer *tmp;
 
@@ -415,7 +387,8 @@ short buffer_add(struct buffer **buffer, u32 *buf, dma_addr_t dma,
 	return 0;
 }
 
-void buffer_free(struct net_device *dev, struct buffer **buffer, int len, short consistent)
+static void buffer_free(struct net_device *dev, struct buffer **buffer, int len,
+		 short consistent)
 {
 
 	struct buffer *tmp, *next;
@@ -439,28 +412,9 @@ void buffer_free(struct net_device *dev, struct buffer **buffer, int len, short 
 		}
 		kfree(tmp);
 		tmp = next;
-	}
-	while (next != *buffer);
+	} while (next != *buffer);
 
 	*buffer = NULL;
-}
-
-void print_buffer(u32 *buffer, int len)
-{
-	int i;
-	u8 *buf = (u8 *)buffer;
-
-	printk("ASCII BUFFER DUMP (len: %x):\n", len);
-
-	for (i = 0; i < len; i++)
-		printk("%c", buf[i]);
-
-	printk("\nBINARY BUFFER DUMP (len: %x):\n", len);
-
-	for (i = 0; i < len; i++)
-		printk("%02x", buf[i]);
-
-	printk("\n");
 }
 
 int get_curr_tx_free_desc(struct net_device *dev, int priority)
@@ -510,7 +464,7 @@ int get_curr_tx_free_desc(struct net_device *dev, int priority)
 	return ret;
 }
 
-short check_nic_enought_desc(struct net_device *dev, int priority)
+static short check_nic_enought_desc(struct net_device *dev, int priority)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
 	struct ieee80211_device *ieee = netdev_priv(dev);
@@ -636,75 +590,7 @@ void fix_rx_fifo(struct net_device *dev)
 	set_nic_rxring(dev);
 }
 
-unsigned char QUALITY_MAP[] = {
-	0x64, 0x64, 0x64, 0x63, 0x63, 0x62, 0x62, 0x61,
-	0x61, 0x60, 0x60, 0x5f, 0x5f, 0x5e, 0x5d, 0x5c,
-	0x5b, 0x5a, 0x59, 0x57, 0x56, 0x54, 0x52, 0x4f,
-	0x4c, 0x49, 0x45, 0x41, 0x3c, 0x37, 0x31, 0x29,
-	0x24, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22,
-	0x22, 0x22, 0x21, 0x21, 0x21, 0x21, 0x21, 0x20,
-	0x20, 0x20, 0x20, 0x1f, 0x1f, 0x1e, 0x1e, 0x1e,
-	0x1d, 0x1d, 0x1c, 0x1c, 0x1b, 0x1a, 0x19, 0x19,
-	0x18, 0x17, 0x16, 0x15, 0x14, 0x12, 0x11, 0x0f,
-	0x0e, 0x0c, 0x0a, 0x08, 0x06, 0x04, 0x01, 0x00
-};
-
-unsigned char STRENGTH_MAP[] = {
-	0x64, 0x64, 0x63, 0x62, 0x61, 0x60, 0x5f, 0x5e,
-	0x5d, 0x5c, 0x5b, 0x5a, 0x57, 0x54, 0x52, 0x50,
-	0x4e, 0x4c, 0x4a, 0x48, 0x46, 0x44, 0x41, 0x3f,
-	0x3c, 0x3a, 0x37, 0x36, 0x36, 0x1c, 0x1c, 0x1b,
-	0x1b, 0x1a, 0x1a, 0x19, 0x19, 0x18, 0x18, 0x17,
-	0x17, 0x16, 0x16, 0x15, 0x15, 0x14, 0x14, 0x13,
-	0x13, 0x12, 0x12, 0x11, 0x11, 0x10, 0x10, 0x0f,
-	0x0f, 0x0e, 0x0e, 0x0d, 0x0d, 0x0c, 0x0c, 0x0b,
-	0x0b, 0x0a, 0x0a, 0x09, 0x09, 0x08, 0x08, 0x07,
-	0x07, 0x06, 0x06, 0x05, 0x04, 0x03, 0x02, 0x00
-};
-
-void rtl8180_RSSI_calc(struct net_device *dev, u8 *rssi, u8 *qual)
-{
-	u32 temp;
-	u32 temp2;
-	u32 q;
-	u32 orig_qual;
-	u8  _rssi;
-
-	q = *qual;
-	orig_qual = *qual;
-	_rssi = 0; /* avoid gcc complains.. */
-
-	if (q <= 0x4e) {
-		temp = QUALITY_MAP[q];
-	} else {
-		if (q & 0x80)
-			temp = 0x32;
-		else
-			temp = 1;
-	}
-
-	*qual = temp;
-	temp2 = *rssi;
-
-	if (_rssi < 0x64) {
-		if (_rssi == 0)
-			*rssi = 1;
-	} else {
-		*rssi = 0x64;
-	}
-
-	return;
-}
-
-void rtl8180_irq_enable(struct net_device *dev)
-{
-	struct r8180_priv *priv = (struct r8180_priv *)ieee80211_priv(dev);
-
-	priv->irq_enabled = 1;
-	write_nic_word(dev, INTA_MASK, priv->irq_mask);
-}
-
-void rtl8180_irq_disable(struct net_device *dev)
+static void rtl8180_irq_disable(struct net_device *dev)
 {
 	struct r8180_priv *priv = (struct r8180_priv *)ieee80211_priv(dev);
 
@@ -725,7 +611,6 @@ void rtl8180_set_mode(struct net_device *dev, int mode)
 	write_nic_byte(dev, EPROM_CMD, ecmd);
 }
 
-void rtl8180_adapter_start(struct net_device *dev);
 void rtl8180_beacon_tx_enable(struct net_device *dev);
 
 void rtl8180_update_msr(struct net_device *dev)
@@ -772,57 +657,6 @@ void rtl8180_set_chan(struct net_device *dev, short ch)
 	priv->rf_set_chan(dev, priv->chan);
 }
 
-void rtl8180_rx_enable(struct net_device *dev)
-{
-	u8 cmd;
-	u32 rxconf;
-	/* for now we accept data, management & ctl frame*/
-	struct r8180_priv *priv = (struct r8180_priv *)ieee80211_priv(dev);
-
-	rxconf = read_nic_dword(dev, RX_CONF);
-	rxconf = rxconf & ~MAC_FILTER_MASK;
-	rxconf = rxconf | (1<<ACCEPT_MNG_FRAME_SHIFT);
-	rxconf = rxconf | (1<<ACCEPT_DATA_FRAME_SHIFT);
-	rxconf = rxconf | (1<<ACCEPT_BCAST_FRAME_SHIFT);
-	rxconf = rxconf | (1<<ACCEPT_MCAST_FRAME_SHIFT);
-	if (dev->flags & IFF_PROMISC)
-		DMESG("NIC in promisc mode");
-
-	if (priv->ieee80211->iw_mode == IW_MODE_MONITOR || \
-	   dev->flags & IFF_PROMISC) {
-		rxconf = rxconf | (1<<ACCEPT_ALLMAC_FRAME_SHIFT);
-	} else {
-		rxconf = rxconf | (1<<ACCEPT_NICMAC_FRAME_SHIFT);
-	}
-
-	if (priv->ieee80211->iw_mode == IW_MODE_MONITOR) {
-		rxconf = rxconf | (1<<ACCEPT_CTL_FRAME_SHIFT);
-		rxconf = rxconf | (1<<ACCEPT_ICVERR_FRAME_SHIFT);
-		rxconf = rxconf | (1<<ACCEPT_PWR_FRAME_SHIFT);
-	}
-
-	if (priv->crcmon == 1 && priv->ieee80211->iw_mode == IW_MODE_MONITOR)
-		rxconf = rxconf | (1<<ACCEPT_CRCERR_FRAME_SHIFT);
-
-	rxconf = rxconf & ~RX_FIFO_THRESHOLD_MASK;
-	rxconf = rxconf | (RX_FIFO_THRESHOLD_NONE << RX_FIFO_THRESHOLD_SHIFT);
-
-	rxconf = rxconf | (1<<RX_AUTORESETPHY_SHIFT);
-	rxconf = rxconf & ~MAX_RX_DMA_MASK;
-	rxconf = rxconf | (MAX_RX_DMA_2048<<MAX_RX_DMA_SHIFT);
-
-	rxconf = rxconf | RCR_ONLYERLPKT;
-
-	rxconf = rxconf & ~RCR_CS_MASK;
-
-	write_nic_dword(dev, RX_CONF, rxconf);
-
-	fix_rx_fifo(dev);
-
-	cmd = read_nic_byte(dev, CMD);
-	write_nic_byte(dev, CMD, cmd | (1<<CMD_RX_ENABLE_SHIFT));
-}
-
 void set_nic_txring(struct net_device *dev)
 {
 	struct r8180_priv *priv = (struct r8180_priv *)ieee80211_priv(dev);
@@ -834,80 +668,6 @@ void set_nic_txring(struct net_device *dev)
 	write_nic_dword(dev, TX_VOPRIORITY_RING_ADDR, priv->txvopringdma);
 	write_nic_dword(dev, TX_HIGHPRIORITY_RING_ADDR, priv->txhpringdma);
 	write_nic_dword(dev, TX_BEACON_RING_ADDR, priv->txbeaconringdma);
-}
-
-void rtl8180_conttx_enable(struct net_device *dev)
-{
-	u32 txconf;
-
-	txconf = read_nic_dword(dev, TX_CONF);
-	txconf = txconf & ~TX_LOOPBACK_MASK;
-	txconf = txconf | (TX_LOOPBACK_CONTINUE<<TX_LOOPBACK_SHIFT);
-	write_nic_dword(dev, TX_CONF, txconf);
-}
-
-void rtl8180_conttx_disable(struct net_device *dev)
-{
-	u32 txconf;
-
-	txconf = read_nic_dword(dev, TX_CONF);
-	txconf = txconf & ~TX_LOOPBACK_MASK;
-	txconf = txconf | (TX_LOOPBACK_NONE<<TX_LOOPBACK_SHIFT);
-	write_nic_dword(dev, TX_CONF, txconf);
-}
-
-void rtl8180_tx_enable(struct net_device *dev)
-{
-	u8 cmd;
-	u8 tx_agc_ctl;
-	u8 byte;
-	u32 txconf;
-	struct r8180_priv *priv = (struct r8180_priv *)ieee80211_priv(dev);
-
-	txconf = read_nic_dword(dev, TX_CONF);
-
-	byte = read_nic_byte(dev, CW_CONF);
-	byte &= ~(1<<CW_CONF_PERPACKET_CW_SHIFT);
-	byte &= ~(1<<CW_CONF_PERPACKET_RETRY_SHIFT);
-	write_nic_byte(dev, CW_CONF, byte);
-
-	tx_agc_ctl = read_nic_byte(dev, TX_AGC_CTL);
-	tx_agc_ctl &= ~(1<<TX_AGC_CTL_PERPACKET_GAIN_SHIFT);
-	tx_agc_ctl &= ~(1<<TX_AGC_CTL_PERPACKET_ANTSEL_SHIFT);
-	tx_agc_ctl |= (1<<TX_AGC_CTL_FEEDBACK_ANT);
-	write_nic_byte(dev, TX_AGC_CTL, tx_agc_ctl);
-	write_nic_byte(dev, 0xec, 0x3f); /* Disable early TX */
-
-	txconf = txconf & ~(1<<TCR_PROBE_NOTIMESTAMP_SHIFT);
-
-	txconf = txconf & ~TX_LOOPBACK_MASK;
-	txconf = txconf | (TX_LOOPBACK_NONE<<TX_LOOPBACK_SHIFT);
-	txconf = txconf & ~TCR_DPRETRY_MASK;
-	txconf = txconf & ~TCR_RTSRETRY_MASK;
-	txconf = txconf | (priv->retry_data<<TX_DPRETRY_SHIFT);
-	txconf = txconf | (priv->retry_rts<<TX_RTSRETRY_SHIFT);
-	txconf = txconf & ~(1<<TX_NOCRC_SHIFT);
-
-	if (priv->hw_plcp_len)
-		txconf = txconf & ~TCR_PLCP_LEN;
-	else
-		txconf = txconf | TCR_PLCP_LEN;
-
-	txconf = txconf & ~TCR_MXDMA_MASK;
-	txconf = txconf | (TCR_MXDMA_2048<<TCR_MXDMA_SHIFT);
-	txconf = txconf | TCR_CWMIN;
-	txconf = txconf | TCR_DISCW;
-
-	txconf = txconf | (1 << TX_NOICV_SHIFT);
-
-	write_nic_dword(dev, TX_CONF, txconf);
-
-	fix_tx_fifo(dev);
-
-	cmd = read_nic_byte(dev, CMD);
-	write_nic_byte(dev, CMD, cmd | (1<<CMD_TX_ENABLE_SHIFT));
-
-	write_nic_dword(dev, TX_CONF, txconf);
 }
 
 void rtl8180_beacon_tx_enable(struct net_device *dev)
@@ -937,8 +697,8 @@ void rtl8180_rtx_disable(struct net_device *dev)
 	struct r8180_priv *priv = ieee80211_priv(dev);
 
 	cmd = read_nic_byte(dev, CMD);
-	write_nic_byte(dev, CMD, cmd & ~\
-		       ((1<<CMD_RX_ENABLE_SHIFT)|(1<<CMD_TX_ENABLE_SHIFT)));
+	write_nic_byte(dev, CMD, cmd &
+		       ~((1<<CMD_RX_ENABLE_SHIFT)|(1<<CMD_TX_ENABLE_SHIFT)));
 	force_pci_posting(dev);
 	mdelay(10);
 
@@ -946,8 +706,8 @@ void rtl8180_rtx_disable(struct net_device *dev)
 		dev_kfree_skb_any(priv->rx_skb);
 }
 
-short alloc_tx_desc_ring(struct net_device *dev, int bufsize, int count,
-			 int addr)
+static short alloc_tx_desc_ring(struct net_device *dev, int bufsize, int count,
+				int addr)
 {
 	int i;
 	u32 *desc;
@@ -1071,7 +831,7 @@ short alloc_tx_desc_ring(struct net_device *dev, int bufsize, int count,
 	return 0;
 }
 
-void free_tx_desc_rings(struct net_device *dev)
+static void free_tx_desc_rings(struct net_device *dev)
 {
 	struct r8180_priv *priv = (struct r8180_priv *)ieee80211_priv(dev);
 	struct pci_dev *pdev = priv->pdev;
@@ -1107,7 +867,7 @@ void free_tx_desc_rings(struct net_device *dev)
 	buffer_free(dev, &(priv->txbeaconbufs), priv->txbuffsize, 1);
 }
 
-void free_rx_desc_ring(struct net_device *dev)
+static void free_rx_desc_ring(struct net_device *dev)
 {
 	struct r8180_priv *priv = (struct r8180_priv *)ieee80211_priv(dev);
 	struct pci_dev *pdev = priv->pdev;
@@ -1119,7 +879,7 @@ void free_rx_desc_ring(struct net_device *dev)
 	buffer_free(dev, &(priv->rxbuffer), priv->rxbuffersize, 0);
 }
 
-short alloc_rx_desc_ring(struct net_device *dev, u16 bufsize, int count)
+static short alloc_rx_desc_ring(struct net_device *dev, u16 bufsize, int count)
 {
 	int i;
 	u32 *desc;
@@ -1160,7 +920,8 @@ short alloc_rx_desc_ring(struct net_device *dev, u16 bufsize, int count)
 
 		dma_tmp = pci_map_single(pdev, buf, bufsize * sizeof(u8),
 					 PCI_DMA_FROMDEVICE);
-
+		if (pci_dma_mapping_error(pdev, dma_tmp))
+			return -1;
 		if (-1 == buffer_add(&(priv->rxbuffer), buf, dma_tmp,
 			   &(priv->rxbufferhead))) {
 			DMESGE("Unable to allocate mem RX buf");
@@ -1267,7 +1028,7 @@ inline u8 rtl8180_IsWirelessBMode(u16 rate)
 
 u16 N_DBPSOfRate(u16 DataRate);
 
-u16 ComputeTxTime(u16 FrameLength, u16 DataRate, u8 bManagementFrame,
+static u16 ComputeTxTime(u16 FrameLength, u16 DataRate, u8 bManagementFrame,
 		  u8 bShortPreamble)
 {
 	u16	FrameTime;
@@ -1330,9 +1091,9 @@ u16 N_DBPSOfRate(u16 DataRate)
 }
 
 /*
- * For Netgear case, they want good-looking singal strength.
+ * For Netgear case, they want good-looking signal strength.
  */
-long NetgearSignalStrengthTranslate(long LastSS, long CurrSS)
+static long NetgearSignalStrengthTranslate(long LastSS, long CurrSS)
 {
 	long RetSS;
 
@@ -1368,7 +1129,7 @@ long NetgearSignalStrengthTranslate(long LastSS, long CurrSS)
 /*
  * Translate 0-100 signal strength index into dBm.
  */
-long TranslateToDbm8185(u8 SignalStrengthIndex)
+static long TranslateToDbm8185(u8 SignalStrengthIndex)
 {
 	long SignalPower;
 
@@ -1381,22 +1142,24 @@ long TranslateToDbm8185(u8 SignalStrengthIndex)
 
 /*
  * Perform signal smoothing for dynamic mechanism.
- * This is different with PerformSignalSmoothing8185 in smoothing fomula.
+ * This is different with PerformSignalSmoothing8185 in smoothing formula.
  * No dramatic adjustion is apply because dynamic mechanism need some degree
  * of correctness. Ported from 8187B.
  */
-void PerformUndecoratedSignalSmoothing8185(struct r8180_priv *priv,
-					   bool bCckRate)
+static void PerformUndecoratedSignalSmoothing8185(struct r8180_priv *priv,
+						  bool bCckRate)
 {
 	/* Determin the current packet is CCK rate. */
 	priv->bCurCCKPkt = bCckRate;
 
 	if (priv->UndecoratedSmoothedSS >= 0)
-		priv->UndecoratedSmoothedSS = ((priv->UndecoratedSmoothedSS * 5) + (priv->SignalStrength * 10)) / 6;
+		priv->UndecoratedSmoothedSS = ((priv->UndecoratedSmoothedSS * 5) +
+					       (priv->SignalStrength * 10)) / 6;
 	else
 		priv->UndecoratedSmoothedSS = priv->SignalStrength * 10;
 
-	priv->UndercorateSmoothedRxPower = ((priv->UndercorateSmoothedRxPower * 50) + (priv->RxPower * 11)) / 60;
+	priv->UndercorateSmoothedRxPower = ((priv->UndercorateSmoothedRxPower * 50) +
+					    (priv->RxPower * 11)) / 60;
 
 	if (bCckRate)
 		priv->CurCCKRSSI = priv->RSSI;
@@ -1408,7 +1171,7 @@ void PerformUndecoratedSignalSmoothing8185(struct r8180_priv *priv,
 /*
  * This is rough RX isr handling routine
  */
-void rtl8180_rx(struct net_device *dev)
+static void rtl8180_rx(struct net_device *dev)
 {
 	struct r8180_priv *priv = (struct r8180_priv *)ieee80211_priv(dev);
 	struct sk_buff *tmp_skb;
@@ -1480,8 +1243,7 @@ void rtl8180_rx(struct net_device *dev)
 
 		pci_dma_sync_single_for_cpu(priv->pdev,
 				    priv->rxbuffer->dma,
-				    priv->rxbuffersize * \
-				    sizeof(u8),
+				    priv->rxbuffersize * sizeof(u8),
 				    PCI_DMA_FROMDEVICE);
 
 		first = *(priv->rxringtail) & (1<<29) ? 1 : 0;
@@ -1534,7 +1296,7 @@ void rtl8180_rx(struct net_device *dev)
 			/* HW is probably passing several buggy frames
 			* without FD or LD flag set.
 			* Throw this garbage away to prevent skb
-			* memory exausting
+			* memory exhausting
 			*/
 			if (!priv->rx_skb_complete)
 				dev_kfree_skb_any(priv->rx_skb);
@@ -1607,64 +1369,66 @@ void rtl8180_rx(struct net_device *dev)
 		/* printk("==========================>rx : RXAGC is %d,signalstrength is %d\n",RXAGC,stats.signalstrength); */
 		stats.rssi = priv->wstats.qual.qual = priv->SignalQuality;
 		stats.noise = priv->wstats.qual.noise = 100 - priv->wstats.qual.qual;
-		bHwError = (((*(priv->rxringtail)) & (0x00000fff)) == 4080) | (((*(priv->rxringtail)) & (0x04000000)) != 0)
-			| (((*(priv->rxringtail)) & (0x08000000)) != 0) | (((~(*(priv->rxringtail))) & (0x10000000)) != 0) | (((~(*(priv->rxringtail))) & (0x20000000)) != 0);
+		bHwError = (((*(priv->rxringtail)) & (0x00000fff)) == 4080) |
+			   (((*(priv->rxringtail)) & (0x04000000)) != 0) |
+			   (((*(priv->rxringtail)) & (0x08000000)) != 0) |
+			   (((~(*(priv->rxringtail))) & (0x10000000)) != 0) |
+			   (((~(*(priv->rxringtail))) & (0x20000000)) != 0);
 		bCRC = ((*(priv->rxringtail)) & (0x00002000)) >> 13;
 		bICV = ((*(priv->rxringtail)) & (0x00001000)) >> 12;
 		hdr = (struct ieee80211_hdr_4addr *)priv->rxbuffer->buf;
 		    fc = le16_to_cpu(hdr->frame_ctl);
 		type = WLAN_FC_GET_TYPE(fc);
 
-			if ((IEEE80211_FTYPE_CTL != type) &&
-				(eqMacAddr(priv->ieee80211->current_network.bssid, (fc & IEEE80211_FCTL_TODS) ? hdr->addr1 : (fc & IEEE80211_FCTL_FROMDS) ? hdr->addr2 : hdr->addr3))
-				 && (!bHwError) && (!bCRC) && (!bICV)) {
-				/* Perform signal smoothing for dynamic
-				 * mechanism on demand. This is different
-				 * with PerformSignalSmoothing8185 in smoothing
-				 * fomula. No dramatic adjustion is apply
-				 * because dynamic mechanism need some degree
-				 * of correctness. */
-				PerformUndecoratedSignalSmoothing8185(priv, bCckRate);
+		if (IEEE80211_FTYPE_CTL != type &&
+		    !bHwError && !bCRC && !bICV &&
+		    eqMacAddr(priv->ieee80211->current_network.bssid,
+			fc & IEEE80211_FCTL_TODS ? hdr->addr1 :
+			fc & IEEE80211_FCTL_FROMDS ? hdr->addr2 :
+			hdr->addr3)) {
 
-				/* For good-looking singal strength. */
-				SignalStrengthIndex = NetgearSignalStrengthTranslate(
-								priv->LastSignalStrengthInPercent,
-								priv->SignalStrength);
+			/* Perform signal smoothing for dynamic
+			 * mechanism on demand. This is different
+			 * with PerformSignalSmoothing8185 in smoothing
+			 * fomula. No dramatic adjustion is apply
+			 * because dynamic mechanism need some degree
+			 * of correctness. */
+			PerformUndecoratedSignalSmoothing8185(priv, bCckRate);
 
-				priv->LastSignalStrengthInPercent = SignalStrengthIndex;
-				priv->Stats_SignalStrength = TranslateToDbm8185((u8)SignalStrengthIndex);
+			/* For good-looking singal strength. */
+			SignalStrengthIndex = NetgearSignalStrengthTranslate(
+							priv->LastSignalStrengthInPercent,
+							priv->SignalStrength);
+
+			priv->LastSignalStrengthInPercent = SignalStrengthIndex;
+			priv->Stats_SignalStrength = TranslateToDbm8185((u8)SignalStrengthIndex);
 		/*
 		 * We need more correct power of received packets and the  "SignalStrength" of RxStats is beautified,
 		 * so we record the correct power here.
 		 */
-				priv->Stats_SignalQuality = (long)(priv->Stats_SignalQuality * 5 + (long)priv->SignalQuality + 5) / 6;
-				priv->Stats_RecvSignalPower = (long)(priv->Stats_RecvSignalPower * 5 + priv->RecvSignalPower - 1) / 6;
+			priv->Stats_SignalQuality = (long)(priv->Stats_SignalQuality * 5 + (long)priv->SignalQuality + 5) / 6;
+			priv->Stats_RecvSignalPower = (long)(priv->Stats_RecvSignalPower * 5 + priv->RecvSignalPower - 1) / 6;
 
-		/* Figure out which antenna that received the lasted packet. */
-				priv->LastRxPktAntenna = Antenna ? 1 : 0; /* 0: aux, 1: main. */
-				SwAntennaDiversityRxOk8185(dev, priv->SignalStrength);
-			}
+		/* Figure out which antenna that received the last packet. */
+			priv->LastRxPktAntenna = Antenna ? 1 : 0; /* 0: aux, 1: main. */
+			SwAntennaDiversityRxOk8185(dev, priv->SignalStrength);
+		}
 
 		if (first) {
 			if (!priv->rx_skb_complete) {
-				/* seems that HW sometimes fails to reiceve and
+				/* seems that HW sometimes fails to receive and
 				   doesn't provide the last descriptor */
 				dev_kfree_skb_any(priv->rx_skb);
 				priv->stats.rxnolast++;
 			}
-			/* support for prism header has been originally added by Christian */
-			if (priv->prism_hdr && priv->ieee80211->iw_mode == IW_MODE_MONITOR) {
-				
-			} else {
-				priv->rx_skb = dev_alloc_skb(len+2);
-				if (!priv->rx_skb)
-					goto drop;
-			}
+			priv->rx_skb = dev_alloc_skb(len+2);
+			if (!priv->rx_skb)
+				goto drop;
 
 			priv->rx_skb_complete = 0;
 			priv->rx_skb->dev = dev;
 		} else {
-			/* if we are here we should  have already RXed
+			/* if we are here we should have already RXed
 			* the first frame.
 			* If we get here and the skb is not allocated then
 			* we have just throw out garbage (skb not allocated)
@@ -1710,8 +1474,7 @@ void rtl8180_rx(struct net_device *dev)
 
 		pci_dma_sync_single_for_device(priv->pdev,
 				    priv->rxbuffer->dma,
-				    priv->rxbuffersize * \
-				    sizeof(u8),
+				    priv->rxbuffersize * sizeof(u8),
 				    PCI_DMA_FROMDEVICE);
 
 drop: /* this is used when we have not enough mem */
@@ -1734,7 +1497,7 @@ drop: /* this is used when we have not enough mem */
 }
 
 
-void rtl8180_dma_kick(struct net_device *dev, int priority)
+static void rtl8180_dma_kick(struct net_device *dev, int priority)
 {
 	struct r8180_priv *priv = (struct r8180_priv *)ieee80211_priv(dev);
 
@@ -1746,7 +1509,7 @@ void rtl8180_dma_kick(struct net_device *dev, int priority)
 	force_pci_posting(dev);
 }
 
-void rtl8180_data_hard_stop(struct net_device *dev)
+static void rtl8180_data_hard_stop(struct net_device *dev)
 {
 	struct r8180_priv *priv = (struct r8180_priv *)ieee80211_priv(dev);
 
@@ -1756,7 +1519,7 @@ void rtl8180_data_hard_stop(struct net_device *dev)
 	rtl8180_set_mode(dev, EPROM_CMD_NORMAL);
 }
 
-void rtl8180_data_hard_resume(struct net_device *dev)
+static void rtl8180_data_hard_resume(struct net_device *dev)
 {
 	struct r8180_priv *priv = (struct r8180_priv *)ieee80211_priv(dev);
 
@@ -1766,12 +1529,13 @@ void rtl8180_data_hard_resume(struct net_device *dev)
 	rtl8180_set_mode(dev, EPROM_CMD_NORMAL);
 }
 
-/* 
+/*
  * This function TX data frames when the ieee80211 stack requires this.
  * It checks also if we need to stop the ieee tx queue, eventually do it
  */
-void rtl8180_hard_data_xmit(struct sk_buff *skb, struct net_device *dev, int
-rate) {
+static void rtl8180_hard_data_xmit(struct sk_buff *skb, struct net_device *dev,
+				   int rate)
+{
 	struct r8180_priv *priv = (struct r8180_priv *)ieee80211_priv(dev);
 	int mode;
 	struct ieee80211_hdr_3addr *h = (struct ieee80211_hdr_3addr *) skb->data;
@@ -1810,19 +1574,19 @@ rate) {
 	spin_unlock_irqrestore(&priv->tx_lock, flags);
 }
 
-/* 
+/*
  * This is a rough attempt to TX a frame
  * This is called by the ieee 80211 stack to TX management frames.
- * If the ring is full packet are dropped (for data frame the queue
+ * If the ring is full packets are dropped (for data frame the queue
  * is stopped before this can happen). For this reason it is better
  * if the descriptors are larger than the largest management frame
- * we intend to TX: i'm unsure what the HW does if it will not found
+ * we intend to TX: i'm unsure what the HW does if it will not find
  * the last fragment of a frame because it has been dropped...
  * Since queues for Management and Data frames are different we
  * might use a different lock than tx_lock (for example mgmt_tx_lock)
  */
-/* these function may loops if invoked with 0 descriptors or 0 len buffer */
-int rtl8180_hard_start_xmit(struct sk_buff *skb, struct net_device *dev)
+/* these function may loop if invoked with 0 descriptors or 0 len buffer */
+static int rtl8180_hard_start_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct r8180_priv *priv = (struct r8180_priv *)ieee80211_priv(dev);
 	unsigned long flags;
@@ -1898,7 +1662,7 @@ u16 rtl8180_len2duration(u32 len, short rate, short *ext)
 	return duration;
 }
 
-void rtl8180_prepare_beacon(struct net_device *dev)
+static void rtl8180_prepare_beacon(struct net_device *dev)
 {
 	struct r8180_priv *priv = (struct r8180_priv *)ieee80211_priv(dev);
 	struct sk_buff *skb;
@@ -1916,12 +1680,12 @@ void rtl8180_prepare_beacon(struct net_device *dev)
 	}
 }
 
-/* 
+/*
  * This function do the real dirty work: it enqueues a TX command
  * descriptor in the ring buffer, copyes the frame in a TX buffer
  * and kicks the NIC to ensure it does the DMA transfer.
  */
-short rtl8180_tx(struct net_device *dev, u8* txbuf, int len, int priority,
+short rtl8180_tx(struct net_device *dev, u8 *txbuf, int len, int priority,
 		 short morefrag, short descfrag, int rate)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
@@ -1932,8 +1696,6 @@ short rtl8180_tx(struct net_device *dev, u8* txbuf, int len, int priority,
 	int remain;
 	int buflen;
 	int count;
-	u16 duration;
-	short ext;
 	struct buffer *buflist;
 	struct ieee80211_hdr_3addr *frag_hdr = (struct ieee80211_hdr_3addr *)txbuf;
 	u8 dest[ETH_ALEN];
@@ -1944,7 +1706,7 @@ short rtl8180_tx(struct net_device *dev, u8* txbuf, int len, int priority,
 	u16			RtsDur = 0;
 	u16			ThisFrameTime = 0;
 	u16			TxDescDuration = 0;
-	u8			ownbit_flag = false;
+	bool			ownbit_flag = false;
 
 	switch (priority) {
 	case MANAGE_PRIORITY:
@@ -1995,14 +1757,14 @@ short rtl8180_tx(struct net_device *dev, u8* txbuf, int len, int priority,
 	}
 
 		memcpy(&dest, frag_hdr->addr1, ETH_ALEN);
-		if (is_multicast_ether_addr(dest) ||
-				is_broadcast_ether_addr(dest)) {
+		if (is_multicast_ether_addr(dest)) {
 			Duration = 0;
 			RtsDur = 0;
 			bRTSEnable = 0;
 			bCTSEnable = 0;
 
-			ThisFrameTime = ComputeTxTime(len + sCrcLng, rtl8180_rate2rate(rate), 0, bUseShortPreamble);
+			ThisFrameTime = ComputeTxTime(len + sCrcLng, rtl8180_rate2rate(rate),
+						      0, bUseShortPreamble);
 			TxDescDuration = ThisFrameTime;
 		} else { /* Unicast packet */
 			u16 AckTime;
@@ -2040,7 +1802,8 @@ short rtl8180_tx(struct net_device *dev, u8* txbuf, int len, int priority,
 				bRTSEnable = 0;
 				RtsDur = 0;
 
-				ThisFrameTime = ComputeTxTime(len + sCrcLng, rtl8180_rate2rate(rate), 0, bUseShortPreamble);
+				ThisFrameTime = ComputeTxTime(len + sCrcLng, rtl8180_rate2rate(rate),
+							      0, bUseShortPreamble);
 				TxDescDuration = ThisFrameTime + aSifsTime + AckTime;
 			}
 
@@ -2093,7 +1856,7 @@ short rtl8180_tx(struct net_device *dev, u8* txbuf, int len, int priority,
 
 		if (remain == len && !descfrag) {
 			ownbit_flag = false;
-			*tail = *tail | (1<<29) ; /* fist segment of the packet */
+			*tail = *tail | (1<<29); /* fist segment of the packet */
 			*tail = *tail | (len);
 		} else {
 			ownbit_flag = true;
@@ -2127,15 +1890,6 @@ short rtl8180_tx(struct net_device *dev, u8* txbuf, int len, int priority,
 		*(tail+5) |= (11<<8); /* (priv->retry_data<<8); */ /* retry lim; */
 
 		*tail = *tail | ((rate&0xf) << 24);
-
-		/* hw_plcp_len is not used for rtl8180 chip */
-		/* FIXME */
-		if (!priv->hw_plcp_len) {
-			duration = rtl8180_len2duration(len, rate, &ext);
-			*(tail+1) = *(tail+1) | ((duration & 0x7fff)<<16);
-			if (ext)
-				*(tail+1) = *(tail+1) | (1<<31); /* plcp length extension */
-		}
 
 		if (morefrag)
 			*tail = (*tail) | (1<<17); /* more fragment */
@@ -2184,7 +1938,7 @@ short rtl8180_tx(struct net_device *dev, u8* txbuf, int len, int priority,
 			priv->txhpbufstail = buflist;
 			break;
 		case BEACON_PRIORITY:
-			/* 
+			/*
 			 * The HW seems to be happy with the 1st
 			 * descriptor filled and the 2nd empty...
 			 * So always update descriptor 1 and never
@@ -2201,7 +1955,7 @@ short rtl8180_tx(struct net_device *dev, u8* txbuf, int len, int priority,
 
 void rtl8180_irq_rx_tasklet(struct r8180_priv *priv);
 
-void rtl8180_link_change(struct net_device *dev)
+static void rtl8180_link_change(struct net_device *dev)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
 	u16 beacon_interval;
@@ -2214,17 +1968,17 @@ void rtl8180_link_change(struct net_device *dev)
 	write_nic_dword(dev, BSSID, ((u32 *)net->bssid)[0]);
 	write_nic_word(dev, BSSID+4, ((u16 *)net->bssid)[2]);
 
-	beacon_interval  = read_nic_dword(dev, BEACON_INTERVAL);
+	beacon_interval  = read_nic_word(dev, BEACON_INTERVAL);
 	beacon_interval &= ~BEACON_INTERVAL_MASK;
 	beacon_interval |= net->beacon_interval;
-	write_nic_dword(dev, BEACON_INTERVAL, beacon_interval);
+	write_nic_word(dev, BEACON_INTERVAL, beacon_interval);
 
 	rtl8180_set_mode(dev, EPROM_CMD_NORMAL);
 
 	rtl8180_set_chan(dev, priv->chan);
 }
 
-void rtl8180_rq_tx_ack(struct net_device *dev)
+static void rtl8180_rq_tx_ack(struct net_device *dev)
 {
 
 	struct r8180_priv *priv = ieee80211_priv(dev);
@@ -2233,7 +1987,7 @@ void rtl8180_rq_tx_ack(struct net_device *dev)
 	priv->ack_tx_to_ieee = 1;
 }
 
-short rtl8180_is_tx_queue_empty(struct net_device *dev)
+static short rtl8180_is_tx_queue_empty(struct net_device *dev)
 {
 
 	struct r8180_priv *priv = ieee80211_priv(dev);
@@ -2270,10 +2024,8 @@ short rtl8180_is_tx_queue_empty(struct net_device *dev)
 				return 0;
 	return 1;
 }
-/* FIXME FIXME 5msecs is random */
-#define HW_WAKE_DELAY 5
 
-void rtl8180_hw_wakeup(struct net_device *dev)
+static void rtl8180_hw_wakeup(struct net_device *dev)
 {
 	unsigned long flags;
 	struct r8180_priv *priv = ieee80211_priv(dev);
@@ -2285,7 +2037,7 @@ void rtl8180_hw_wakeup(struct net_device *dev)
 	spin_unlock_irqrestore(&priv->ps_lock, flags);
 }
 
-void rtl8180_hw_sleep_down(struct net_device *dev)
+static void rtl8180_hw_sleep_down(struct net_device *dev)
 {
 	unsigned long flags;
 	struct r8180_priv *priv = ieee80211_priv(dev);
@@ -2296,7 +2048,7 @@ void rtl8180_hw_sleep_down(struct net_device *dev)
 	spin_unlock_irqrestore(&priv->ps_lock, flags);
 }
 
-void rtl8180_hw_sleep(struct net_device *dev, u32 th, u32 tl)
+static void rtl8180_hw_sleep(struct net_device *dev, u32 th, u32 tl)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
 	u32 rb = jiffies;
@@ -2304,13 +2056,13 @@ void rtl8180_hw_sleep(struct net_device *dev, u32 th, u32 tl)
 
 	spin_lock_irqsave(&priv->ps_lock, flags);
 
-	/* 
+	/*
 	 * Writing HW register with 0 equals to disable
 	 * the timer, that is not really what we want
 	 */
 	tl -= MSECS(4+16+7);
 
-	/* 
+	/*
 	 * If the interval in witch we are requested to sleep is too
 	 * short then give up and remain awake
 	 */
@@ -2325,10 +2077,10 @@ void rtl8180_hw_sleep(struct net_device *dev, u32 th, u32 tl)
 		u32 tmp = (tl > rb) ? (tl-rb) : (rb-tl);
 
 		priv->DozePeriodInPast2Sec += jiffies_to_msecs(tmp);
-
-		queue_delayed_work(priv->ieee80211->wq, &priv->ieee80211->hw_wakeup_wq, tmp); /* as tl may be less than rb */
+		/* as tl may be less than rb */
+		queue_delayed_work(priv->ieee80211->wq, &priv->ieee80211->hw_wakeup_wq, tmp);
 	}
-	/* 
+	/*
 	 * If we suspect the TimerInt is gone beyond tl
 	 * while setting it, then give up
 	 */
@@ -2343,7 +2095,7 @@ void rtl8180_hw_sleep(struct net_device *dev, u32 th, u32 tl)
 	spin_unlock_irqrestore(&priv->ps_lock, flags);
 }
 
-void rtl8180_wmm_param_update(struct work_struct *work)
+static void rtl8180_wmm_param_update(struct work_struct *work)
 {
 	struct ieee80211_device *ieee = container_of(work, struct ieee80211_device, wmm_param_update_wq);
 	struct net_device *dev = ieee->dev;
@@ -2368,7 +2120,7 @@ void rtl8180_wmm_param_update(struct work_struct *work)
 				u8		u1bAIFS;
 				u32		u4bAcParam;
 				pAcParam = (PAC_PARAM)(&AcParam);
-				/* Retrive paramters to udpate. */
+				/* Retrieve parameters to update. */
 				u1bAIFS = pAcParam->f.AciAifsn.f.AIFSN * (((mode&IEEE_G) == IEEE_G) ? 9 : 20) + aSifsTime;
 				u4bAcParam = ((((u32)(pAcParam->f.TXOPLimit))<<AC_PARAM_TXOP_LIMIT_OFFSET)|
 					      (((u32)(pAcParam->f.Ecw.f.ECWmax))<<AC_PARAM_ECW_MAX_OFFSET)|
@@ -2388,7 +2140,8 @@ void rtl8180_wmm_param_update(struct work_struct *work)
 					write_nic_dword(dev, AC_VO_PARAM, u4bAcParam);
 					break;
 				default:
-					printk(KERN_WARNING "SetHwReg8185():invalid ACI: %d!\n", eACI);
+					pr_warn("SetHwReg8185():invalid ACI: %d!\n",
+						eACI);
 					break;
 				}
 			}
@@ -2404,7 +2157,7 @@ void rtl8180_wmm_param_update(struct work_struct *work)
 			u8		u1bAIFS;
 			u32		u4bAcParam;
 
-			/* Retrive paramters to udpate. */
+			/* Retrieve parameters to update. */
 			eACI = pAcParam->f.AciAifsn.f.ACI;
 			/* Mode G/A: slotTimeTimer = 9; Mode B: 20 */
 			u1bAIFS = pAcParam->f.AciAifsn.f.AIFSN * (((mode&IEEE_G) == IEEE_G) ? 9 : 20) + aSifsTime;
@@ -2427,7 +2180,8 @@ void rtl8180_wmm_param_update(struct work_struct *work)
 				write_nic_dword(dev, AC_VO_PARAM, u4bAcParam);
 				break;
 			default:
-				printk(KERN_WARNING "SetHwReg8185(): invalid ACI: %d !\n", eACI);
+				pr_warn("SetHwReg8185(): invalid ACI: %d !\n",
+					eACI);
 				break;
 			}
 		}
@@ -2435,7 +2189,6 @@ void rtl8180_wmm_param_update(struct work_struct *work)
 	}
 }
 
-void rtl8180_tx_irq_wq(struct work_struct *work);
 void rtl8180_restart_wq(struct work_struct *work);
 /* void rtl8180_rq_tx_ack(struct work_struct *work); */
 void rtl8180_watch_dog_wq(struct work_struct *work);
@@ -2444,9 +2197,9 @@ void rtl8180_hw_sleep_wq(struct work_struct *work);
 void rtl8180_sw_antenna_wq(struct work_struct *work);
 void rtl8180_watch_dog(struct net_device *dev);
 
-void watch_dog_adaptive(unsigned long data)
+static void watch_dog_adaptive(unsigned long data)
 {
-	struct r8180_priv* priv = ieee80211_priv((struct net_device *)data);
+	struct r8180_priv *priv = ieee80211_priv((struct net_device *)data);
 
 	if (!priv->up) {
 		DMESG("<----watch_dog_adaptive():driver is not up!\n");
@@ -2462,7 +2215,7 @@ void watch_dog_adaptive(unsigned long data)
 		TxPwrTracking87SE((struct net_device *)data);
 
 	/* Perform DIG immediately. */
-	if (CheckDig((struct net_device *)data) == true)
+	if (CheckDig((struct net_device *)data))
 		queue_work(priv->ieee80211->wq, (void *)&priv->ieee80211->hw_dig_wq);
 	rtl8180_watch_dog((struct net_device *)data);
 
@@ -2486,7 +2239,8 @@ static CHANNEL_LIST ChannelPlan[] = {
 	{{1,2,3,4,5,6,7,8,9,10,11,12,13},13} /* world wide 13: ch1~ch11 active scan, ch12~13 passive //lzm add 080826 */
 };
 
-static void rtl8180_set_channel_map(u8 channel_plan, struct ieee80211_device *ieee)
+static void rtl8180_set_channel_map(u8 channel_plan,
+				    struct ieee80211_device *ieee)
 {
 	int i;
 
@@ -2520,7 +2274,7 @@ static void rtl8180_set_channel_map(u8 channel_plan, struct ieee80211_device *ie
 		}
 	case COUNTRY_CODE_GLOBAL_DOMAIN:
 		{
-			GET_DOT11D_INFO(ieee)->bEnabled = 0;
+			GET_DOT11D_INFO(ieee)->bEnabled = false;
 			Dot11d_Reset(ieee);
 			ieee->bGlobalDomain = true;
 			break;
@@ -2588,12 +2342,11 @@ static void rtl8187se_eeprom_register_write(struct eeprom_93cx6 *eeprom)
 	udelay(10);
 }
 
-short rtl8180_init(struct net_device *dev)
+static short rtl8180_init(struct net_device *dev)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
 	u16 word;
-	u16 version;
-	u32 usValue;
+	u16 usValue;
 	u16 tmpu16;
 	int i, j;
 	struct eeprom_93cx6 eeprom;
@@ -2625,7 +2378,6 @@ short rtl8180_init(struct net_device *dev)
 	priv->RFChangeInProgress = false;
 	priv->SetRFPowerStateInProgress = false;
 	priv->RFProgType = 0;
-	priv->bInHctTest = false;
 
 	priv->irq_enabled = 0;
 
@@ -2649,14 +2401,12 @@ short rtl8180_init(struct net_device *dev)
 	priv->ieee80211->ps_is_queue_empty = rtl8180_is_tx_queue_empty;
 
 	priv->hw_wep = hwwep;
-	priv->prism_hdr = 0;
 	priv->dev = dev;
 	priv->retry_rts = DEFAULT_RETRY_RTS;
 	priv->retry_data = DEFAULT_RETRY_DATA;
 	priv->RFChangeInProgress = false;
 	priv->SetRFPowerStateInProgress = false;
 	priv->RFProgType = 0;
-	priv->bInHctTest = false;
 	priv->bInactivePs = true; /* false; */
 	priv->ieee80211->bInactivePs = priv->bInactivePs;
 	priv->bSwRfProcessing = false;
@@ -2682,7 +2432,7 @@ short rtl8180_init(struct net_device *dev)
 	init_timer(&priv->SwAntennaDiversityTimer);
 	priv->SwAntennaDiversityTimer.data = (unsigned long)dev;
 	priv->SwAntennaDiversityTimer.function = (void *)SwAntennaDiversityTimerCallback;
-	priv->bDigMechanism = 1;
+	priv->bDigMechanism = true;
 	priv->InitialGain = 6;
 	priv->bXtalCalibration = false;
 	priv->XtalCal_Xin = 0;
@@ -2690,7 +2440,7 @@ short rtl8180_init(struct net_device *dev)
 	priv->bTxPowerTrack = false;
 	priv->ThermalMeter = 0;
 	priv->FalseAlarmRegValue = 0;
-	priv->RegDigOfdmFaUpTh = 0xc; /* Upper threhold of OFDM false alarm, which is used in DIG. */
+	priv->RegDigOfdmFaUpTh = 0xc; /* Upper threshold of OFDM false alarm, which is used in DIG. */
 	priv->DIG_NumberFallbackVote = 0;
 	priv->DIG_NumberUpgradeVote = 0;
 	priv->LastSignalStrengthInPercent = 0;
@@ -2717,7 +2467,6 @@ short rtl8180_init(struct net_device *dev)
 	priv->NumTxOkTotal = 0;
 	priv->NumTxUnicast = 0;
 	priv->keepAliveLevel = DEFAULT_KEEP_ALIVE_LEVEL;
-	priv->PowerProfile = POWER_PROFILE_AC;
 	priv->CurrRetryCnt = 0;
 	priv->LastRetryCnt = 0;
 	priv->LastTxokCnt = 0;
@@ -2739,15 +2488,12 @@ short rtl8180_init(struct net_device *dev)
 	priv->RegBModeGainStage = 1;
 
 	priv->promisc = (dev->flags & IFF_PROMISC) ? 1 : 0;
-	spin_lock_init(&priv->irq_lock);
 	spin_lock_init(&priv->irq_th_lock);
 	spin_lock_init(&priv->tx_lock);
 	spin_lock_init(&priv->ps_lock);
 	spin_lock_init(&priv->rf_ps_lock);
 	sema_init(&priv->wx_sem, 1);
-	sema_init(&priv->rf_state, 1);
 	INIT_WORK(&priv->reset_wq, (void *)rtl8180_restart_wq);
-	INIT_WORK(&priv->tx_irq_wq, (void *)rtl8180_tx_irq_wq);
 	INIT_DELAYED_WORK(&priv->ieee80211->hw_wakeup_wq,
 			  (void *)rtl8180_hw_wakeup_wq);
 	INIT_DELAYED_WORK(&priv->ieee80211->hw_sleep_wq,
@@ -2789,19 +2535,14 @@ short rtl8180_init(struct net_device *dev)
 	priv->ieee80211->stop_send_beacons = rtl8180_beacon_tx_disable;
 	priv->ieee80211->fts = DEFAULT_FRAG_THRESHOLD;
 
-	priv->MWIEnable = 0;
-
 	priv->ShortRetryLimit = 7;
 	priv->LongRetryLimit = 7;
 	priv->EarlyRxThreshold = 7;
 
-	priv->CSMethod = (0x01 << 29);
-
-	priv->TransmitConfig =	TCR_DurProcMode_OFFSET |
+	priv->TransmitConfig =	(1<<TCR_DurProcMode_OFFSET) |
 				(7<<TCR_MXDMA_OFFSET) |
 				(priv->ShortRetryLimit<<TCR_SRL_OFFSET) |
-				(priv->LongRetryLimit<<TCR_LRL_OFFSET) |
-				(0 ? TCR_SAT : 0);
+				(priv->LongRetryLimit<<TCR_LRL_OFFSET);
 
 	priv->ReceiveConfig =	RCR_AMF | RCR_ADF | RCR_ACF |
 				RCR_AB | RCR_AM | RCR_APM |
@@ -2810,7 +2551,7 @@ short rtl8180_init(struct net_device *dev)
 				(priv->EarlyRxThreshold == 7 ?
 					 RCR_ONLYERLPKT : 0);
 
-	priv->IntrMask		= IMR_TMGDOK | IMR_TBDER | IMR_THPDER |
+	priv->IntrMask		= IMR_TMGDOK | IMR_TBDER |
 				  IMR_THPDER | IMR_THPDOK |
 				  IMR_TVODER | IMR_TVODOK |
 				  IMR_TVIDER | IMR_TVIDOK |
@@ -2823,47 +2564,35 @@ short rtl8180_init(struct net_device *dev)
 	priv->InitialGain = 6;
 
 	DMESG("MAC controller is a RTL8187SE b/g");
-	priv->phy_ver = 2;
 
 	priv->ieee80211->modulation |= IEEE80211_OFDM_MODULATION;
 	priv->ieee80211->short_slot = 1;
 
-	/* just for sync 85 */
-	priv->enable_gpio0 = 0;
-
-	eeprom_93cx6_read(&eeprom, EEPROM_SW_REVD_OFFSET, &eeprom_val);
-	usValue = eeprom_val;
-	DMESG("usValue is 0x%x\n", usValue);
+	eeprom_93cx6_read(&eeprom, EEPROM_SW_REVD_OFFSET, &usValue);
+	DMESG("usValue is %#hx\n", usValue);
 	/* 3Read AntennaDiversity */
 
 	/* SW Antenna Diversity. */
-	if ((usValue & EEPROM_SW_AD_MASK) != EEPROM_SW_AD_ENABLE)
-		priv->EEPROMSwAntennaDiversity = false;
-	else
-		priv->EEPROMSwAntennaDiversity = true;
+	priv->EEPROMSwAntennaDiversity = (usValue & EEPROM_SW_AD_MASK) ==
+		EEPROM_SW_AD_ENABLE;
 
 	/* Default Antenna to use. */
-	if ((usValue & EEPROM_DEF_ANT_MASK) != EEPROM_DEF_ANT_1)
-		priv->EEPROMDefaultAntenna1 = false;
-	else
-		priv->EEPROMDefaultAntenna1 = true;
+	priv->EEPROMDefaultAntenna1 = (usValue & EEPROM_DEF_ANT_MASK) ==
+		EEPROM_DEF_ANT_1;
 
 	if (priv->RegSwAntennaDiversityMechanism == 0) /* Auto */
 		/* 0: default from EEPROM. */
 		priv->bSwAntennaDiverity = priv->EEPROMSwAntennaDiversity;
 	else
 		/* 1:disable antenna diversity, 2: enable antenna diversity. */
-		priv->bSwAntennaDiverity = ((priv->RegSwAntennaDiversityMechanism == 1) ? false : true);
+		priv->bSwAntennaDiverity = priv->RegSwAntennaDiversityMechanism == 2;
 
 	if (priv->RegDefaultAntenna == 0)
 		/* 0: default from EEPROM. */
 		priv->bDefaultAntenna1 = priv->EEPROMDefaultAntenna1;
 	else
 		/* 1: main, 2: aux. */
-		priv->bDefaultAntenna1 = ((priv->RegDefaultAntenna == 2) ? true : false);
-
-	/* rtl8185 can calc plcp len in HW. */
-	priv->hw_plcp_len = 1;
+		priv->bDefaultAntenna1 = priv->RegDefaultAntenna == 2;
 
 	priv->plcp_preamble_mode = 2;
 	/* the eeprom type is stored in RCR register bit #6 */
@@ -2886,7 +2615,7 @@ short rtl8180_init(struct net_device *dev)
 		priv->chtxpwr_ofdm[i+1] = (word & 0xff00) >> 8;
 	}
 
-	/* 3Read crystal calibtration and thermal meter indication on 87SE. */
+	/* 3Read crystal calibration and thermal meter indication on 87SE. */
 	eeprom_93cx6_read(&eeprom, EEPROM_RSV>>1, &tmpu16);
 
 	/* Crystal calibration for Xin and Xout resp. */
@@ -2900,18 +2629,6 @@ short rtl8180_init(struct net_device *dev)
 	if ((tmpu16 & EEPROM_THERMAL_METER_ENABLE) >> 13)
 		priv->bTxPowerTrack = true;
 
-	eeprom_93cx6_read(&eeprom, EPROM_TXPW_BASE, &word);
-	priv->cck_txpwr_base = word & 0xf;
-	priv->ofdm_txpwr_base = (word>>4) & 0xf;
-
-	eeprom_93cx6_read(&eeprom, EPROM_VERSION, &version);
-	DMESG("EEPROM version %x", version);
-	priv->rcr_csense = 3;
-
-	eeprom_93cx6_read(&eeprom, ENERGY_TRESHOLD, &eeprom_val);
-	priv->cs_treshold = (eeprom_val & 0xff00) >> 8;
-
-	eeprom_93cx6_read(&eeprom, RFCHIPID, &eeprom_val);
 	priv->rf_sleep = rtl8225z4_rf_sleep;
 	priv->rf_wakeup = rtl8225z4_rf_wakeup;
 	DMESGW("**PLEASE** REPORT SUCCESSFUL/UNSUCCESSFUL TO Realtek!");
@@ -2952,7 +2669,7 @@ short rtl8180_init(struct net_device *dev)
 				  TX_BEACON_RING_ADDR))
 		return -ENOMEM;
 
-	if (request_irq(dev->irq, (void *)rtl8180_interrupt, IRQF_SHARED, dev->name, dev)) {
+	if (request_irq(dev->irq, rtl8180_interrupt, IRQF_SHARED, dev->name, dev)) {
 		DMESGE("Error allocating IRQ %d", dev->irq);
 		return -1;
 	} else {
@@ -3043,7 +2760,7 @@ void rtl8185_tx_antenna(struct net_device *dev, u8 ant)
 	mdelay(1);
 }
 
-void rtl8185_write_phy(struct net_device *dev, u8 adr, u32 data)
+static void rtl8185_write_phy(struct net_device *dev, u8 adr, u32 data)
 {
 	u32 phyw;
 
@@ -3075,100 +2792,7 @@ void write_phy_cck(struct net_device *dev, u8 adr, u32 data)
 	rtl8185_write_phy(dev, adr, data | 0x10000);
 }
 
-void rtl8185_set_rate(struct net_device *dev)
-{
-	int i;
-	u16 word;
-	int basic_rate, min_rr_rate, max_rr_rate;
-
-	basic_rate = ieeerate2rtlrate(240);
-	min_rr_rate = ieeerate2rtlrate(60);
-	max_rr_rate = ieeerate2rtlrate(240);
-
-	write_nic_byte(dev, RESP_RATE,
-			max_rr_rate<<MAX_RESP_RATE_SHIFT | min_rr_rate<<MIN_RESP_RATE_SHIFT);
-
-	word  = read_nic_word(dev, BRSR);
-	word &= ~BRSR_MBR_8185;
-
-	for (i = 0; i <= basic_rate; i++)
-		word |= (1<<i);
-
-	write_nic_word(dev, BRSR, word);
-}
-
-void rtl8180_adapter_start(struct net_device *dev)
-{
-	struct r8180_priv *priv = ieee80211_priv(dev);
-
-	rtl8180_rtx_disable(dev);
-	rtl8180_reset(dev);
-
-	/* enable beacon timeout, beacon TX ok and err
-	 * LP tx ok and err, HP TX ok and err, NP TX ok and err,
-	 * RX ok and ERR, and GP timer
-	 */
-	priv->irq_mask = 0x6fcf;
-
-	priv->dma_poll_mask = 0;
-
-	rtl8180_beacon_tx_disable(dev);
-
-	rtl8180_set_mode(dev, EPROM_CMD_CONFIG);
-	write_nic_dword(dev, MAC0, ((u32 *)dev->dev_addr)[0]);
-	write_nic_word(dev, MAC4, ((u32 *)dev->dev_addr)[1] & 0xffff);
-	rtl8180_set_mode(dev, EPROM_CMD_NORMAL);
-
-	rtl8180_update_msr(dev);
-
-	/* These might be unnecessary since we do in rx_enable / tx_enable */
-	fix_rx_fifo(dev);
-	fix_tx_fifo(dev);
-
-	rtl8180_set_mode(dev, EPROM_CMD_CONFIG);
-
-	/*
-	 * The following is very strange. seems to be that 1 means test mode,
-	 * but we need to acknolwledges the nic when a packet is ready
-	 * although we set it to 0
-	 */
-
-	write_nic_byte(dev,
-		       CONFIG2, read_nic_byte(dev, CONFIG2) & ~\
-		       (1<<CONFIG2_DMA_POLLING_MODE_SHIFT));
-	/* ^the nic isn't in test mode */
-	write_nic_byte(dev,
-		       CONFIG2, read_nic_byte(dev, CONFIG2)|(1<<4));
-
-	rtl8180_set_mode(dev, EPROM_CMD_NORMAL);
-
-	write_nic_dword(dev, INT_TIMEOUT, 0);
-
-	write_nic_byte(dev, WPA_CONFIG, 0);
-
-	rtl8180_no_hw_wep(dev);
-
-	rtl8185_set_rate(dev);
-	write_nic_byte(dev, RATE_FALLBACK, 0x81);
-
-	write_nic_byte(dev, GP_ENABLE, read_nic_byte(dev, GP_ENABLE) & ~(1<<6));
-
-	/* FIXME cfg 3 ClkRun enable - isn't it ReadOnly ? */
-	rtl8180_set_mode(dev, EPROM_CMD_CONFIG);
-	write_nic_byte(dev, CONFIG3, read_nic_byte(dev, CONFIG3)
-		       | (1 << CONFIG3_CLKRUN_SHIFT));
-	rtl8180_set_mode(dev, EPROM_CMD_NORMAL);
-
-	priv->rf_init(dev);
-
-	if (priv->rf_set_sens != NULL)
-		priv->rf_set_sens(dev, priv->sens);
-	rtl8180_irq_enable(dev);
-
-	netif_start_queue(dev);
-}
-
-/* 
+/*
  * This configures registers for beacon tx and enables it via
  * rtl8180_beacon_tx_enable(). rtl8180_beacon_tx_disable() might
  * be used to stop beacon transmission
@@ -3208,11 +2832,8 @@ static struct net_device_stats *rtl8180_stats(struct net_device *dev)
 /*
  * Change current and default preamble mode.
  */
-bool
-MgntActSet_802_11_PowerSaveMode(
-	struct r8180_priv *priv,
-	RT_PS_MODE		rtPsMode
-)
+static bool MgntActSet_802_11_PowerSaveMode(struct r8180_priv *priv,
+				     RT_PS_MODE rtPsMode)
 {
 	/* Currently, we do not change power save mode on IBSS mode. */
 	if (priv->ieee80211->iw_mode == IW_MODE_ADHOC)
@@ -3223,15 +2844,16 @@ MgntActSet_802_11_PowerSaveMode(
 	return true;
 }
 
-void LeisurePSEnter(struct r8180_priv *priv)
+static void LeisurePSEnter(struct r8180_priv *priv)
 {
 	if (priv->bLeisurePs) {
 		if (priv->ieee80211->ps == IEEE80211_PS_DISABLED)
-			MgntActSet_802_11_PowerSaveMode(priv, IEEE80211_PS_MBCAST|IEEE80211_PS_UNICAST); /* IEEE80211_PS_ENABLE */
+			/* IEEE80211_PS_ENABLE */
+			MgntActSet_802_11_PowerSaveMode(priv, IEEE80211_PS_MBCAST|IEEE80211_PS_UNICAST);
 	}
 }
 
-void LeisurePSLeave(struct r8180_priv *priv)
+static void LeisurePSLeave(struct r8180_priv *priv)
 {
 	if (priv->bLeisurePs) {
 		if (priv->ieee80211->ps != IEEE80211_PS_DISABLED)
@@ -3288,8 +2910,6 @@ static void MgntLinkKeepAlive(struct r8180_priv *priv)
 	}
 }
 
-static u8 read_acadapter_file(char *filename);
-
 void rtl8180_watch_dog(struct net_device *dev)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
@@ -3299,7 +2919,10 @@ void rtl8180_watch_dog(struct net_device *dev)
 	u16 SlotIndex = 0;
 	u16 i = 0;
 	if (priv->ieee80211->actscanning == false) {
-		if ((priv->ieee80211->iw_mode != IW_MODE_ADHOC) && (priv->ieee80211->state == IEEE80211_NOLINK) && (priv->ieee80211->beinretry == false) && (priv->eRFPowerState == eRfOn))
+		if ((priv->ieee80211->iw_mode != IW_MODE_ADHOC) &&
+		    (priv->ieee80211->state == IEEE80211_NOLINK) &&
+		    (priv->ieee80211->beinretry == false) &&
+		    (priv->eRFPowerState == eRfOn))
 			IPSEnter(dev);
 	}
 	/* YJ,add,080828,for link state check */
@@ -3319,12 +2942,7 @@ void rtl8180_watch_dog(struct net_device *dev)
 	MgntLinkKeepAlive(priv);
 
 	/* YJ,add,080828,for LPS */
-	if (priv->PowerProfile == POWER_PROFILE_BATTERY)
-		priv->bLeisurePs = true;
-	else if (priv->PowerProfile == POWER_PROFILE_AC) {
-		LeisurePSLeave(priv);
-		priv->bLeisurePs = false;
-	}
+	LeisurePSLeave(priv);
 
 	if (priv->ieee80211->state == IEEE80211_LINKED) {
 		priv->link_detect.NumRxOkInPeriod = priv->ieee80211->NumRxDataInPeriod;
@@ -3351,7 +2969,7 @@ void rtl8180_watch_dog(struct net_device *dev)
 	priv->ieee80211->NumRxBcnInPeriod = 0;
 }
 
-int _rtl8180_up(struct net_device *dev)
+static int _rtl8180_up(struct net_device *dev)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
 
@@ -3373,7 +2991,7 @@ int _rtl8180_up(struct net_device *dev)
 	return 0;
 }
 
-int rtl8180_open(struct net_device *dev)
+static int rtl8180_open(struct net_device *dev)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
 	int ret;
@@ -3394,7 +3012,7 @@ int rtl8180_up(struct net_device *dev)
 	return _rtl8180_up(dev);
 }
 
-int rtl8180_close(struct net_device *dev)
+static int rtl8180_close(struct net_device *dev)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
 	int ret;
@@ -3447,7 +3065,7 @@ void rtl8180_restart_wq(struct work_struct *work)
 	up(&priv->wx_sem);
 }
 
-void rtl8180_restart(struct net_device *dev)
+static void rtl8180_restart(struct net_device *dev)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
 
@@ -3459,7 +3077,7 @@ void rtl8180_commit(struct net_device *dev)
 	struct r8180_priv *priv = ieee80211_priv(dev);
 
 	if (priv->up == 0)
-		return ;
+		return;
 
 	del_timer_sync(&priv->watch_dog_timer);
 	del_timer_sync(&priv->rateadapter_timer);
@@ -3488,7 +3106,7 @@ static void r8180_set_multicast(struct net_device *dev)
 	priv->promisc = promisc;
 }
 
-int r8180_set_mac_adr(struct net_device *dev, void *mac)
+static int r8180_set_mac_adr(struct net_device *dev, void *mac)
 {
 	struct r8180_priv *priv = ieee80211_priv(dev);
 	struct sockaddr *addr = mac;
@@ -3511,7 +3129,7 @@ int r8180_set_mac_adr(struct net_device *dev, void *mac)
 }
 
 /* based on ipw2200 driver */
-int rtl8180_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
+static int rtl8180_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 {
 	struct r8180_priv *priv = (struct r8180_priv *)ieee80211_priv(dev);
 	struct iwreq *wrq = (struct iwreq *) rq;
@@ -3541,8 +3159,8 @@ static const struct net_device_ops rtl8180_netdev_ops = {
 	.ndo_start_xmit		= ieee80211_rtl_xmit,
 };
 
-static int __devinit rtl8180_pci_probe(struct pci_dev *pdev,
-				       const struct pci_device_id *id)
+static int rtl8180_pci_probe(struct pci_dev *pdev,
+			     const struct pci_device_id *id)
 {
 	unsigned long ioaddr = 0;
 	struct net_device *dev = NULL;
@@ -3624,7 +3242,8 @@ static int __devinit rtl8180_pci_probe(struct pci_dev *pdev,
 
 	netif_carrier_off(dev);
 
-	register_netdev(dev);
+	if (register_netdev(dev))
+		goto fail1;
 
 	rtl8180_proc_init_one(dev);
 
@@ -3632,7 +3251,7 @@ static int __devinit rtl8180_pci_probe(struct pci_dev *pdev,
 	return 0;
 fail1:
 	if (dev->mem_start != (unsigned long)NULL) {
-		iounmap((void *)dev->mem_start);
+		iounmap((void __iomem *)dev->mem_start);
 		release_mem_region(pci_resource_start(pdev, 1),
 				   pci_resource_len(pdev, 1));
 	}
@@ -3649,11 +3268,10 @@ fail_free:
 	pci_disable_device(pdev);
 
 	DMESG("wlan driver load failed\n");
-	pci_set_drvdata(pdev, NULL);
 	return ret;
 }
 
-static void __devexit rtl8180_pci_remove(struct pci_dev *pdev)
+static void rtl8180_pci_remove(struct pci_dev *pdev)
 {
 	struct r8180_priv *priv;
 	struct net_device *dev = pci_get_drvdata(pdev);
@@ -3679,7 +3297,7 @@ static void __devexit rtl8180_pci_remove(struct pci_dev *pdev)
 		free_tx_desc_rings(dev);
 
 		if (dev->mem_start != (unsigned long)NULL) {
-			iounmap((void *)dev->mem_start);
+			iounmap((void __iomem *)dev->mem_start);
 			release_mem_region(pci_resource_start(pdev, 1),
 					   pci_resource_len(pdev, 1));
 		}
@@ -3691,48 +3309,38 @@ static void __devexit rtl8180_pci_remove(struct pci_dev *pdev)
 	DMESG("wlan driver removed\n");
 }
 
-/* fun with the built-in ieee80211 stack... */
-extern int ieee80211_crypto_init(void);
-extern void ieee80211_crypto_deinit(void);
-extern int ieee80211_crypto_tkip_init(void);
-extern void ieee80211_crypto_tkip_exit(void);
-extern int ieee80211_crypto_ccmp_init(void);
-extern void ieee80211_crypto_ccmp_exit(void);
-extern int ieee80211_crypto_wep_init(void);
-extern void ieee80211_crypto_wep_exit(void);
-
 static int __init rtl8180_pci_module_init(void)
 {
 	int ret;
 
 	ret = ieee80211_crypto_init();
 	if (ret) {
-		printk(KERN_ERR "ieee80211_crypto_init() failed %d\n", ret);
+		pr_err("ieee80211_crypto_init() failed %d\n", ret);
 		return ret;
 	}
 	ret = ieee80211_crypto_tkip_init();
 	if (ret) {
-		printk(KERN_ERR "ieee80211_crypto_tkip_init() failed %d\n", ret);
+		pr_err("ieee80211_crypto_tkip_init() failed %d\n", ret);
 		return ret;
 	}
 	ret = ieee80211_crypto_ccmp_init();
 	if (ret) {
-		printk(KERN_ERR "ieee80211_crypto_ccmp_init() failed %d\n", ret);
+		pr_err("ieee80211_crypto_ccmp_init() failed %d\n", ret);
 		return ret;
 	}
 	ret = ieee80211_crypto_wep_init();
 	if (ret) {
-		printk(KERN_ERR "ieee80211_crypto_wep_init() failed %d\n", ret);
+		pr_err("ieee80211_crypto_wep_init() failed %d\n", ret);
 		return ret;
 	}
 
-	printk(KERN_INFO "\nLinux kernel driver for RTL8180 / RTL8185 based WLAN cards\n");
-	printk(KERN_INFO "Copyright (c) 2004-2005, Andrea Merello\n");
+	pr_info("\nLinux kernel driver for RTL8180 / RTL8185 based WLAN cards\n");
+	pr_info("Copyright (c) 2004-2005, Andrea Merello\n");
 	DMESG("Initializing module");
 	DMESG("Wireless extensions version %d", WIRELESS_EXT);
 	rtl8180_proc_module_init();
 
-      if (pci_register_driver(&rtl8180_pci_driver)) {
+	if (pci_register_driver(&rtl8180_pci_driver)) {
 		DMESG("No device found");
 		return -ENODEV;
 	}
@@ -3750,7 +3358,7 @@ static void __exit rtl8180_pci_module_exit(void)
 	DMESG("Exiting");
 }
 
-void rtl8180_try_wake_queue(struct net_device *dev, int pri)
+static void rtl8180_try_wake_queue(struct net_device *dev, int pri)
 {
 	unsigned long flags;
 	short enough_desc;
@@ -3764,7 +3372,7 @@ void rtl8180_try_wake_queue(struct net_device *dev, int pri)
 		ieee80211_rtl_wake_queue(priv->ieee80211);
 }
 
-void rtl8180_tx_isr(struct net_device *dev, int pri, short error)
+static void rtl8180_tx_isr(struct net_device *dev, int pri, short error)
 {
 	struct r8180_priv *priv = (struct r8180_priv *)ieee80211_priv(dev);
 	u32 *tail; /* tail virtual addr */
@@ -3827,10 +3435,10 @@ void rtl8180_tx_isr(struct net_device *dev, int pri, short error)
 
 	default:
 		spin_unlock_irqrestore(&priv->tx_lock, flag);
-		return ;
+		return;
 	}
 
-	nicv = (u32 *)((nic - nicbegin) + (u8*)begin);
+	nicv = (u32 *)((nic - nicbegin) + (u8 *)begin);
 	if ((head <= tail && (nicv > tail || nicv < head)) ||
 		(head > tail && (nicv > tail && nicv < head))) {
 			DMESGW("nic has lost pointer");
@@ -3839,7 +3447,7 @@ void rtl8180_tx_isr(struct net_device *dev, int pri, short error)
 			return;
 		}
 
-	/* 
+	/*
 	 * We check all the descriptors between the head and the nic,
 	 * but not the currently pointed by the nic (the next to be txed)
 	 * and the previous of the pointed (might be in process ??)
@@ -3877,7 +3485,7 @@ void rtl8180_tx_isr(struct net_device *dev, int pri, short error)
 			head += 8;
 	}
 
-	/* 
+	/*
 	 * The head has been moved to the last certainly TXed
 	 * (or at least processed by the nic) packet.
 	 * The driver take forcefully owning of all these packets
@@ -3918,16 +3526,7 @@ void rtl8180_tx_isr(struct net_device *dev, int pri, short error)
 	spin_unlock_irqrestore(&priv->tx_lock, flag);
 }
 
-void rtl8180_tx_irq_wq(struct work_struct *work)
-{
-	struct delayed_work *dwork = to_delayed_work(work);
-	struct ieee80211_device * ieee = (struct ieee80211_device *)
-		container_of(dwork, struct ieee80211_device, watch_dog_wq);
-	struct net_device *dev = ieee->dev;
-
-	rtl8180_tx_isr(dev, MANAGE_PRIORITY, 0);
-}
-irqreturn_t rtl8180_interrupt(int irq, void *netdev, struct pt_regs *regs)
+static irqreturn_t rtl8180_interrupt(int irq, void *netdev)
 {
 	struct net_device *dev = (struct net_device *) netdev;
 	struct r8180_priv *priv = (struct r8180_priv *)ieee80211_priv(dev);
@@ -3956,7 +3555,7 @@ irqreturn_t rtl8180_interrupt(int irq, void *netdev, struct pt_regs *regs)
 	}
 
 	if (inta == 0xffff) {
-		/* HW disappared */
+		/* HW disappeared */
 		spin_unlock_irqrestore(&priv->irq_th_lock, flags);
 		return IRQ_HANDLED;
 	}
@@ -3999,7 +3598,7 @@ irqreturn_t rtl8180_interrupt(int irq, void *netdev, struct pt_regs *regs)
 		priv->stats.txbkperr++;
 		priv->ieee80211->stats.tx_errors++;
 		rtl8180_tx_isr(dev, BK_PRIORITY, 1);
-		rtl8180_try_wake_queue(dev, BE_PRIORITY);
+		rtl8180_try_wake_queue(dev, BK_PRIORITY);
 	}
 
 	if (inta & ISR_TBEDER) { /* corresponding to BE_PRIORITY */
@@ -4053,6 +3652,7 @@ irqreturn_t rtl8180_interrupt(int irq, void *netdev, struct pt_regs *regs)
 		priv->link_detect.NumTxOkInPeriod++; /* YJ,add,080828 */
 		priv->stats.txnpokint++;
 		rtl8180_tx_isr(dev, NORM_PRIORITY, 0);
+		rtl8180_try_wake_queue(dev, NORM_PRIORITY);
 	}
 
 	if (inta & ISR_TLPDOK) { /* Low priority tx ok */
@@ -4099,10 +3699,7 @@ void GPIOChangeRFWorkItemCallBack(struct work_struct *work)
 	char *argv[3];
 	static char *RadioPowerPath = "/etc/acpi/events/RadioPower.sh";
 	static char *envp[] = {"HOME=/", "TERM=linux", "PATH=/usr/bin:/bin", NULL};
-	static int readf_count = 0;
-
-	if (readf_count % 10 == 0)
-		priv->PowerProfile = read_acadapter_file("/proc/acpi/ac_adapter/AC0/state");
+	static int readf_count;
 
 	readf_count = (readf_count+1)%0xffff;
 	/* We should turn off LED before polling FF51[4]. */
@@ -4144,13 +3741,8 @@ void GPIOChangeRFWorkItemCallBack(struct work_struct *work)
 		argv[0] = RadioPowerPath;
 		argv[2] = NULL;
 
-		call_usermodehelper(RadioPowerPath, argv, envp, 1);
+		call_usermodehelper(RadioPowerPath, argv, envp, UMH_WAIT_PROC);
 	}
-}
-
-static u8 read_acadapter_file(char *filename)
-{
-	return 0;
 }
 
 module_init(rtl8180_pci_module_init);

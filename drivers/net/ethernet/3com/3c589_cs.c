@@ -25,7 +25,6 @@
 #define DRV_VERSION	"1.162-ac"
 
 #include <linux/module.h>
-#include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/ptrace.h>
 #include <linux/slab.h>
@@ -50,7 +49,6 @@
 
 #include <asm/uaccess.h>
 #include <asm/io.h>
-#include <asm/system.h>
 
 /* To minimize the size of the driver source I only define operating
    constants if they are used several times.  You'll need the manual
@@ -819,7 +817,7 @@ static int el3_rx(struct net_device *dev)
 	    short pkt_len = rx_status & 0x7ff;
 	    struct sk_buff *skb;
 
-	    skb = dev_alloc_skb(pkt_len+5);
+	    skb = netdev_alloc_skb(dev, pkt_len + 5);
 
 	    netdev_dbg(dev, "    Receiving packet size %d status %4.4x.\n",
 		       pkt_len, rx_status);
@@ -929,16 +927,4 @@ static struct pcmcia_driver tc589_driver = {
 	.suspend	= tc589_suspend,
 	.resume		= tc589_resume,
 };
-
-static int __init init_tc589(void)
-{
-	return pcmcia_register_driver(&tc589_driver);
-}
-
-static void __exit exit_tc589(void)
-{
-	pcmcia_unregister_driver(&tc589_driver);
-}
-
-module_init(init_tc589);
-module_exit(exit_tc589);
+module_pcmcia_driver(tc589_driver);

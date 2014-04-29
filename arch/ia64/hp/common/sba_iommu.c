@@ -43,7 +43,6 @@
 #include <asm/io.h>
 #include <asm/page.h>		/* PAGE_OFFSET */
 #include <asm/dma.h>
-#include <asm/system.h>		/* wmb() */
 
 #include <asm/acpi-ext.h>
 
@@ -256,7 +255,7 @@ static u64 prefetch_spill_page;
 #endif
 
 #ifdef CONFIG_PCI
-# define GET_IOC(dev)	(((dev)->bus == &pci_bus_type)						\
+# define GET_IOC(dev)	((dev_is_pci(dev))						\
 			 ? ((struct ioc *) PCI_CONTROLLER(to_pci_dev(dev))->iommu) : NULL)
 #else
 # define GET_IOC(dev)	NULL
@@ -1130,7 +1129,8 @@ void sba_unmap_single_attrs(struct device *dev, dma_addr_t iova, size_t size,
  * See Documentation/DMA-API-HOWTO.txt
  */
 static void *
-sba_alloc_coherent (struct device *dev, size_t size, dma_addr_t *dma_handle, gfp_t flags)
+sba_alloc_coherent(struct device *dev, size_t size, dma_addr_t *dma_handle,
+		   gfp_t flags, struct dma_attrs *attrs)
 {
 	struct ioc *ioc;
 	void *addr;
@@ -1192,8 +1192,8 @@ sba_alloc_coherent (struct device *dev, size_t size, dma_addr_t *dma_handle, gfp
  *
  * See Documentation/DMA-API-HOWTO.txt
  */
-static void sba_free_coherent (struct device *dev, size_t size, void *vaddr,
-			       dma_addr_t dma_handle)
+static void sba_free_coherent(struct device *dev, size_t size, void *vaddr,
+			      dma_addr_t dma_handle, struct dma_attrs *attrs)
 {
 	sba_unmap_single_attrs(dev, dma_handle, size, 0, NULL);
 	free_pages((unsigned long) vaddr, get_order(size));
@@ -1992,7 +1992,7 @@ sba_connect_bus(struct pci_bus *bus)
 	if (PCI_CONTROLLER(bus)->iommu)
 		return;
 
-	handle = PCI_CONTROLLER(bus)->acpi_handle;
+	handle = acpi_device_handle(PCI_CONTROLLER(bus)->companion);
 	if (!handle)
 		return;
 
@@ -2042,7 +2042,8 @@ sba_map_ioc_to_node(struct ioc *ioc, acpi_handle handle)
 #endif
 
 static int __init
-acpi_sba_ioc_add(struct acpi_device *device)
+acpi_sba_ioc_add(struct acpi_device *device,
+		 const struct acpi_device_id *not_used)
 {
 	struct ioc *ioc;
 	acpi_status status;
@@ -2090,13 +2091,17 @@ static const struct acpi_device_id hp_ioc_iommu_device_ids[] = {
 	{"HWP0004", 0},
 	{"", 0},
 };
-static struct acpi_driver acpi_sba_ioc_driver = {
-	.name		= "IOC IOMMU Driver",
-	.ids		= hp_ioc_iommu_device_ids,
-	.ops		= {
-		.add	= acpi_sba_ioc_add,
-	},
+static struct acpi_scan_handler acpi_sba_ioc_handler = {
+	.ids	= hp_ioc_iommu_device_ids,
+	.attach	= acpi_sba_ioc_add,
 };
+
+static int __init acpi_sba_ioc_init_acpi(void)
+{
+	return acpi_scan_add_handler(&acpi_sba_ioc_handler);
+}
+/* This has to run before acpi_scan_init(). */
+arch_initcall(acpi_sba_ioc_init_acpi);
 
 extern struct dma_map_ops swiotlb_dma_ops;
 
@@ -2122,7 +2127,10 @@ sba_init(void)
 	}
 #endif
 
-	acpi_bus_register_driver(&acpi_sba_ioc_driver);
+	/*
+	 * ioc_list should be populated by the acpi_sba_ioc_handler's .attach()
+	 * routine, but that only happens if acpi_scan_init() has already run.
+	 */
 	if (!ioc_list) {
 #ifdef CONFIG_IA64_GENERIC
 		/*
@@ -2213,8 +2221,8 @@ sba_page_override(char *str)
 __setup("sbapagesize=",sba_page_override);
 
 struct dma_map_ops sba_dma_ops = {
-	.alloc_coherent		= sba_alloc_coherent,
-	.free_coherent		= sba_free_coherent,
+	.alloc			= sba_alloc_coherent,
+	.free			= sba_free_coherent,
 	.map_page		= sba_map_page,
 	.unmap_page		= sba_unmap_page,
 	.map_sg			= sba_map_sg_attrs,

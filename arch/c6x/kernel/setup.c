@@ -34,6 +34,7 @@
 #include <asm/dscr.h>
 #include <asm/clock.h>
 #include <asm/soc.h>
+#include <asm/special_insns.h>
 
 static const char *c6x_soc_name;
 
@@ -66,13 +67,6 @@ unsigned long ram_end;
 /* Uncached memory for DMA consistent use (memdma=) */
 static unsigned long dma_start __initdata;
 static unsigned long dma_size __initdata;
-
-char c6x_command_line[COMMAND_LINE_SIZE];
-
-#if defined(CONFIG_CMDLINE_BOOL)
-static const char default_command_line[COMMAND_LINE_SIZE] __section(.cmdline) =
-	CONFIG_CMDLINE;
-#endif
 
 struct cpuinfo_c6x {
 	const char *cpu_name;
@@ -140,6 +134,10 @@ static void __init get_cpuinfo(void)
 		break;
 	case 16:
 		p->cpu_name = "C64x+";
+		p->cpu_voltage = "1.2";
+		break;
+	case 21:
+		p->cpu_name = "C66X";
 		p->cpu_voltage = "1.2";
 		break;
 	default:
@@ -289,10 +287,8 @@ notrace void __init machine_init(unsigned long dt_ptr)
 		fdt = dtb;
 
 	/* Do some early initialization based on the flat device tree */
-	early_init_devtree(fdt);
+	early_init_dt_scan(fdt);
 
-	/* parse_early_param needs a boot_command_line */
-	strlcpy(boot_command_line, c6x_command_line, COMMAND_LINE_SIZE);
 	parse_early_param();
 }
 
@@ -304,7 +300,7 @@ void __init setup_arch(char **cmdline_p)
 	printk(KERN_INFO "Initializing kernel\n");
 
 	/* Initialize command line */
-	*cmdline_p = c6x_command_line;
+	*cmdline_p = boot_command_line;
 
 	memory_end = ram_end;
 	memory_end &= ~(PAGE_SIZE - 1);

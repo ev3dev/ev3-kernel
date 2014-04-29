@@ -78,8 +78,7 @@ static int parse_redboot_partitions(struct mtd_info *master,
 
 	if ( directory < 0 ) {
 		offset = master->size + directory * master->erasesize;
-		while (mtd_can_have_bb(master) &&
-		       mtd_block_isbad(master, offset)) {
+		while (mtd_block_isbad(master, offset)) {
 			if (!offset) {
 			nogood:
 				printk(KERN_NOTICE "Failed to find a non-bad block to check for RedBoot partition table\n");
@@ -89,8 +88,7 @@ static int parse_redboot_partitions(struct mtd_info *master,
 		}
 	} else {
 		offset = directory * master->erasesize;
-		while (mtd_can_have_bb(master) &&
-		       mtd_block_isbad(master, offset)) {
+		while (mtd_block_isbad(master, offset)) {
 			offset += master->erasesize;
 			if (offset == master->size)
 				goto nogood;
@@ -302,7 +300,8 @@ MODULE_ALIAS("RedBoot");
 
 static int __init redboot_parser_init(void)
 {
-	return register_mtd_parser(&redboot_parser);
+	register_mtd_parser(&redboot_parser);
+	return 0;
 }
 
 static void __exit redboot_parser_exit(void)

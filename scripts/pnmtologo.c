@@ -105,8 +105,8 @@ static unsigned int get_number(FILE *fp)
     while (isdigit(c)) {
 	val = 10*val+c-'0';
 	/* some PBM are 'broken'; GiMP for example exports a PBM without space
-	 * between the digits. This is Ok cause we know a PBM can only have a
-	 * '1' or a '0' for the digit. */
+	 * between the digits. This is Ok cause we know a PBM can only have a '1'
+	 * or a '0' for the digit. */
 	if (is_plain_pbm)
 		break;
 	c = fgetc(fp);

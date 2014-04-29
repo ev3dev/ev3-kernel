@@ -23,13 +23,14 @@
 #ifndef _MEDIA_DEVICE_H
 #define _MEDIA_DEVICE_H
 
-#include <linux/device.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
 #include <linux/spinlock.h>
 
 #include <media/media-devnode.h>
 #include <media/media-entity.h>
+
+struct device;
 
 /**
  * struct media_device - Media device
@@ -44,6 +45,7 @@
  * @entities:	List of registered entities
  * @lock:	Entities list lock
  * @graph_mutex: Entities graph operation lock
+ * @link_notify: Link state change notification callback
  *
  * This structure represents an abstract high-level media device. It allows easy
  * access to entities and provides basic media device-level support. The
@@ -74,9 +76,13 @@ struct media_device {
 	/* Serializes graph operations. */
 	struct mutex graph_mutex;
 
-	int (*link_notify)(struct media_pad *source,
-			   struct media_pad *sink, u32 flags);
+	int (*link_notify)(struct media_link *link, u32 flags,
+			   unsigned int notification);
 };
+
+/* Supported link_notify @notification values. */
+#define MEDIA_DEV_NOTIFY_PRE_LINK_CH	0
+#define MEDIA_DEV_NOTIFY_POST_LINK_CH	1
 
 /* media_devnode to media_device */
 #define to_media_device(node) container_of(node, struct media_device, devnode)

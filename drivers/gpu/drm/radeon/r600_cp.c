@@ -24,13 +24,14 @@
  * Authors:
  *     Dave Airlie <airlied@redhat.com>
  *     Alex Deucher <alexander.deucher@amd.com>
+ *
+ * ------------------------ This file is DEPRECATED! -------------------------
  */
 
 #include <linux/module.h>
 
-#include "drmP.h"
-#include "drm.h"
-#include "radeon_drm.h"
+#include <drm/drmP.h>
+#include <drm/radeon_drm.h>
 #include "radeon_drv.h"
 
 #define PFP_UCODE_SIZE 576
@@ -407,7 +408,7 @@ static void r600_cp_load_microcode(drm_radeon_private_t *dev_priv)
 
 	RADEON_WRITE(R600_GRBM_SOFT_RESET, R600_SOFT_RESET_CP);
 	RADEON_READ(R600_GRBM_SOFT_RESET);
-	DRM_UDELAY(15000);
+	mdelay(15);
 	RADEON_WRITE(R600_GRBM_SOFT_RESET, 0);
 
 	fw_data = (const __be32 *)dev_priv->me_fw->data;
@@ -500,7 +501,7 @@ static void r700_cp_load_microcode(drm_radeon_private_t *dev_priv)
 
 	RADEON_WRITE(R600_GRBM_SOFT_RESET, R600_SOFT_RESET_CP);
 	RADEON_READ(R600_GRBM_SOFT_RESET);
-	DRM_UDELAY(15000);
+	mdelay(15);
 	RADEON_WRITE(R600_GRBM_SOFT_RESET, 0);
 
 	fw_data = (const __be32 *)dev_priv->pfp_fw->data;
@@ -722,12 +723,7 @@ static u32 r600_get_tile_pipe_to_backend_map(u32 num_tile_pipes,
 
 static int r600_count_pipe_bits(uint32_t val)
 {
-	int i, ret = 0;
-	for (i = 0; i < 32; i++) {
-		ret += val & 1;
-		val >>= 1;
-	}
-	return ret;
+	return hweight32(val);
 }
 
 static void r600_gfx_init(struct drm_device *dev,
@@ -1797,7 +1793,7 @@ static void r600_cp_init_ring_buffer(struct drm_device *dev,
 
 	RADEON_WRITE(R600_GRBM_SOFT_RESET, R600_SOFT_RESET_CP);
 	RADEON_READ(R600_GRBM_SOFT_RESET);
-	DRM_UDELAY(15000);
+	mdelay(15);
 	RADEON_WRITE(R600_GRBM_SOFT_RESET, 0);
 
 
@@ -2204,13 +2200,13 @@ int r600_do_init_cp(struct drm_device *dev, drm_radeon_init_t *init,
 	dev_priv->ring.end = ((u32 *) dev_priv->cp_ring->handle
 			      + init->ring_size / sizeof(u32));
 	dev_priv->ring.size = init->ring_size;
-	dev_priv->ring.size_l2qw = drm_order(init->ring_size / 8);
+	dev_priv->ring.size_l2qw = order_base_2(init->ring_size / 8);
 
 	dev_priv->ring.rptr_update = /* init->rptr_update */ 4096;
-	dev_priv->ring.rptr_update_l2qw = drm_order(/* init->rptr_update */ 4096 / 8);
+	dev_priv->ring.rptr_update_l2qw = order_base_2(/* init->rptr_update */ 4096 / 8);
 
 	dev_priv->ring.fetch_size = /* init->fetch_size */ 32;
-	dev_priv->ring.fetch_size_l2ow = drm_order(/* init->fetch_size */ 32 / 16);
+	dev_priv->ring.fetch_size_l2ow = order_base_2(/* init->fetch_size */ 32 / 16);
 
 	dev_priv->ring.tail_mask = (dev_priv->ring.size / sizeof(u32)) - 1;
 
@@ -2519,7 +2515,7 @@ int r600_cp_dispatch_texture(struct drm_device *dev,
 		buf = radeon_freelist_get(dev);
 		if (!buf) {
 			DRM_DEBUG("EAGAIN\n");
-			if (DRM_COPY_TO_USER(tex->image, image, sizeof(*image)))
+			if (copy_to_user(tex->image, image, sizeof(*image)))
 				return -EFAULT;
 			return -EAGAIN;
 		}
@@ -2532,7 +2528,7 @@ int r600_cp_dispatch_texture(struct drm_device *dev,
 		buffer =
 		    (u32 *) ((char *)dev->agp_buffer_map->handle + buf->offset);
 
-		if (DRM_COPY_FROM_USER(buffer, data, pass_size)) {
+		if (copy_from_user(buffer, data, pass_size)) {
 			DRM_ERROR("EFAULT on pad, %d bytes\n", pass_size);
 			return -EFAULT;
 		}

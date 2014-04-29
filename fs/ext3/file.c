@@ -18,12 +18,8 @@
  *	(jj@sunsite.ms.mff.cuni.cz)
  */
 
-#include <linux/time.h>
-#include <linux/fs.h>
-#include <linux/jbd.h>
 #include <linux/quotaops.h>
-#include <linux/ext3_fs.h>
-#include <linux/ext3_jbd.h>
+#include "ext3.h"
 #include "xattr.h"
 #include "acl.h"
 
@@ -79,6 +75,7 @@ const struct inode_operations ext3_file_inode_operations = {
 	.removexattr	= generic_removexattr,
 #endif
 	.get_acl	= ext3_get_acl,
+	.set_acl	= ext3_set_acl,
 	.fiemap		= ext3_fiemap,
 };
 

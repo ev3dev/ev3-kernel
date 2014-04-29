@@ -2,7 +2,7 @@
  * sca3000.c -- support VTI sca3000 series accelerometers
  *              via SPI
  *
- * Copyright (c) 2007 Jonathan Cameron <jic23@cam.ac.uk>
+ * Copyright (c) 2007 Jonathan Cameron <jic23@kernel.org>
  *
  * Partly based upon tle62x0.c
  *
@@ -136,7 +136,7 @@
 #define SCA3000_INT_MASK_ACTIVE_HIGH		0x01
 #define SCA3000_INT_MASK_ACTIVE_LOW		0x00
 
-/* Values of mulipexed registers (write to ctrl_data after select) */
+/* Values of multiplexed registers (write to ctrl_data after select) */
 #define SCA3000_REG_ADDR_CTRL_DATA		0x22
 
 /* Measurement modes available on some sca3000 series chips. Code assumes others

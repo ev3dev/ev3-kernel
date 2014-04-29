@@ -45,10 +45,8 @@
 static int corgi_jack_func;
 static int corgi_spk_func;
 
-static void corgi_ext_control(struct snd_soc_codec *codec)
+static void corgi_ext_control(struct snd_soc_dapm_context *dapm)
 {
-	struct snd_soc_dapm_context *dapm = &codec->dapm;
-
 	/* set up jack connection */
 	switch (corgi_jack_func) {
 	case CORGI_HP:
@@ -104,7 +102,7 @@ static int corgi_startup(struct snd_pcm_substream *substream)
 	mutex_lock(&codec->mutex);
 
 	/* check the jack status at stream startup */
-	corgi_ext_control(codec);
+	corgi_ext_control(&codec->dapm);
 
 	mutex_unlock(&codec->mutex);
 
@@ -173,13 +171,13 @@ static int corgi_get_jack(struct snd_kcontrol *kcontrol,
 static int corgi_set_jack(struct snd_kcontrol *kcontrol,
 	struct snd_ctl_elem_value *ucontrol)
 {
-	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct snd_soc_card *card = snd_kcontrol_chip(kcontrol);
 
 	if (corgi_jack_func == ucontrol->value.integer.value[0])
 		return 0;
 
 	corgi_jack_func = ucontrol->value.integer.value[0];
-	corgi_ext_control(codec);
+	corgi_ext_control(&card->dapm);
 	return 1;
 }
 
@@ -193,13 +191,13 @@ static int corgi_get_spk(struct snd_kcontrol *kcontrol,
 static int corgi_set_spk(struct snd_kcontrol *kcontrol,
 	struct snd_ctl_elem_value *ucontrol)
 {
-	struct snd_soc_codec *codec =  snd_kcontrol_chip(kcontrol);
+	struct snd_soc_card *card =  snd_kcontrol_chip(kcontrol);
 
 	if (corgi_spk_func == ucontrol->value.integer.value[0])
 		return 0;
 
 	corgi_spk_func = ucontrol->value.integer.value[0];
-	corgi_ext_control(codec);
+	corgi_ext_control(&card->dapm);
 	return 1;
 }
 
@@ -305,7 +303,7 @@ static struct snd_soc_card corgi = {
 	.num_dapm_routes = ARRAY_SIZE(corgi_audio_map),
 };
 
-static int __devinit corgi_probe(struct platform_device *pdev)
+static int corgi_probe(struct platform_device *pdev)
 {
 	struct snd_soc_card *card = &corgi;
 	int ret;
@@ -319,7 +317,7 @@ static int __devinit corgi_probe(struct platform_device *pdev)
 	return ret;
 }
 
-static int __devexit corgi_remove(struct platform_device *pdev)
+static int corgi_remove(struct platform_device *pdev)
 {
 	struct snd_soc_card *card = platform_get_drvdata(pdev);
 
@@ -331,9 +329,10 @@ static struct platform_driver corgi_driver = {
 	.driver		= {
 		.name	= "corgi-audio",
 		.owner	= THIS_MODULE,
+		.pm     = &snd_soc_pm_ops,
 	},
 	.probe		= corgi_probe,
-	.remove		= __devexit_p(corgi_remove),
+	.remove		= corgi_remove,
 };
 
 module_platform_driver(corgi_driver);

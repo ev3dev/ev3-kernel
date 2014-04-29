@@ -59,6 +59,13 @@ struct popc_6insn_patch_entry {
 extern struct popc_6insn_patch_entry __popc_6insn_patch,
 	__popc_6insn_patch_end;
 
+struct pause_patch_entry {
+	unsigned int	addr;
+	unsigned int	insns[3];
+};
+extern struct pause_patch_entry __pause_3insn_patch,
+	__pause_3insn_patch_end;
+
 extern void __init per_cpu_patch(void);
 extern void sun4v_patch_1insn_range(struct sun4v_1insn_patch_entry *,
 				    struct sun4v_1insn_patch_entry *);
@@ -81,7 +88,6 @@ extern asmlinkage void syscall_trace_leave(struct pt_regs *regs);
 
 extern void bad_trap_tl1(struct pt_regs *regs, long lvl);
 
-extern void do_fpe_common(struct pt_regs *regs);
 extern void do_fpieee(struct pt_regs *regs);
 extern void do_fpother(struct pt_regs *regs);
 extern void do_tof(struct pt_regs *regs);
@@ -243,7 +249,7 @@ extern struct ino_bucket *ivector_table;
 extern unsigned long ivector_table_pa;
 
 extern void init_irqwork_curcpu(void);
-extern void __cpuinit sun4v_register_mondo_queues(int this_cpu);
+extern void sun4v_register_mondo_queues(int this_cpu);
 
 #endif /* CONFIG_SPARC32 */
 #endif /* _ENTRY_H */

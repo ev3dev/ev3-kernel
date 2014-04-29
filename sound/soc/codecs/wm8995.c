@@ -549,12 +549,9 @@ static int check_clk_sys(struct snd_soc_dapm_widget *source,
 static int wm8995_put_class_w(struct snd_kcontrol *kcontrol,
 			      struct snd_ctl_elem_value *ucontrol)
 {
-	struct snd_soc_dapm_widget_list *wlist = snd_kcontrol_chip(kcontrol);
-	struct snd_soc_dapm_widget *w = wlist->widgets[0];
-	struct snd_soc_codec *codec;
+	struct snd_soc_codec *codec = snd_soc_dapm_kcontrol_codec(kcontrol);
 	int ret;
 
-	codec = w->codec;
 	ret = snd_soc_dapm_put_volsw(kcontrol, ucontrol);
 	wm8995_update_class_w(codec);
 	return ret;
@@ -2047,7 +2044,6 @@ static int wm8995_probe(struct snd_soc_codec *codec)
 	int i;
 	int ret;
 
-	codec->dapm.idle_bias_off = 1;
 	wm8995 = snd_soc_codec_get_drvdata(codec);
 	wm8995->codec = codec;
 
@@ -2137,7 +2133,7 @@ static int wm8995_probe(struct snd_soc_codec *codec)
 
 	wm8995_update_class_w(codec);
 
-	snd_soc_add_controls(codec, wm8995_snd_controls,
+	snd_soc_add_codec_controls(codec, wm8995_snd_controls,
 			     ARRAY_SIZE(wm8995_snd_controls));
 	snd_soc_dapm_new_controls(&codec->dapm, wm8995_dapm_widgets,
 				  ARRAY_SIZE(wm8995_dapm_widgets));
@@ -2241,6 +2237,7 @@ static struct snd_soc_codec_driver soc_codec_dev_wm8995 = {
 	.suspend = wm8995_suspend,
 	.resume = wm8995_resume,
 	.set_bias_level = wm8995_set_bias_level,
+	.idle_bias_off = true,
 };
 
 static struct regmap_config wm8995_regmap = {
@@ -2256,46 +2253,33 @@ static struct regmap_config wm8995_regmap = {
 };
 
 #if defined(CONFIG_SPI_MASTER)
-static int __devinit wm8995_spi_probe(struct spi_device *spi)
+static int wm8995_spi_probe(struct spi_device *spi)
 {
 	struct wm8995_priv *wm8995;
 	int ret;
 
-	wm8995 = kzalloc(sizeof *wm8995, GFP_KERNEL);
+	wm8995 = devm_kzalloc(&spi->dev, sizeof(*wm8995), GFP_KERNEL);
 	if (!wm8995)
 		return -ENOMEM;
 
 	spi_set_drvdata(spi, wm8995);
 
-	wm8995->regmap = regmap_init_spi(spi, &wm8995_regmap);
+	wm8995->regmap = devm_regmap_init_spi(spi, &wm8995_regmap);
 	if (IS_ERR(wm8995->regmap)) {
 		ret = PTR_ERR(wm8995->regmap);
 		dev_err(&spi->dev, "Failed to register regmap: %d\n", ret);
-		goto err_alloc;
+		return ret;
 	}
 
 	ret = snd_soc_register_codec(&spi->dev,
 				     &soc_codec_dev_wm8995, wm8995_dai,
 				     ARRAY_SIZE(wm8995_dai));
-	if (ret < 0)
-		goto err_regmap;
-
-	return ret;
-
-err_regmap:
-	regmap_exit(wm8995->regmap);
-err_alloc:
-	kfree(wm8995);
-
 	return ret;
 }
 
-static int __devexit wm8995_spi_remove(struct spi_device *spi)
+static int wm8995_spi_remove(struct spi_device *spi)
 {
-	struct wm8995_priv *wm8995 = spi_get_drvdata(spi);
 	snd_soc_unregister_codec(&spi->dev);
-	regmap_exit(wm8995->regmap);
-	kfree(wm8995);
 	return 0;
 }
 
@@ -2305,55 +2289,42 @@ static struct spi_driver wm8995_spi_driver = {
 		.owner = THIS_MODULE,
 	},
 	.probe = wm8995_spi_probe,
-	.remove = __devexit_p(wm8995_spi_remove)
+	.remove = wm8995_spi_remove
 };
 #endif
 
-#if defined(CONFIG_I2C) || defined(CONFIG_I2C_MODULE)
-static __devinit int wm8995_i2c_probe(struct i2c_client *i2c,
-				      const struct i2c_device_id *id)
+#if IS_ENABLED(CONFIG_I2C)
+static int wm8995_i2c_probe(struct i2c_client *i2c,
+			    const struct i2c_device_id *id)
 {
 	struct wm8995_priv *wm8995;
 	int ret;
 
-	wm8995 = kzalloc(sizeof *wm8995, GFP_KERNEL);
+	wm8995 = devm_kzalloc(&i2c->dev, sizeof(*wm8995), GFP_KERNEL);
 	if (!wm8995)
 		return -ENOMEM;
 
 	i2c_set_clientdata(i2c, wm8995);
 
-	wm8995->regmap = regmap_init_i2c(i2c, &wm8995_regmap);
+	wm8995->regmap = devm_regmap_init_i2c(i2c, &wm8995_regmap);
 	if (IS_ERR(wm8995->regmap)) {
 		ret = PTR_ERR(wm8995->regmap);
 		dev_err(&i2c->dev, "Failed to register regmap: %d\n", ret);
-		goto err_alloc;
+		return ret;
 	}
 
 	ret = snd_soc_register_codec(&i2c->dev,
 				     &soc_codec_dev_wm8995, wm8995_dai,
 				     ARRAY_SIZE(wm8995_dai));
-	if (ret < 0) {
+	if (ret < 0)
 		dev_err(&i2c->dev, "Failed to register CODEC: %d\n", ret);
-		goto err_regmap;
-	}
-
-	return ret;
-
-err_regmap:
-	regmap_exit(wm8995->regmap);
-err_alloc:
-	kfree(wm8995);
 
 	return ret;
 }
 
-static __devexit int wm8995_i2c_remove(struct i2c_client *client)
+static int wm8995_i2c_remove(struct i2c_client *client)
 {
-	struct wm8995_priv *wm8995 = i2c_get_clientdata(client);
-
 	snd_soc_unregister_codec(&client->dev);
-	regmap_exit(wm8995->regmap);
-	kfree(wm8995);
 	return 0;
 }
 
@@ -2370,7 +2341,7 @@ static struct i2c_driver wm8995_i2c_driver = {
 		.owner = THIS_MODULE,
 	},
 	.probe = wm8995_i2c_probe,
-	.remove = __devexit_p(wm8995_i2c_remove),
+	.remove = wm8995_i2c_remove,
 	.id_table = wm8995_i2c_id
 };
 #endif
@@ -2379,7 +2350,7 @@ static int __init wm8995_modinit(void)
 {
 	int ret = 0;
 
-#if defined(CONFIG_I2C) || defined(CONFIG_I2C_MODULE)
+#if IS_ENABLED(CONFIG_I2C)
 	ret = i2c_add_driver(&wm8995_i2c_driver);
 	if (ret) {
 		printk(KERN_ERR "Failed to register wm8995 I2C driver: %d\n",
@@ -2400,7 +2371,7 @@ module_init(wm8995_modinit);
 
 static void __exit wm8995_exit(void)
 {
-#if defined(CONFIG_I2C) || defined(CONFIG_I2C_MODULE)
+#if IS_ENABLED(CONFIG_I2C)
 	i2c_del_driver(&wm8995_i2c_driver);
 #endif
 #if defined(CONFIG_SPI_MASTER)

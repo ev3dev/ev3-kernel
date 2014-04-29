@@ -8,7 +8,6 @@
 
 #include <linux/module.h>
 #include <linux/kernel.h>
-#include <linux/init.h>
 #include <linux/platform_device.h>
 #include <linux/input.h>
 #include <linux/mfd/adp5520.h>
@@ -69,9 +68,9 @@ static int adp5520_keys_notifier(struct notifier_block *nb,
 	return 0;
 }
 
-static int __devinit adp5520_keys_probe(struct platform_device *pdev)
+static int adp5520_keys_probe(struct platform_device *pdev)
 {
-	struct adp5520_keys_platform_data *pdata = pdev->dev.platform_data;
+	struct adp5520_keys_platform_data *pdata = dev_get_platdata(&pdev->dev);
 	struct input_dev *input;
 	struct adp5520_keys *dev;
 	int ret, i;
@@ -182,7 +181,7 @@ err:
 	return ret;
 }
 
-static int __devexit adp5520_keys_remove(struct platform_device *pdev)
+static int adp5520_keys_remove(struct platform_device *pdev)
 {
 	struct adp5520_keys *dev = platform_get_drvdata(pdev);
 
@@ -200,7 +199,7 @@ static struct platform_driver adp5520_keys_driver = {
 		.owner	= THIS_MODULE,
 	},
 	.probe		= adp5520_keys_probe,
-	.remove		= __devexit_p(adp5520_keys_remove),
+	.remove		= adp5520_keys_remove,
 };
 module_platform_driver(adp5520_keys_driver);
 

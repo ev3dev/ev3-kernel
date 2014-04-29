@@ -24,6 +24,8 @@
  *
  */
 
+#include <linux/linkage.h>
+
 .file "serpent-sse2-i586-asm_32.S"
 .text
 
@@ -463,23 +465,20 @@
 	pand x0,		x4; \
 	pxor x2,		x4;
 
-#define transpose_4x4(x0, x1, x2, x3, t1, t2, t3) \
-	movdqa x2,		t3; \
-	movdqa x0,		t1; \
-	unpcklps x3,		t3; \
+#define transpose_4x4(x0, x1, x2, x3, t0, t1, t2) \
 	movdqa x0,		t2; \
-	unpcklps x1,		t1; \
-	unpckhps x1,		t2; \
-	movdqa t3,		x1; \
-	unpckhps x3,		x2; \
-	movdqa t1,		x0; \
-	movhlps t1,		x1; \
-	movdqa t2,		t1; \
-	movlhps t3,		x0; \
-	movlhps x2,		t1; \
-	movhlps t2,		x2; \
-	movdqa x2,		x3; \
-	movdqa t1,		x2;
+	punpckldq x1,		x0; \
+	punpckhdq x1,		t2; \
+	movdqa x2,		t1; \
+	punpckhdq x3,		x2; \
+	punpckldq x3,		t1; \
+	movdqa x0,		x1; \
+	punpcklqdq t1,		x0; \
+	punpckhqdq t1,		x1; \
+	movdqa t2,		x3; \
+	punpcklqdq x2,		t2; \
+	punpckhqdq x2,		x3; \
+	movdqa t2,		x2;
 
 #define read_blocks(in, x0, x1, x2, x3, t0, t1, t2) \
 	movdqu (0*4*4)(in),	x0; \
@@ -513,11 +512,7 @@
 	pxor t0,		x3; \
 	movdqu x3,		(3*4*4)(out);
 
-.align 8
-.global __serpent_enc_blk_4way
-.type   __serpent_enc_blk_4way,@function;
-
-__serpent_enc_blk_4way:
+ENTRY(__serpent_enc_blk_4way)
 	/* input:
 	 *	arg_ctx(%esp): ctx, CTX
 	 *	arg_dst(%esp): dst
@@ -569,22 +564,19 @@ __serpent_enc_blk_4way:
 	movl arg_dst(%esp), %eax;
 
 	cmpb $0, arg_xor(%esp);
-	jnz __enc_xor4;
+	jnz .L__enc_xor4;
 
 	write_blocks(%eax, RA, RB, RC, RD, RT0, RT1, RE);
 
 	ret;
 
-__enc_xor4:
+.L__enc_xor4:
 	xor_blocks(%eax, RA, RB, RC, RD, RT0, RT1, RE);
 
 	ret;
+ENDPROC(__serpent_enc_blk_4way)
 
-.align 8
-.global serpent_dec_blk_4way
-.type   serpent_dec_blk_4way,@function;
-
-serpent_dec_blk_4way:
+ENTRY(serpent_dec_blk_4way)
 	/* input:
 	 *	arg_ctx(%esp): ctx, CTX
 	 *	arg_dst(%esp): dst
@@ -636,3 +628,4 @@ serpent_dec_blk_4way:
 	write_blocks(%eax, RC, RD, RB, RE, RT0, RT1, RA);
 
 	ret;
+ENDPROC(serpent_dec_blk_4way)

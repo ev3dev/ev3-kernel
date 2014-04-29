@@ -176,7 +176,6 @@ __acquires(ohci->lock)
 	if (status == -EBUSY) {
 		if (!autostopped) {
 			spin_unlock_irq (&ohci->lock);
-			(void) ohci_init (ohci);
 			status = ohci_restart (ohci);
 
 			usb_root_hub_lost_power(hcd->self.root_hub);
@@ -213,10 +212,11 @@ __acquires(ohci->lock)
 	/* Sometimes PCI D3 suspend trashes frame timings ... */
 	periodic_reinit (ohci);
 
-	/* the following code is executed with ohci->lock held and
-	 * irqs disabled if and only if autostopped is true
+	/*
+	 * The following code is executed with ohci->lock held and
+	 * irqs disabled if and only if autostopped is true.  This
+	 * will cause sparse to warn about a "context imbalance".
 	 */
-
 skip_resume:
 	/* interrupts might have been disabled */
 	ohci_writel (ohci, OHCI_INTR_INIT, &ohci->regs->intrenable);
@@ -314,48 +314,6 @@ static int ohci_bus_resume (struct usb_hcd *hcd)
 	if (rc == 0)
 		usb_hcd_poll_rh_status(hcd);
 	return rc;
-}
-
-/* Carry out the final steps of resuming the controller device */
-static void ohci_finish_controller_resume(struct usb_hcd *hcd)
-{
-	struct ohci_hcd		*ohci = hcd_to_ohci(hcd);
-	int			port;
-	bool			need_reinit = false;
-
-	/* See if the controller is already running or has been reset */
-	ohci->hc_control = ohci_readl(ohci, &ohci->regs->control);
-	if (ohci->hc_control & (OHCI_CTRL_IR | OHCI_SCHED_ENABLES)) {
-		need_reinit = true;
-	} else {
-		switch (ohci->hc_control & OHCI_CTRL_HCFS) {
-		case OHCI_USB_OPER:
-		case OHCI_USB_RESET:
-			need_reinit = true;
-		}
-	}
-
-	/* If needed, reinitialize and suspend the root hub */
-	if (need_reinit) {
-		spin_lock_irq(&ohci->lock);
-		ohci_rh_resume(ohci);
-		ohci_rh_suspend(ohci, 0);
-		spin_unlock_irq(&ohci->lock);
-	}
-
-	/* Normally just turn on port power and enable interrupts */
-	else {
-		ohci_dbg(ohci, "powerup ports\n");
-		for (port = 0; port < ohci->num_ports; port++)
-			ohci_writel(ohci, RH_PS_PPS,
-					&ohci->regs->roothub.portstatus[port]);
-
-		ohci_writel(ohci, OHCI_INTR_MIE, &ohci->regs->intrenable);
-		ohci_readl(ohci, &ohci->regs->intrenable);
-		msleep(20);
-	}
-
-	usb_hcd_resume_root_hub(hcd);
 }
 
 /* Carry out polling-, autostop-, and autoresume-related state changes */
@@ -574,7 +532,7 @@ ohci_hub_descriptor (
 	    temp |= 0x0010;
 	else if (rh & RH_A_OCPM)	/* per-port overcurrent reporting? */
 	    temp |= 0x0008;
-	desc->wHubCharacteristics = (__force __u16)cpu_to_hc16(ohci, temp);
+	desc->wHubCharacteristics = cpu_to_le16(temp);
 
 	/* ports removable, and usb 1.0 legacy PortPwrCtrlMask */
 	rh = roothub_b (ohci);
@@ -622,14 +580,8 @@ static int ohci_start_port_reset (struct usb_hcd *hcd, unsigned port)
 
 /* See usb 7.1.7.5:  root hubs must issue at least 50 msec reset signaling,
  * not necessarily continuous ... to guard against resume signaling.
- * The short timeout is safe for non-root hubs, and is backward-compatible
- * with earlier Linux hosts.
  */
-#ifdef	CONFIG_USB_SUSPEND
 #define	PORT_RESET_MSEC		50
-#else
-#define	PORT_RESET_MSEC		10
-#endif
 
 /* this timer value might be vendor-specific ... */
 #define	PORT_RESET_HW_MSEC	10
@@ -773,10 +725,8 @@ static int ohci_hub_control (
 		temp = roothub_portstatus (ohci, wIndex);
 		put_unaligned_le32(temp, buf);
 
-#ifndef	OHCI_VERBOSE_DEBUG
-	if (*(u16*)(buf+2))	/* only if wPortChange is interesting */
-#endif
-		dbg_port (ohci, "GetStatus", wIndex, temp);
+		if (*(u16*)(buf+2))	/* only if wPortChange is interesting */
+			dbg_port(ohci, "GetStatus", wIndex, temp);
 		break;
 	case SetHubFeature:
 		switch (wValue) {

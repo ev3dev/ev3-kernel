@@ -46,6 +46,7 @@
 #define E1000_RXD_ERR_SE        0x02    /* Symbol Error */
 #define E1000_RXD_SPC_VLAN_MASK 0x0FFF  /* VLAN ID is in lower 12 bits */
 
+#define E1000_RXDEXT_STATERR_LB    0x00040000
 #define E1000_RXDEXT_STATERR_CE    0x01000000
 #define E1000_RXDEXT_STATERR_SE    0x02000000
 #define E1000_RXDEXT_STATERR_SEQ   0x04000000
@@ -96,10 +97,6 @@
 #define E1000_ERR_CONFIG   3
 #define E1000_ERR_MAC_INIT 5
 #define E1000_ERR_MBX      15
-
-#ifndef ETH_ADDR_LEN
-#define ETH_ADDR_LEN                 6
-#endif
 
 /* SRRCTL bit definitions */
 #define E1000_SRRCTL_BSIZEPKT_SHIFT                     10 /* Shift _right_ */

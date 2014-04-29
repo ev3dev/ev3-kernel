@@ -41,7 +41,6 @@ struct pxa25x_ep {
 	struct usb_ep				ep;
 	struct pxa25x_udc			*dev;
 
-	const struct usb_endpoint_descriptor	*desc;
 	struct list_head			queue;
 	unsigned long				pio_irqs;
 
@@ -119,7 +118,7 @@ struct pxa25x_udc {
 	struct device				*dev;
 	struct clk				*clk;
 	struct pxa2xx_udc_mach_info		*mach;
-	struct otg_transceiver			*transceiver;
+	struct usb_phy				*transceiver;
 	u64					dma_mask;
 	struct pxa25x_ep			ep [PXA_UDC_NUM_ENDPOINTS];
 
@@ -127,6 +126,7 @@ struct pxa25x_udc {
 	struct dentry				*debugfs_udc;
 #endif
 };
+#define to_pxa25x(g)	(container_of((g), struct pxa25x_udc, gadget))
 
 /*-------------------------------------------------------------------------*/
 
@@ -226,7 +226,7 @@ dump_state(struct pxa25x_udc *dev)
 		dev->stats.read.bytes, dev->stats.read.ops);
 
 	for (i = 1; i < PXA_UDC_NUM_ENDPOINTS; i++) {
-		if (dev->ep [i].desc == NULL)
+		if (dev->ep[i].ep.desc == NULL)
 			continue;
 		DMSG ("udccs%d = %02x\n", i, *dev->ep->reg_udccs);
 	}

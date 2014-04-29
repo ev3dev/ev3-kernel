@@ -754,7 +754,7 @@ static struct uart_driver pru_suart_reg = {
 	.nr = NR_SUART,
 };
 
-static int __devinit omapl_pru_suart_probe(struct platform_device *pdev)
+static int omapl_pru_suart_probe(struct platform_device *pdev)
 {
 	struct omapl_pru_suart *soft_uart;
 	struct ti_pru_suart_platform_data *pdata;
@@ -976,7 +976,7 @@ probe_exit:
 	return err;
 }
 
-static int __devexit omapl_pru_suart_remove(struct platform_device *pdev)
+static int omapl_pru_suart_remove(struct platform_device *pdev)
 {
 	struct ti_pru_suart_platform_data *pdata;
 	struct omapl_pru_suart *soft_uart = platform_get_drvdata(pdev);
@@ -1030,7 +1030,7 @@ static int __devexit omapl_pru_suart_remove(struct platform_device *pdev)
 
 static struct platform_driver serial_omapl_pru_driver = {
 	.probe = omapl_pru_suart_probe,
-	.remove = __devexit_p(omapl_pru_suart_remove),
+	.remove = omapl_pru_suart_remove,
 	.suspend = omapl_pru_suart_suspend,
 	.resume = omapl_pru__suart_resume,
 	.driver = {

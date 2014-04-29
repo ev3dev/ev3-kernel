@@ -71,10 +71,6 @@ extern unsigned long empty_zero_page;
  * No page table caches to initialise
  */
 #define pgtable_cache_init()   do { } while (0)
-#define io_remap_pfn_range      remap_pfn_range
-
-#define io_remap_page_range(vma, vaddr, paddr, size, prot)		\
-		remap_pfn_range(vma, vaddr, (paddr) >> PAGE_SHIFT, size, prot)
 
 #include <asm-generic/pgtable.h>
 

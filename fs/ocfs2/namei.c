@@ -98,7 +98,7 @@ static int ocfs2_create_symlink_data(struct ocfs2_super *osb,
 #define OCFS2_ORPHAN_NAMELEN ((int)(2 * sizeof(u64)))
 
 static struct dentry *ocfs2_lookup(struct inode *dir, struct dentry *dentry,
-				   struct nameidata *nd)
+				   unsigned int flags)
 {
 	int status;
 	u64 blkno;
@@ -230,6 +230,7 @@ static int ocfs2_mknod(struct inode *dir,
 	struct ocfs2_dir_lookup_result lookup = { NULL, };
 	sigset_t oldset;
 	int did_block_signals = 0;
+	struct posix_acl *default_acl = NULL, *acl = NULL;
 
 	trace_ocfs2_mknod(dir, dentry, dentry->d_name.len, dentry->d_name.name,
 			  (unsigned long long)OCFS2_I(dir)->ip_blkno,
@@ -331,6 +332,12 @@ static int ocfs2_mknod(struct inode *dir,
 		goto leave;
 	}
 
+	status = posix_acl_create(dir, &mode, &default_acl, &acl);
+	if (status) {
+		mlog_errno(status);
+		goto leave;
+	}
+
 	handle = ocfs2_start_trans(osb, ocfs2_mknod_credits(osb->sb,
 							    S_ISDIR(mode),
 							    xattr_credits));
@@ -379,8 +386,17 @@ static int ocfs2_mknod(struct inode *dir,
 		inc_nlink(dir);
 	}
 
-	status = ocfs2_init_acl(handle, inode, dir, new_fe_bh, parent_fe_bh,
-				meta_ac, data_ac);
+	if (default_acl) {
+		status = ocfs2_set_acl(handle, inode, new_fe_bh,
+				       ACL_TYPE_DEFAULT, default_acl,
+				       meta_ac, data_ac);
+	}
+	if (!status && acl) {
+		status = ocfs2_set_acl(handle, inode, new_fe_bh,
+				       ACL_TYPE_ACCESS, acl,
+				       meta_ac, data_ac);
+	}
+
 	if (status < 0) {
 		mlog_errno(status);
 		goto leave;
@@ -419,6 +435,10 @@ static int ocfs2_mknod(struct inode *dir,
 	d_instantiate(dentry, inode);
 	status = 0;
 leave:
+	if (default_acl)
+		posix_acl_release(default_acl);
+	if (acl)
+		posix_acl_release(acl);
 	if (status < 0 && did_quota_inode)
 		dquot_free_inode(inode);
 	if (handle)
@@ -489,7 +509,7 @@ static int __ocfs2_mknod_locked(struct inode *dir,
 
 	*new_fe_bh = sb_getblk(osb->sb, fe_blkno);
 	if (!*new_fe_bh) {
-		status = -EIO;
+		status = -ENOMEM;
 		mlog_errno(status);
 		goto leave;
 	}
@@ -512,8 +532,8 @@ static int __ocfs2_mknod_locked(struct inode *dir,
 	fe->i_suballoc_loc = cpu_to_le64(suballoc_loc);
 	fe->i_suballoc_bit = cpu_to_le16(suballoc_bit);
 	fe->i_suballoc_slot = cpu_to_le16(inode_ac->ac_alloc_slot);
-	fe->i_uid = cpu_to_le32(inode->i_uid);
-	fe->i_gid = cpu_to_le32(inode->i_gid);
+	fe->i_uid = cpu_to_le32(i_uid_read(inode));
+	fe->i_gid = cpu_to_le32(i_gid_read(inode));
 	fe->i_mode = cpu_to_le16(inode->i_mode);
 	if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode))
 		fe->id1.dev1.i_rdev = cpu_to_le64(huge_encode_dev(dev));
@@ -522,7 +542,7 @@ static int __ocfs2_mknod_locked(struct inode *dir,
 
 	fe->i_last_eb_blk = 0;
 	strcpy(fe->i_signature, OCFS2_INODE_SIGNATURE);
-	le32_add_cpu(&fe->i_flags, OCFS2_VALID_FL);
+	fe->i_flags |= cpu_to_le32(OCFS2_VALID_FL);
 	fe->i_atime = fe->i_ctime = fe->i_mtime =
 		cpu_to_le64(CURRENT_TIME.tv_sec);
 	fe->i_mtime_nsec = fe->i_ctime_nsec = fe->i_atime_nsec =
@@ -618,7 +638,7 @@ static int ocfs2_mkdir(struct inode *dir,
 static int ocfs2_create(struct inode *dir,
 			struct dentry *dentry,
 			umode_t mode,
-			struct nameidata *nd)
+			bool excl)
 {
 	int ret;
 
@@ -644,6 +664,7 @@ static int ocfs2_link(struct dentry *old_dentry,
 	struct ocfs2_super *osb = OCFS2_SB(dir->i_sb);
 	struct ocfs2_dir_lookup_result lookup = { NULL, };
 	sigset_t oldset;
+	u64 old_de_ino;
 
 	trace_ocfs2_link((unsigned long long)OCFS2_I(inode)->ip_blkno,
 			 old_dentry->d_name.len, old_dentry->d_name.name,
@@ -662,6 +683,22 @@ static int ocfs2_link(struct dentry *old_dentry,
 	}
 
 	if (!dir->i_nlink) {
+		err = -ENOENT;
+		goto out;
+	}
+
+	err = ocfs2_lookup_ino_from_name(dir, old_dentry->d_name.name,
+			old_dentry->d_name.len, &old_de_ino);
+	if (err) {
+		err = -ENOENT;
+		goto out;
+	}
+
+	/*
+	 * Check whether another node removed the source inode while we
+	 * were in the vfs.
+	 */
+	if (old_de_ino != OCFS2_I(inode)->ip_blkno) {
 		err = -ENOENT;
 		goto out;
 	}
@@ -773,7 +810,7 @@ static int ocfs2_remote_dentry_delete(struct dentry *dentry)
 	return ret;
 }
 
-static inline int inode_is_unlinkable(struct inode *inode)
+static inline int ocfs2_inode_is_unlinkable(struct inode *inode)
 {
 	if (S_ISDIR(inode->i_mode)) {
 		if (inode->i_nlink == 2)
@@ -791,6 +828,7 @@ static int ocfs2_unlink(struct inode *dir,
 {
 	int status;
 	int child_locked = 0;
+	bool is_unlinkable = false;
 	struct inode *inode = dentry->d_inode;
 	struct inode *orphan_dir = NULL;
 	struct ocfs2_super *osb = OCFS2_SB(dir->i_sb);
@@ -865,7 +903,7 @@ static int ocfs2_unlink(struct inode *dir,
 		goto leave;
 	}
 
-	if (inode_is_unlinkable(inode)) {
+	if (ocfs2_inode_is_unlinkable(inode)) {
 		status = ocfs2_prepare_orphan_dir(osb, &orphan_dir,
 						  OCFS2_I(inode)->ip_blkno,
 						  orphan_name, &orphan_insert);
@@ -873,6 +911,7 @@ static int ocfs2_unlink(struct inode *dir,
 			mlog_errno(status);
 			goto leave;
 		}
+		is_unlinkable = true;
 	}
 
 	handle = ocfs2_start_trans(osb, ocfs2_unlink_credits(osb->sb));
@@ -891,15 +930,6 @@ static int ocfs2_unlink(struct inode *dir,
 	}
 
 	fe = (struct ocfs2_dinode *) fe_bh->b_data;
-
-	if (inode_is_unlinkable(inode)) {
-		status = ocfs2_orphan_add(osb, handle, inode, fe_bh, orphan_name,
-					  &orphan_insert, orphan_dir);
-		if (status < 0) {
-			mlog_errno(status);
-			goto leave;
-		}
-	}
 
 	/* delete the name from the parent dir */
 	status = ocfs2_delete_entry(handle, dir, &lookup);
@@ -923,6 +953,14 @@ static int ocfs2_unlink(struct inode *dir,
 		mlog_errno(status);
 		if (S_ISDIR(inode->i_mode))
 			inc_nlink(dir);
+		goto leave;
+	}
+
+	if (is_unlinkable) {
+		status = ocfs2_orphan_add(osb, handle, inode, fe_bh,
+				orphan_name, &orphan_insert, orphan_dir);
+		if (status < 0)
+			mlog_errno(status);
 	}
 
 leave:
@@ -947,7 +985,7 @@ leave:
 	ocfs2_free_dir_lookup_result(&orphan_insert);
 	ocfs2_free_dir_lookup_result(&lookup);
 
-	if (status)
+	if (status && (status != -ENOTEMPTY) && (status != -ENOENT))
 		mlog_errno(status);
 
 	return status;
@@ -1724,15 +1762,16 @@ static int ocfs2_symlink(struct inode *dir,
 	fe = (struct ocfs2_dinode *) new_fe_bh->b_data;
 	inode->i_rdev = 0;
 	newsize = l - 1;
+	inode->i_op = &ocfs2_symlink_inode_operations;
 	if (l > ocfs2_fast_symlink_chars(sb)) {
 		u32 offset = 0;
 
-		inode->i_op = &ocfs2_symlink_inode_operations;
 		status = dquot_alloc_space_nodirty(inode,
 		    ocfs2_clusters_to_bytes(osb->sb, 1));
 		if (status)
 			goto bail;
 		did_quota = 1;
+		inode->i_mapping->a_ops = &ocfs2_aops;
 		status = ocfs2_add_inode_data(osb, inode, &offset, 1, 0,
 					      new_fe_bh,
 					      handle, data_ac, NULL,
@@ -1750,7 +1789,7 @@ static int ocfs2_symlink(struct inode *dir,
 		i_size_write(inode, newsize);
 		inode->i_blocks = ocfs2_inode_sector_count(inode);
 	} else {
-		inode->i_op = &ocfs2_fast_symlink_inode_operations;
+		inode->i_mapping->a_ops = &ocfs2_fast_symlink_aops;
 		memcpy((char *) fe->id2.i_symlink, symname, l);
 		i_size_write(inode, newsize);
 		inode->i_blocks = 0;
@@ -2011,23 +2050,6 @@ static int ocfs2_orphan_add(struct ocfs2_super *osb,
 		goto leave;
 	}
 
-	/* we're a cluster, and nlink can change on disk from
-	 * underneath us... */
-	orphan_fe = (struct ocfs2_dinode *) orphan_dir_bh->b_data;
-	if (S_ISDIR(inode->i_mode))
-		ocfs2_add_links_count(orphan_fe, 1);
-	set_nlink(orphan_dir_inode, ocfs2_read_links_count(orphan_fe));
-	ocfs2_journal_dirty(handle, orphan_dir_bh);
-
-	status = __ocfs2_add_entry(handle, orphan_dir_inode, name,
-				   OCFS2_ORPHAN_NAMELEN, inode,
-				   OCFS2_I(inode)->ip_blkno,
-				   orphan_dir_bh, lookup);
-	if (status < 0) {
-		mlog_errno(status);
-		goto leave;
-	}
-
 	/*
 	 * We're going to journal the change of i_flags and i_orphaned_slot.
 	 * It's safe anyway, though some callers may duplicate the journaling.
@@ -2043,7 +2065,24 @@ static int ocfs2_orphan_add(struct ocfs2_super *osb,
 		goto leave;
 	}
 
-	le32_add_cpu(&fe->i_flags, OCFS2_ORPHANED_FL);
+	/* we're a cluster, and nlink can change on disk from
+	 * underneath us... */
+	orphan_fe = (struct ocfs2_dinode *) orphan_dir_bh->b_data;
+	if (S_ISDIR(inode->i_mode))
+		ocfs2_add_links_count(orphan_fe, 1);
+	set_nlink(orphan_dir_inode, ocfs2_read_links_count(orphan_fe));
+	ocfs2_journal_dirty(handle, orphan_dir_bh);
+
+	status = __ocfs2_add_entry(handle, orphan_dir_inode, name,
+				   OCFS2_ORPHAN_NAMELEN, inode,
+				   OCFS2_I(inode)->ip_blkno,
+				   orphan_dir_bh, lookup);
+	if (status < 0) {
+		mlog_errno(status);
+		goto rollback;
+	}
+
+	fe->i_flags |= cpu_to_le32(OCFS2_ORPHANED_FL);
 	OCFS2_I(inode)->ip_flags &= ~OCFS2_INODE_SKIP_ORPHAN_DIR;
 
 	/* Record which orphan dir our inode now resides
@@ -2056,11 +2095,16 @@ static int ocfs2_orphan_add(struct ocfs2_super *osb,
 	trace_ocfs2_orphan_add_end((unsigned long long)OCFS2_I(inode)->ip_blkno,
 				   osb->slot_num);
 
+rollback:
+	if (status < 0) {
+		if (S_ISDIR(inode->i_mode))
+			ocfs2_add_links_count(orphan_fe, -1);
+		set_nlink(orphan_dir_inode, ocfs2_read_links_count(orphan_fe));
+	}
+
 leave:
 	brelse(orphan_dir_bh);
 
-	if (status)
-		mlog_errno(status);
 	return status;
 }
 
@@ -2215,7 +2259,7 @@ out:
 
 	brelse(orphan_dir_bh);
 
-	return 0;
+	return ret;
 }
 
 int ocfs2_create_inode_in_orphan(struct inode *dir,
@@ -2433,7 +2477,7 @@ int ocfs2_mv_orphaned_inode_to_new(struct inode *dir,
 	}
 
 	di = (struct ocfs2_dinode *)di_bh->b_data;
-	le32_add_cpu(&di->i_flags, -OCFS2_ORPHANED_FL);
+	di->i_flags &= ~cpu_to_le32(OCFS2_ORPHANED_FL);
 	di->i_orphaned_slot = 0;
 	set_nlink(inode, 1);
 	ocfs2_set_links_count(di, inode->i_nlink);
@@ -2497,4 +2541,5 @@ const struct inode_operations ocfs2_dir_iops = {
 	.removexattr	= generic_removexattr,
 	.fiemap         = ocfs2_fiemap,
 	.get_acl	= ocfs2_iop_get_acl,
+	.set_acl	= ocfs2_iop_set_acl,
 };

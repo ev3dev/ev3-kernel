@@ -64,7 +64,7 @@ static inline int is_pse(struct kvm_vcpu *vcpu)
 
 static inline int is_paging(struct kvm_vcpu *vcpu)
 {
-	return kvm_read_cr0_bits(vcpu, X86_CR0_PG);
+	return likely(kvm_read_cr0_bits(vcpu, X86_CR0_PG));
 }
 
 static inline u32 bit(int bitno)
@@ -112,7 +112,7 @@ void kvm_before_handle_nmi(struct kvm_vcpu *vcpu);
 void kvm_after_handle_nmi(struct kvm_vcpu *vcpu);
 int kvm_inject_realmode_interrupt(struct kvm_vcpu *vcpu, int irq, int inc_eip);
 
-void kvm_write_tsc(struct kvm_vcpu *vcpu, u64 data);
+void kvm_write_tsc(struct kvm_vcpu *vcpu, struct msr_data *msr);
 
 int kvm_read_guest_virt(struct x86_emulate_ctxt *ctxt,
 	gva_t addr, void *val, unsigned int bytes,
@@ -122,6 +122,10 @@ int kvm_write_guest_virt_system(struct x86_emulate_ctxt *ctxt,
 	gva_t addr, void *val, unsigned int bytes,
 	struct x86_exception *exception);
 
+#define KVM_SUPPORTED_XCR0	(XSTATE_FP | XSTATE_SSE | XSTATE_YMM)
 extern u64 host_xcr0;
 
+extern unsigned int min_timer_period_us;
+
+extern struct static_key kvm_no_apic_vcpu;
 #endif

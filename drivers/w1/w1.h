@@ -67,8 +67,8 @@ struct w1_slave
 	struct w1_reg_num	reg_num;
 	atomic_t		refcnt;
 	u8			rom[9];
-	u32			flags;
 	int			ttl;
+	unsigned long		flags;
 
 	struct w1_master	*master;
 	struct w1_family	*family;
@@ -180,6 +180,7 @@ struct w1_master
 
 	struct task_struct	*thread;
 	struct mutex		mutex;
+	struct mutex		bus_mutex;
 
 	struct device_driver	*driver;
 	struct device		dev;

@@ -36,10 +36,18 @@
 /*
  * Generic range manager structs
  */
+#include <linux/bug.h>
+#include <linux/kernel.h>
 #include <linux/list.h>
+#include <linux/spinlock.h>
 #ifdef CONFIG_DEBUG_FS
 #include <linux/seq_file.h>
 #endif
+
+enum drm_mm_search_flags {
+	DRM_MM_SEARCH_DEFAULT =		0,
+	DRM_MM_SEARCH_BEST =		1 << 0,
+};
 
 struct drm_mm_node {
 	struct list_head node_list;
@@ -50,6 +58,7 @@ struct drm_mm_node {
 	unsigned scanned_next_free : 1;
 	unsigned scanned_preceeds_hole : 1;
 	unsigned allocated : 1;
+	unsigned long color;
 	unsigned long start;
 	unsigned long size;
 	struct drm_mm *mm;
@@ -61,18 +70,19 @@ struct drm_mm {
 	/* head_node.node_list is the list of all memory nodes, ordered
 	 * according to the (increasing) start address of the memory node. */
 	struct drm_mm_node head_node;
-	struct list_head unused_nodes;
-	int num_unused;
-	spinlock_t unused_lock;
 	unsigned int scan_check_range : 1;
 	unsigned scan_alignment;
+	unsigned long scan_color;
 	unsigned long scan_size;
 	unsigned long scan_hit_start;
-	unsigned scan_hit_size;
+	unsigned long scan_hit_end;
 	unsigned scanned_blocks;
 	unsigned long scan_start;
 	unsigned long scan_end;
 	struct drm_mm_node *prev_scanned_node;
+
+	void (*color_adjust)(struct drm_mm_node *node, unsigned long color,
+			     unsigned long *start, unsigned long *end);
 };
 
 static inline bool drm_mm_node_allocated(struct drm_mm_node *node)
@@ -84,97 +94,101 @@ static inline bool drm_mm_initialized(struct drm_mm *mm)
 {
 	return mm->hole_stack.next;
 }
+
+static inline unsigned long __drm_mm_hole_node_start(struct drm_mm_node *hole_node)
+{
+	return hole_node->start + hole_node->size;
+}
+
+static inline unsigned long drm_mm_hole_node_start(struct drm_mm_node *hole_node)
+{
+	BUG_ON(!hole_node->hole_follows);
+	return __drm_mm_hole_node_start(hole_node);
+}
+
+static inline unsigned long __drm_mm_hole_node_end(struct drm_mm_node *hole_node)
+{
+	return list_entry(hole_node->node_list.next,
+			  struct drm_mm_node, node_list)->start;
+}
+
+static inline unsigned long drm_mm_hole_node_end(struct drm_mm_node *hole_node)
+{
+	return __drm_mm_hole_node_end(hole_node);
+}
+
 #define drm_mm_for_each_node(entry, mm) list_for_each_entry(entry, \
 						&(mm)->head_node.node_list, \
 						node_list)
-#define drm_mm_for_each_scanned_node_reverse(entry, n, mm) \
-	for (entry = (mm)->prev_scanned_node, \
-		next = entry ? list_entry(entry->node_list.next, \
-			struct drm_mm_node, node_list) : NULL; \
-	     entry != NULL; entry = next, \
-		next = entry ? list_entry(entry->node_list.next, \
-			struct drm_mm_node, node_list) : NULL) \
+
+/* Note that we need to unroll list_for_each_entry in order to inline
+ * setting hole_start and hole_end on each iteration and keep the
+ * macro sane.
+ */
+#define drm_mm_for_each_hole(entry, mm, hole_start, hole_end) \
+	for (entry = list_entry((mm)->hole_stack.next, struct drm_mm_node, hole_stack); \
+	     &entry->hole_stack != &(mm)->hole_stack ? \
+	     hole_start = drm_mm_hole_node_start(entry), \
+	     hole_end = drm_mm_hole_node_end(entry), \
+	     1 : 0; \
+	     entry = list_entry(entry->hole_stack.next, struct drm_mm_node, hole_stack))
+
 /*
  * Basic range manager support (drm_mm.c)
  */
-extern struct drm_mm_node *drm_mm_get_block_generic(struct drm_mm_node *node,
-						    unsigned long size,
-						    unsigned alignment,
-						    int atomic);
-extern struct drm_mm_node *drm_mm_get_block_range_generic(
-						struct drm_mm_node *node,
-						unsigned long size,
-						unsigned alignment,
-						unsigned long start,
-						unsigned long end,
-						int atomic);
-static inline struct drm_mm_node *drm_mm_get_block(struct drm_mm_node *parent,
-						   unsigned long size,
-						   unsigned alignment)
+extern int drm_mm_reserve_node(struct drm_mm *mm, struct drm_mm_node *node);
+
+extern int drm_mm_insert_node_generic(struct drm_mm *mm,
+				      struct drm_mm_node *node,
+				      unsigned long size,
+				      unsigned alignment,
+				      unsigned long color,
+				      enum drm_mm_search_flags flags);
+static inline int drm_mm_insert_node(struct drm_mm *mm,
+				     struct drm_mm_node *node,
+				     unsigned long size,
+				     unsigned alignment,
+				     enum drm_mm_search_flags flags)
 {
-	return drm_mm_get_block_generic(parent, size, alignment, 0);
+	return drm_mm_insert_node_generic(mm, node, size, alignment, 0, flags);
 }
-static inline struct drm_mm_node *drm_mm_get_block_atomic(struct drm_mm_node *parent,
-							  unsigned long size,
-							  unsigned alignment)
-{
-	return drm_mm_get_block_generic(parent, size, alignment, 1);
-}
-static inline struct drm_mm_node *drm_mm_get_block_range(
-						struct drm_mm_node *parent,
-						unsigned long size,
-						unsigned alignment,
-						unsigned long start,
-						unsigned long end)
-{
-	return drm_mm_get_block_range_generic(parent, size, alignment,
-						start, end, 0);
-}
-static inline struct drm_mm_node *drm_mm_get_block_atomic_range(
-						struct drm_mm_node *parent,
-						unsigned long size,
-						unsigned alignment,
-						unsigned long start,
-						unsigned long end)
-{
-	return drm_mm_get_block_range_generic(parent, size, alignment,
-						start, end, 1);
-}
-extern int drm_mm_insert_node(struct drm_mm *mm, struct drm_mm_node *node,
-			      unsigned long size, unsigned alignment);
-extern int drm_mm_insert_node_in_range(struct drm_mm *mm,
+
+extern int drm_mm_insert_node_in_range_generic(struct drm_mm *mm,
 				       struct drm_mm_node *node,
-				       unsigned long size, unsigned alignment,
-				       unsigned long start, unsigned long end);
-extern void drm_mm_put_block(struct drm_mm_node *cur);
-extern void drm_mm_remove_node(struct drm_mm_node *node);
-extern void drm_mm_replace_node(struct drm_mm_node *old, struct drm_mm_node *new);
-extern struct drm_mm_node *drm_mm_search_free(const struct drm_mm *mm,
+				       unsigned long size,
+				       unsigned alignment,
+				       unsigned long color,
+				       unsigned long start,
+				       unsigned long end,
+				       enum drm_mm_search_flags flags);
+static inline int drm_mm_insert_node_in_range(struct drm_mm *mm,
+					      struct drm_mm_node *node,
 					      unsigned long size,
 					      unsigned alignment,
-					      int best_match);
-extern struct drm_mm_node *drm_mm_search_free_in_range(
-						const struct drm_mm *mm,
-						unsigned long size,
-						unsigned alignment,
-						unsigned long start,
-						unsigned long end,
-						int best_match);
-extern int drm_mm_init(struct drm_mm *mm, unsigned long start,
-		       unsigned long size);
-extern void drm_mm_takedown(struct drm_mm *mm);
-extern int drm_mm_clean(struct drm_mm *mm);
-extern int drm_mm_pre_get(struct drm_mm *mm);
-
-static inline struct drm_mm *drm_get_mm(struct drm_mm_node *block)
+					      unsigned long start,
+					      unsigned long end,
+					      enum drm_mm_search_flags flags)
 {
-	return block->mm;
+	return drm_mm_insert_node_in_range_generic(mm, node, size, alignment,
+						   0, start, end, flags);
 }
 
-void drm_mm_init_scan(struct drm_mm *mm, unsigned long size,
-		      unsigned alignment);
-void drm_mm_init_scan_with_range(struct drm_mm *mm, unsigned long size,
+extern void drm_mm_remove_node(struct drm_mm_node *node);
+extern void drm_mm_replace_node(struct drm_mm_node *old, struct drm_mm_node *new);
+extern void drm_mm_init(struct drm_mm *mm,
+			unsigned long start,
+			unsigned long size);
+extern void drm_mm_takedown(struct drm_mm *mm);
+extern int drm_mm_clean(struct drm_mm *mm);
+
+void drm_mm_init_scan(struct drm_mm *mm,
+		      unsigned long size,
+		      unsigned alignment,
+		      unsigned long color);
+void drm_mm_init_scan_with_range(struct drm_mm *mm,
+				 unsigned long size,
 				 unsigned alignment,
+				 unsigned long color,
 				 unsigned long start,
 				 unsigned long end);
 int drm_mm_scan_add_block(struct drm_mm_node *node);

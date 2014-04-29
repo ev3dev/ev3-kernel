@@ -20,8 +20,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *  along with this program; if not, see <http://www.gnu.org/licenses/>.
  *
  */
 
@@ -32,6 +31,7 @@
 #define NCI_MAX_NUM_MAPPING_CONFIGS				10
 #define NCI_MAX_NUM_RF_CONFIGS					10
 #define NCI_MAX_NUM_CONN					10
+#define NCI_MAX_PARAM_LEN					251
 
 /* NCI Status Codes */
 #define NCI_STATUS_OK						0x00
@@ -102,6 +102,9 @@
 #define NCI_RF_INTERFACE_ISO_DEP				0x02
 #define NCI_RF_INTERFACE_NFC_DEP				0x03
 
+/* NCI Configuration Parameter Tags */
+#define NCI_PN_ATR_REQ_GEN_BYTES				0x29
+
 /* NCI Reset types */
 #define NCI_RESET_TYPE_KEEP_CONFIG				0x00
 #define NCI_RESET_TYPE_RESET_CONFIG				0x01
@@ -115,6 +118,11 @@
 /* NCI RF_DISCOVER_MAP_CMD modes */
 #define NCI_DISC_MAP_MODE_POLL					0x01
 #define NCI_DISC_MAP_MODE_LISTEN				0x02
+
+/* NCI Discover Notification Type */
+#define NCI_DISCOVER_NTF_TYPE_LAST				0x00
+#define NCI_DISCOVER_NTF_TYPE_LAST_NFCC				0x01
+#define NCI_DISCOVER_NTF_TYPE_MORE				0x02
 
 /* NCI Deactivation Type */
 #define NCI_DEACTIVATE_TYPE_IDLE_MODE				0x00
@@ -157,6 +165,10 @@
 #define NCI_GID_NFCEE_MGMT					0x2
 #define NCI_GID_PROPRIETARY					0xf
 
+/* ----- NCI over SPI head/crc(tail) room needed for outgoing frames ----- */
+#define NCI_SPI_HDR_LEN						4
+#define NCI_SPI_CRC_LEN						2
+
 /* ---- NCI Packet structures ---- */
 #define NCI_CTRL_HDR_SIZE					3
 #define NCI_DATA_HDR_SIZE					3
@@ -183,6 +195,18 @@ struct nci_core_reset_cmd {
 
 #define NCI_OP_CORE_INIT_CMD		nci_opcode_pack(NCI_GID_CORE, 0x01)
 
+#define NCI_OP_CORE_SET_CONFIG_CMD	nci_opcode_pack(NCI_GID_CORE, 0x02)
+struct set_config_param {
+	__u8	id;
+	__u8	len;
+	__u8	val[NCI_MAX_PARAM_LEN];
+} __packed;
+
+struct nci_core_set_config_cmd {
+	__u8	num_params;
+	struct	set_config_param param; /* support 1 param per cmd is enough */
+} __packed;
+
 #define NCI_OP_RF_DISCOVER_MAP_CMD	nci_opcode_pack(NCI_GID_RF_MGMT, 0x00)
 struct disc_map_config {
 	__u8	rf_protocol;
@@ -205,6 +229,13 @@ struct disc_config {
 struct nci_rf_disc_cmd {
 	__u8				num_disc_configs;
 	struct disc_config		disc_configs[NCI_MAX_NUM_RF_CONFIGS];
+} __packed;
+
+#define NCI_OP_RF_DISCOVER_SELECT_CMD	nci_opcode_pack(NCI_GID_RF_MGMT, 0x04)
+struct nci_rf_discover_select_cmd {
+	__u8	rf_discovery_id;
+	__u8	rf_protocol;
+	__u8	rf_interface;
 } __packed;
 
 #define NCI_OP_RF_DEACTIVATE_CMD	nci_opcode_pack(NCI_GID_RF_MGMT, 0x06)
@@ -240,9 +271,18 @@ struct nci_core_init_rsp_2 {
 	__le32	manufact_specific_info;
 } __packed;
 
+#define NCI_OP_CORE_SET_CONFIG_RSP	nci_opcode_pack(NCI_GID_CORE, 0x02)
+struct nci_core_set_config_rsp {
+	__u8	status;
+	__u8	num_params;
+	__u8	params_id[0];	/* variable size array */
+} __packed;
+
 #define NCI_OP_RF_DISCOVER_MAP_RSP	nci_opcode_pack(NCI_GID_RF_MGMT, 0x00)
 
 #define NCI_OP_RF_DISCOVER_RSP		nci_opcode_pack(NCI_GID_RF_MGMT, 0x03)
+
+#define NCI_OP_RF_DISCOVER_SELECT_RSP	nci_opcode_pack(NCI_GID_RF_MGMT, 0x04)
 
 #define NCI_OP_RF_DEACTIVATE_RSP	nci_opcode_pack(NCI_GID_RF_MGMT, 0x06)
 
@@ -260,13 +300,15 @@ struct nci_core_conn_credit_ntf {
 	struct conn_credit_entry	conn_entries[NCI_MAX_NUM_CONN];
 } __packed;
 
+#define NCI_OP_CORE_GENERIC_ERROR_NTF	nci_opcode_pack(NCI_GID_CORE, 0x07)
+
 #define NCI_OP_CORE_INTF_ERROR_NTF	nci_opcode_pack(NCI_GID_CORE, 0x08)
 struct nci_core_intf_error_ntf {
 	__u8	status;
 	__u8	conn_id;
 } __packed;
 
-#define NCI_OP_RF_INTF_ACTIVATED_NTF	nci_opcode_pack(NCI_GID_RF_MGMT, 0x05)
+#define NCI_OP_RF_DISCOVER_NTF		nci_opcode_pack(NCI_GID_RF_MGMT, 0x03)
 struct rf_tech_specific_params_nfca_poll {
 	__u16	sens_res;
 	__u8	nfcid1_len;	/* 0, 4, 7, or 10 Bytes */
@@ -275,9 +317,46 @@ struct rf_tech_specific_params_nfca_poll {
 	__u8	sel_res;
 } __packed;
 
+struct rf_tech_specific_params_nfcb_poll {
+	__u8	sensb_res_len;
+	__u8	sensb_res[12];	/* 11 or 12 Bytes */
+} __packed;
+
+struct rf_tech_specific_params_nfcf_poll {
+	__u8	bit_rate;
+	__u8	sensf_res_len;
+	__u8	sensf_res[18];	/* 16 or 18 Bytes */
+} __packed;
+
+struct nci_rf_discover_ntf {
+	__u8	rf_discovery_id;
+	__u8	rf_protocol;
+	__u8	rf_tech_and_mode;
+	__u8	rf_tech_specific_params_len;
+
+	union {
+		struct rf_tech_specific_params_nfca_poll nfca_poll;
+		struct rf_tech_specific_params_nfcb_poll nfcb_poll;
+		struct rf_tech_specific_params_nfcf_poll nfcf_poll;
+	} rf_tech_specific_params;
+
+	__u8	ntf_type;
+} __packed;
+
+#define NCI_OP_RF_INTF_ACTIVATED_NTF	nci_opcode_pack(NCI_GID_RF_MGMT, 0x05)
 struct activation_params_nfca_poll_iso_dep {
 	__u8	rats_res_len;
 	__u8	rats_res[20];
+};
+
+struct activation_params_nfcb_poll_iso_dep {
+	__u8	attrib_res_len;
+	__u8	attrib_res[50];
+};
+
+struct activation_params_poll_nfc_dep {
+	__u8	atr_res_len;
+	__u8	atr_res[63];
 };
 
 struct nci_rf_intf_activated_ntf {
@@ -291,6 +370,8 @@ struct nci_rf_intf_activated_ntf {
 
 	union {
 		struct rf_tech_specific_params_nfca_poll nfca_poll;
+		struct rf_tech_specific_params_nfcb_poll nfcb_poll;
+		struct rf_tech_specific_params_nfcf_poll nfcf_poll;
 	} rf_tech_specific_params;
 
 	__u8	data_exch_rf_tech_and_mode;
@@ -300,6 +381,8 @@ struct nci_rf_intf_activated_ntf {
 
 	union {
 		struct activation_params_nfca_poll_iso_dep nfca_poll_iso_dep;
+		struct activation_params_nfcb_poll_iso_dep nfcb_poll_iso_dep;
+		struct activation_params_poll_nfc_dep poll_nfc_dep;
 	} activation_params;
 
 } __packed;

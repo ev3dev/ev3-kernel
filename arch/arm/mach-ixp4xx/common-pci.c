@@ -32,7 +32,6 @@
 #include <asm/cputype.h>
 #include <asm/irq.h>
 #include <asm/sizes.h>
-#include <asm/system.h>
 #include <asm/mach/pci.h>
 #include <mach/hardware.h>
 
@@ -327,7 +326,7 @@ static int ixp4xx_needs_bounce(struct device *dev, dma_addr_t dma_addr, size_t s
  */
 static int ixp4xx_pci_platform_notify(struct device *dev)
 {
-	if(dev->bus == &pci_bus_type) {
+	if (dev_is_pci(dev)) {
 		*dev->dma_mask =  SZ_64M - 1;
 		dev->coherent_dma_mask = SZ_64M - 1;
 		dmabounce_register_dev(dev, 2048, 4096, ixp4xx_needs_bounce);
@@ -337,9 +336,9 @@ static int ixp4xx_pci_platform_notify(struct device *dev)
 
 static int ixp4xx_pci_platform_notify_remove(struct device *dev)
 {
-	if(dev->bus == &pci_bus_type) {
+	if (dev_is_pci(dev))
 		dmabounce_unregister_dev(dev);
-	}
+
 	return 0;
 }
 
@@ -411,6 +410,7 @@ void __init ixp4xx_pci_preinit(void)
 		 * Enable the IO window to be way up high, at 0xfffffc00
 		 */
 		local_write_config(PCI_BASE_ADDRESS_5, 4, 0xfffffc01);
+		local_write_config(0x40, 4, 0x000080FF); /* No TRDY time limit */
 	} else {
 		printk("PCI: IXP4xx is target - No bus scan performed\n");
 	}
@@ -472,19 +472,13 @@ int ixp4xx_setup(int nr, struct pci_sys_data *sys)
 	request_resource(&ioport_resource, &res[0]);
 	request_resource(&iomem_resource, &res[1]);
 
-	pci_add_resource(&sys->resources, &res[0]);
-	pci_add_resource(&sys->resources, &res[1]);
+	pci_add_resource_offset(&sys->resources, &res[0], sys->io_offset);
+	pci_add_resource_offset(&sys->resources, &res[1], sys->mem_offset);
 
 	platform_notify = ixp4xx_pci_platform_notify;
 	platform_notify_remove = ixp4xx_pci_platform_notify_remove;
 
 	return 1;
-}
-
-struct pci_bus * __devinit ixp4xx_scan_bus(int nr, struct pci_sys_data *sys)
-{
-	return pci_scan_root_bus(NULL, sys->busnr, &ixp4xx_ops, sys,
-				 &sys->resources);
 }
 
 int dma_set_coherent_mask(struct device *dev, u64 mask)

@@ -15,9 +15,7 @@
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 #include <sound/soc.h>
-#include <mach/kirkwood.h>
-#include <plat/audio.h>
-#include <asm/mach-types.h>
+#include <linux/platform_data/asoc-kirkwood.h>
 #include "../codecs/alc5623.h"
 
 static int t5325_hw_params(struct snd_pcm_substream *substream,
@@ -70,8 +68,8 @@ static struct snd_soc_dai_link t5325_dai[] = {
 {
 	.name = "ALC5621",
 	.stream_name = "ALC5621 HiFi",
-	.cpu_dai_name = "kirkwood-i2s",
-	.platform_name = "kirkwood-pcm-audio",
+	.cpu_dai_name = "i2s",
+	.platform_name = "mvebu-audio",
 	.codec_dai_name = "alc5621-hifi",
 	.codec_name = "alc562x-codec.0-001a",
 	.dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_CBS_CFS,
@@ -79,7 +77,6 @@ static struct snd_soc_dai_link t5325_dai[] = {
 	.init = t5325_dai_init,
 },
 };
-
 
 static struct snd_soc_card t5325 = {
 	.name = "t5325",
@@ -93,38 +90,40 @@ static struct snd_soc_card t5325 = {
 	.num_dapm_routes = ARRAY_SIZE(t5325_route),
 };
 
-static struct platform_device *t5325_snd_device;
-
-static int __init t5325_init(void)
+static int t5325_probe(struct platform_device *pdev)
 {
+	struct snd_soc_card *card = &t5325;
 	int ret;
 
-	if (!machine_is_t5325())
-		return 0;
+	card->dev = &pdev->dev;
 
-	t5325_snd_device = platform_device_alloc("soc-audio", -1);
-	if (!t5325_snd_device)
-		return -ENOMEM;
-
-	platform_set_drvdata(t5325_snd_device,
-			&t5325);
-
-	ret = platform_device_add(t5325_snd_device);
-	if (ret) {
-		printk(KERN_ERR "%s: platform_device_add failed\n", __func__);
-		platform_device_put(t5325_snd_device);
-	}
-
+	ret = snd_soc_register_card(card);
+	if (ret)
+		dev_err(&pdev->dev, "snd_soc_register_card() failed: %d\n",
+			ret);
 	return ret;
 }
-module_init(t5325_init);
 
-static void __exit t5325_exit(void)
+static int t5325_remove(struct platform_device *pdev)
 {
-	platform_device_unregister(t5325_snd_device);
+	struct snd_soc_card *card = platform_get_drvdata(pdev);
+
+	snd_soc_unregister_card(card);
+	return 0;
 }
-module_exit(t5325_exit);
+
+static struct platform_driver t5325_driver = {
+	.driver		= {
+		.name	= "t5325-audio",
+		.owner	= THIS_MODULE,
+	},
+	.probe		= t5325_probe,
+	.remove		= t5325_remove,
+};
+
+module_platform_driver(t5325_driver);
 
 MODULE_AUTHOR("Arnaud Patard <arnaud.patard@rtp-net.org>");
 MODULE_DESCRIPTION("ALSA SoC t5325 audio client");
 MODULE_LICENSE("GPL");
+MODULE_ALIAS("platform:t5325-audio");

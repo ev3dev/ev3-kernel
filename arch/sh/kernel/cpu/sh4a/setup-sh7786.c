@@ -23,22 +23,30 @@
 #include <linux/sh_timer.h>
 #include <linux/sh_dma.h>
 #include <linux/sh_intc.h>
+#include <linux/usb/ohci_pdriver.h>
 #include <cpu/dma-register.h>
 #include <asm/mmzone.h>
 
 static struct plat_sci_port scif0_platform_data = {
-	.mapbase	= 0xffea0000,
 	.flags		= UPF_BOOT_AUTOCONF,
 	.scscr		= SCSCR_RE | SCSCR_TE | SCSCR_REIE | SCSCR_CKE1,
-	.scbrr_algo_id	= SCBRR_ALGO_1,
 	.type		= PORT_SCIF,
-	.irqs		= { 40, 41, 43, 42 },
 	.regtype	= SCIx_SH4_SCIF_FIFODATA_REGTYPE,
+};
+
+static struct resource scif0_resources[] = {
+	DEFINE_RES_MEM(0xffea0000, 0x100),
+	DEFINE_RES_IRQ(evt2irq(0x700)),
+	DEFINE_RES_IRQ(evt2irq(0x720)),
+	DEFINE_RES_IRQ(evt2irq(0x760)),
+	DEFINE_RES_IRQ(evt2irq(0x740)),
 };
 
 static struct platform_device scif0_device = {
 	.name		= "sh-sci",
 	.id		= 0,
+	.resource	= scif0_resources,
+	.num_resources	= ARRAY_SIZE(scif0_resources),
 	.dev		= {
 		.platform_data	= &scif0_platform_data,
 	},
@@ -48,90 +56,119 @@ static struct platform_device scif0_device = {
  * The rest of these all have multiplexed IRQs
  */
 static struct plat_sci_port scif1_platform_data = {
-	.mapbase	= 0xffeb0000,
 	.flags		= UPF_BOOT_AUTOCONF,
 	.scscr		= SCSCR_RE | SCSCR_TE | SCSCR_REIE | SCSCR_CKE1,
-	.scbrr_algo_id	= SCBRR_ALGO_1,
 	.type		= PORT_SCIF,
-	.irqs		= { 44, 44, 44, 44 },
 	.regtype	= SCIx_SH4_SCIF_FIFODATA_REGTYPE,
+};
+
+static struct resource scif1_resources[] = {
+	DEFINE_RES_MEM(0xffeb0000, 0x100),
+	DEFINE_RES_IRQ(evt2irq(0x780)),
+};
+
+static struct resource scif1_demux_resources[] = {
+	DEFINE_RES_MEM(0xffeb0000, 0x100),
+	/* Placeholders, see sh7786_devices_setup() */
+	DEFINE_RES_IRQ(0),
+	DEFINE_RES_IRQ(0),
+	DEFINE_RES_IRQ(0),
+	DEFINE_RES_IRQ(0),
 };
 
 static struct platform_device scif1_device = {
 	.name		= "sh-sci",
 	.id		= 1,
+	.resource	= scif1_resources,
+	.num_resources	= ARRAY_SIZE(scif1_resources),
 	.dev		= {
 		.platform_data	= &scif1_platform_data,
 	},
 };
 
 static struct plat_sci_port scif2_platform_data = {
-	.mapbase	= 0xffec0000,
 	.flags		= UPF_BOOT_AUTOCONF,
 	.scscr		= SCSCR_RE | SCSCR_TE | SCSCR_REIE | SCSCR_CKE1,
-	.scbrr_algo_id	= SCBRR_ALGO_1,
 	.type		= PORT_SCIF,
-	.irqs		= { 50, 50, 50, 50 },
 	.regtype	= SCIx_SH4_SCIF_FIFODATA_REGTYPE,
+};
+
+static struct resource scif2_resources[] = {
+	DEFINE_RES_MEM(0xffec0000, 0x100),
+	DEFINE_RES_IRQ(evt2irq(0x840)),
 };
 
 static struct platform_device scif2_device = {
 	.name		= "sh-sci",
 	.id		= 2,
+	.resource	= scif2_resources,
+	.num_resources	= ARRAY_SIZE(scif2_resources),
 	.dev		= {
 		.platform_data	= &scif2_platform_data,
 	},
 };
 
 static struct plat_sci_port scif3_platform_data = {
-	.mapbase	= 0xffed0000,
 	.flags		= UPF_BOOT_AUTOCONF,
 	.scscr		= SCSCR_RE | SCSCR_TE | SCSCR_REIE | SCSCR_CKE1,
-	.scbrr_algo_id	= SCBRR_ALGO_1,
 	.type		= PORT_SCIF,
-	.irqs		= { 51, 51, 51, 51 },
 	.regtype	= SCIx_SH4_SCIF_FIFODATA_REGTYPE,
+};
+
+static struct resource scif3_resources[] = {
+	DEFINE_RES_MEM(0xffed0000, 0x100),
+	DEFINE_RES_IRQ(evt2irq(0x860)),
 };
 
 static struct platform_device scif3_device = {
 	.name		= "sh-sci",
 	.id		= 3,
+	.resource	= scif3_resources,
+	.num_resources	= ARRAY_SIZE(scif3_resources),
 	.dev		= {
 		.platform_data	= &scif3_platform_data,
 	},
 };
 
 static struct plat_sci_port scif4_platform_data = {
-	.mapbase	= 0xffee0000,
 	.flags		= UPF_BOOT_AUTOCONF,
 	.scscr		= SCSCR_RE | SCSCR_TE | SCSCR_REIE | SCSCR_CKE1,
-	.scbrr_algo_id	= SCBRR_ALGO_1,
 	.type		= PORT_SCIF,
-	.irqs		= { 52, 52, 52, 52 },
 	.regtype	= SCIx_SH4_SCIF_FIFODATA_REGTYPE,
+};
+
+static struct resource scif4_resources[] = {
+	DEFINE_RES_MEM(0xffee0000, 0x100),
+	DEFINE_RES_IRQ(evt2irq(0x880)),
 };
 
 static struct platform_device scif4_device = {
 	.name		= "sh-sci",
 	.id		= 4,
+	.resource	= scif4_resources,
+	.num_resources	= ARRAY_SIZE(scif4_resources),
 	.dev		= {
 		.platform_data	= &scif4_platform_data,
 	},
 };
 
 static struct plat_sci_port scif5_platform_data = {
-	.mapbase	= 0xffef0000,
 	.flags		= UPF_BOOT_AUTOCONF,
 	.scscr		= SCSCR_RE | SCSCR_TE | SCSCR_REIE | SCSCR_CKE1,
-	.scbrr_algo_id	= SCBRR_ALGO_1,
 	.type		= PORT_SCIF,
-	.irqs		= { 53, 53, 53, 53 },
 	.regtype	= SCIx_SH4_SCIF_FIFODATA_REGTYPE,
+};
+
+static struct resource scif5_resources[] = {
+	DEFINE_RES_MEM(0xffef0000, 0x100),
+	DEFINE_RES_IRQ(evt2irq(0x8a0)),
 };
 
 static struct platform_device scif5_device = {
 	.name		= "sh-sci",
 	.id		= 5,
+	.resource	= scif5_resources,
+	.num_resources	= ARRAY_SIZE(scif5_resources),
 	.dev		= {
 		.platform_data	= &scif5_platform_data,
 	},
@@ -150,7 +187,7 @@ static struct resource tmu0_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 16,
+		.start	= evt2irq(0x400),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -178,7 +215,7 @@ static struct resource tmu1_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 17,
+		.start	= evt2irq(0x420),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -205,7 +242,7 @@ static struct resource tmu2_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 18,
+		.start	= evt2irq(0x440),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -232,7 +269,7 @@ static struct resource tmu3_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 20,
+		.start	= evt2irq(0x480),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -259,7 +296,7 @@ static struct resource tmu4_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 21,
+		.start	= evt2irq(0x4a0),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -286,7 +323,7 @@ static struct resource tmu5_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 22,
+		.start	= evt2irq(0x4c0),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -313,7 +350,7 @@ static struct resource tmu6_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 45,
+		.start	= evt2irq(0x7a0),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -340,7 +377,7 @@ static struct resource tmu7_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 45,
+		.start	= evt2irq(0x7a0),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -367,7 +404,7 @@ static struct resource tmu8_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 45,
+		.start	= evt2irq(0x7a0),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -394,7 +431,7 @@ static struct resource tmu9_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 46,
+		.start	= evt2irq(0x7c0),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -421,7 +458,7 @@ static struct resource tmu10_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 46,
+		.start	= evt2irq(0x7c0),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -448,7 +485,7 @@ static struct resource tmu11_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 46,
+		.start	= evt2irq(0x7c0),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -550,8 +587,8 @@ static struct resource usb_ehci_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 77,
-		.end	= 77,
+		.start	= evt2irq(0xba0),
+		.end	= evt2irq(0xba0),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -574,18 +611,21 @@ static struct resource usb_ohci_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 77,
-		.end	= 77,
+		.start	= evt2irq(0xba0),
+		.end	= evt2irq(0xba0),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
 
+static struct usb_ohci_pdata usb_ohci_pdata;
+
 static struct platform_device usb_ohci_device = {
-	.name		= "sh_ohci",
+	.name		= "ohci-platform",
 	.id		= -1,
 	.dev = {
 		.dma_mask		= &usb_ohci_device.dev.coherent_dma_mask,
 		.coherent_dma_mask	= DMA_BIT_MASK(32),
+		.platform_data		= &usb_ohci_pdata,
 	},
 	.num_resources	= ARRAY_SIZE(usb_ohci_resources),
 	.resource	= usb_ohci_resources,
@@ -1030,13 +1070,16 @@ static int __init sh7786_devices_setup(void)
 	 */
 	irq = intc_irq_lookup(sh7786_intc_desc.name, TXI1);
 	if (irq > 0) {
-		scif1_platform_data.irqs[SCIx_TXI_IRQ] = irq;
-		scif1_platform_data.irqs[SCIx_ERI_IRQ] =
+		scif1_demux_resources[1].start =
 			intc_irq_lookup(sh7786_intc_desc.name, ERI1);
-		scif1_platform_data.irqs[SCIx_BRI_IRQ] =
-			intc_irq_lookup(sh7786_intc_desc.name, BRI1);
-		scif1_platform_data.irqs[SCIx_RXI_IRQ] =
+		scif1_demux_resources[2].start =
 			intc_irq_lookup(sh7786_intc_desc.name, RXI1);
+		scif1_demux_resources[3].start = irq;
+		scif1_demux_resources[4].start =
+			intc_irq_lookup(sh7786_intc_desc.name, BRI1);
+
+		scif1_device.resource = scif1_demux_resources;
+		scif1_device.num_resources = ARRAY_SIZE(scif1_demux_resources);
 	}
 
 	ret = platform_add_devices(sh7786_early_devices,

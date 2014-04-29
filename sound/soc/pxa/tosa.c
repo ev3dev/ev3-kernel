@@ -197,7 +197,7 @@ static int tosa_ac97_init(struct snd_soc_pcm_runtime *rtd)
 	snd_soc_dapm_nc_pin(dapm, "MONOOUT");
 
 	/* add tosa specific controls */
-	err = snd_soc_add_controls(codec, tosa_controls,
+	err = snd_soc_add_codec_controls(codec, tosa_controls,
 				ARRAY_SIZE(tosa_controls));
 	if (err < 0)
 		return err;
@@ -241,7 +241,7 @@ static struct snd_soc_card tosa = {
 	.num_links = ARRAY_SIZE(tosa_dai),
 };
 
-static int __devinit tosa_probe(struct platform_device *pdev)
+static int tosa_probe(struct platform_device *pdev)
 {
 	struct snd_soc_card *card = &tosa;
 	int ret;
@@ -262,7 +262,7 @@ static int __devinit tosa_probe(struct platform_device *pdev)
 	return ret;
 }
 
-static int __devexit tosa_remove(struct platform_device *pdev)
+static int tosa_remove(struct platform_device *pdev)
 {
 	struct snd_soc_card *card = platform_get_drvdata(pdev);
 
@@ -275,9 +275,10 @@ static struct platform_driver tosa_driver = {
 	.driver		= {
 		.name	= "tosa-audio",
 		.owner	= THIS_MODULE,
+		.pm     = &snd_soc_pm_ops,
 	},
 	.probe		= tosa_probe,
-	.remove		= __devexit_p(tosa_remove),
+	.remove		= tosa_remove,
 };
 
 module_platform_driver(tosa_driver);

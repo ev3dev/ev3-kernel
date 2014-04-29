@@ -22,6 +22,7 @@
 #include <linux/proc_fs.h>
 #include <linux/mutex.h>
 #include <linux/atomic.h>
+#include <linux/irqdomain.h>
 
 #define OF_ROOT_NODE_ADDR_CELLS_DEFAULT	2
 #define OF_ROOT_NODE_SIZE_CELLS_DEFAULT	1
@@ -42,10 +43,6 @@ extern int of_getintprop_default(struct device_node *np,
 				 const char *name,
 				 int def);
 extern int of_find_in_proplist(const char *list, const char *match, int len);
-#ifdef CONFIG_NUMA
-extern int of_node_to_nid(struct device_node *dp);
-#define of_node_to_nid of_node_to_nid
-#endif
 
 extern void prom_build_devicetree(void);
 extern void of_populate_present_mask(void);
@@ -54,15 +51,6 @@ extern void of_fill_in_cpu_data(void);
 struct resource;
 extern void __iomem *of_ioremap(struct resource *res, unsigned long offset, unsigned long size, char *name);
 extern void of_iounmap(struct resource *res, void __iomem *base, unsigned long size);
-
-/* These routines are here to provide compatibility with how powerpc
- * handles IRQ mapping for OF device nodes.  We precompute and permanently
- * register them in the platform_device objects, whereas powerpc computes them
- * on request.
- */
-static inline void irq_dispose_mapping(unsigned int virq)
-{
-}
 
 extern struct device_node *of_console_device;
 extern char *of_console_path;

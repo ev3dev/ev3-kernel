@@ -84,7 +84,7 @@ static struct st7586_function st7586_cfg_script[] = {
 	{ ST7586_END, ST7586_END},
 };
 
-static struct fb_fix_screeninfo st7586fb_fix __devinitdata = {
+static struct fb_fix_screeninfo st7586fb_fix = {
 	.id		= "ST7586",
 	.type		= FB_TYPE_PACKED_PIXELS,
 	.visual		= FB_VISUAL_MONO01,
@@ -95,7 +95,7 @@ static struct fb_fix_screeninfo st7586fb_fix __devinitdata = {
 	.accel		= FB_ACCEL_NONE,
 };
 
-static struct fb_var_screeninfo st7586fb_var __devinitdata = {
+static struct fb_var_screeninfo st7586fb_var = {
 	.xres		= WIDTH,
 	.yres		= HEIGHT,
 	.xres_virtual	= WIDTH,
@@ -453,7 +453,7 @@ static struct fb_deferred_io st7586fb_defio = {
 	.deferred_io	= st7586fb_deferred_io,
 };
 
-static int __devinit st7586fb_probe (struct spi_device *spi)
+static int st7586fb_probe (struct spi_device *spi)
 {
 	int chip = spi_get_device_id(spi)->driver_data;
 	struct st7586fb_platform_data *pdata = spi->dev.platform_data;
@@ -546,7 +546,7 @@ fballoc_fail:
 	return retval;
 }
 
-static int __devexit st7586fb_remove(struct spi_device *spi)
+static int st7586fb_remove(struct spi_device *spi)
 {
 	struct fb_info *info = spi_get_drvdata(spi);
 
@@ -583,7 +583,7 @@ static struct spi_driver st7586fb_driver = {
 	},
 	.id_table = st7586fb_ids,
 	.probe  = st7586fb_probe,
-	.remove = __devexit_p(st7586fb_remove),
+	.remove = st7586fb_remove,
 };
 
 static int __init st7586fb_init(void)

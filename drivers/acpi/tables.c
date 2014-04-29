@@ -204,7 +204,7 @@ int __init
 acpi_table_parse_entries(char *id,
 			     unsigned long table_size,
 			     int entry_id,
-			     acpi_table_entry_handler handler,
+			     acpi_tbl_entry_handler handler,
 			     unsigned int max_entries)
 {
 	struct acpi_table_header *table_header = NULL;
@@ -240,10 +240,17 @@ acpi_table_parse_entries(char *id,
 	       table_end) {
 		if (entry->type == entry_id
 		    && (!max_entries || count++ < max_entries))
-			if (handler(entry, table_end)) {
-				early_acpi_os_unmap_memory((char *)table_header, tbl_size);
-				return -EINVAL;
-			}
+			if (handler(entry, table_end))
+				goto err;
+
+		/*
+		 * If entry->length is 0, break from this loop to avoid
+		 * infinite loop.
+		 */
+		if (entry->length == 0) {
+			pr_err(PREFIX "[%4.4s:0x%02x] Invalid zero length\n", id, entry_id);
+			goto err;
+		}
 
 		entry = (struct acpi_subtable_header *)
 		    ((unsigned long)entry + entry->length);
@@ -255,11 +262,14 @@ acpi_table_parse_entries(char *id,
 
 	early_acpi_os_unmap_memory((char *)table_header, tbl_size);
 	return count;
+err:
+	early_acpi_os_unmap_memory((char *)table_header, tbl_size);
+	return -EINVAL;
 }
 
 int __init
 acpi_table_parse_madt(enum acpi_madt_type id,
-		      acpi_table_entry_handler handler, unsigned int max_entries)
+		      acpi_tbl_entry_handler handler, unsigned int max_entries)
 {
 	return acpi_table_parse_entries(ACPI_SIG_MADT,
 					    sizeof(struct acpi_table_madt), id,
@@ -268,14 +278,15 @@ acpi_table_parse_madt(enum acpi_madt_type id,
 
 /**
  * acpi_table_parse - find table with @id, run @handler on it
- *
  * @id: table id to find
  * @handler: handler to run
  *
  * Scan the ACPI System Descriptor Table (STD) for a table matching @id,
- * run @handler on it.  Return 0 if table found, return on if not.
+ * run @handler on it.
+ *
+ * Return 0 if table found, -errno if not.
  */
-int __init acpi_table_parse(char *id, acpi_table_handler handler)
+int __init acpi_table_parse(char *id, acpi_tbl_table_handler handler)
 {
 	struct acpi_table_header *table = NULL;
 	acpi_size tbl_size;
@@ -283,7 +294,7 @@ int __init acpi_table_parse(char *id, acpi_table_handler handler)
 	if (acpi_disabled)
 		return -ENODEV;
 
-	if (!handler)
+	if (!id || !handler)
 		return -EINVAL;
 
 	if (strncmp(id, ACPI_SIG_MADT, 4) == 0)
@@ -296,7 +307,7 @@ int __init acpi_table_parse(char *id, acpi_table_handler handler)
 		early_acpi_os_unmap_memory(table, tbl_size);
 		return 0;
 	} else
-		return 1;
+		return -ENODEV;
 }
 
 /* 
@@ -341,7 +352,7 @@ int __init acpi_table_init(void)
 
 	status = acpi_initialize_tables(initial_tables, ACPI_MAX_TABLES, 0);
 	if (ACPI_FAILURE(status))
-		return 1;
+		return -EINVAL;
 
 	check_multiple_madt();
 	return 0;

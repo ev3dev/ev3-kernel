@@ -22,8 +22,8 @@
 #include <linux/sysfs.h>
 
 #include "iio_dummy_evgen.h"
-#include "iio.h"
-#include "sysfs.h"
+#include <linux/iio/iio.h>
+#include <linux/iio/sysfs.h>
 
 /* Fiddly bit of faking and irq without hardware */
 #define IIO_EVENTGEN_NO 10
@@ -32,7 +32,7 @@
  * @chip: irq chip we are faking
  * @base: base of irq range
  * @enabled: mask of which irqs are enabled
- * @inuse: mask of which irqs actually have anyone connected
+ * @inuse: mask of which irqs are connected
  * @lock: protect the evgen state
  */
 struct iio_dummy_eventgen {
@@ -108,7 +108,7 @@ int iio_dummy_evgen_get_irq(void)
 
 	mutex_lock(&iio_evgen->lock);
 	for (i = 0; i < IIO_EVENTGEN_NO; i++)
-		if (iio_evgen->inuse[i] == false) {
+		if (!iio_evgen->inuse[i]) {
 			ret = iio_evgen->base + i;
 			iio_evgen->inuse[i] = true;
 			break;
@@ -216,6 +216,6 @@ static __exit void iio_dummy_evgen_exit(void)
 }
 module_exit(iio_dummy_evgen_exit);
 
-MODULE_AUTHOR("Jonathan Cameron <jic23@cam.ac.uk>");
+MODULE_AUTHOR("Jonathan Cameron <jic23@kernel.org>");
 MODULE_DESCRIPTION("IIO dummy driver");
 MODULE_LICENSE("GPL v2");

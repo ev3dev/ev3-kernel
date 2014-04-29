@@ -78,32 +78,18 @@ static int ehci_msp_setup(struct usb_hcd *hcd)
 {
 	struct ehci_hcd		*ehci = hcd_to_ehci(hcd);
 	int			retval;
+
 	ehci->big_endian_mmio = 1;
 	ehci->big_endian_desc = 1;
 
 	ehci->caps = hcd->regs;
-	ehci->regs = hcd->regs +
-		HC_LENGTH(ehci, ehci_readl(ehci, &ehci->caps->hc_capbase));
-	dbg_hcs_params(ehci, "reset");
-	dbg_hcc_params(ehci, "reset");
-
-	/* cache this readonly data; minimize chip reads */
-	ehci->hcs_params = ehci_readl(ehci, &ehci->caps->hcs_params);
 	hcd->has_tt = 1;
 
-	retval = ehci_halt(ehci);
-	if (retval)
-		return retval;
-
-	ehci_reset(ehci);
-
-	/* data structure init */
-	retval = ehci_init(hcd);
+	retval = ehci_setup(hcd);
 	if (retval)
 		return retval;
 
 	usb_hcd_tdi_set_mode(ehci);
-	ehci_port_power(ehci, 0);
 
 	return retval;
 }
@@ -224,8 +210,10 @@ int usb_hcd_msp_probe(const struct hc_driver *driver,
 
 
 	retval = usb_add_hcd(hcd, res->start, IRQF_SHARED);
-	if (retval == 0)
+	if (retval == 0) {
+		device_wakeup_enable(hcd->self.controller);
 		return 0;
+	}
 
 	usb_remove_hcd(hcd);
 err3:
@@ -300,13 +288,12 @@ static const struct hc_driver ehci_msp_hc_driver = {
 #else
 	.irq =			ehci_irq,
 #endif
-	.flags =		HCD_MEMORY | HCD_USB2,
+	.flags =		HCD_MEMORY | HCD_USB2 | HCD_BH,
 
 	/*
 	 * basic lifecycle operations
 	 */
-	.reset =		ehci_msp_setup,
-	.start =		ehci_run,
+	.reset			= ehci_msp_setup,
 	.shutdown		= ehci_shutdown,
 	.start			= ehci_run,
 	.stop			= ehci_stop,

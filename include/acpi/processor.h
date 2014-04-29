@@ -3,9 +3,12 @@
 
 #include <linux/kernel.h>
 #include <linux/cpu.h>
-#include <linux/cpuidle.h>
 #include <linux/thermal.h>
 #include <asm/acpi.h>
+
+#define ACPI_PROCESSOR_CLASS		"processor"
+#define ACPI_PROCESSOR_DEVICE_NAME	"Processor"
+#define ACPI_PROCESSOR_DEVICE_HID	"ACPI0007"
 
 #define ACPI_PROCESSOR_BUSY_METRIC	10
 
@@ -59,16 +62,11 @@ struct acpi_processor_cx {
 	u8 entry_method;
 	u8 index;
 	u32 latency;
-	u32 latency_ticks;
-	u32 power;
-	u32 usage;
-	u64 time;
 	u8 bm_sts_skip;
 	char desc[ACPI_CX_DESC_LEN];
 };
 
 struct acpi_processor_power {
-	struct cpuidle_device dev;
 	struct acpi_processor_cx *state;
 	unsigned long bm_check_timestamp;
 	u32 default_state;
@@ -201,6 +199,7 @@ struct acpi_processor_flags {
 struct acpi_processor {
 	acpi_handle handle;
 	u32 acpi_id;
+	u32 apic_id;
 	u32 id;
 	u32 pblk;
 	int performance_platform_limit;
@@ -213,6 +212,7 @@ struct acpi_processor {
 	struct acpi_processor_throttling throttling;
 	struct acpi_processor_limit limit;
 	struct thermal_cooling_device *cdev;
+	struct device *dev; /* Processor device. */
 };
 
 struct acpi_processor_errata {
@@ -239,6 +239,9 @@ extern void acpi_processor_unregister_performance(struct
 /* note: this locks both the calling module and the processor module
          if a _PPC object exists, rmmod is disallowed then */
 int acpi_processor_notify_smm(struct module *calling_module);
+
+/* parsing the _P* objects. */
+extern int acpi_processor_get_performance_info(struct acpi_processor *pr);
 
 /* for communication between multiple parts of the processor kernel module */
 DECLARE_PER_CPU(struct acpi_processor *, processors);
@@ -311,6 +314,8 @@ static inline int acpi_processor_get_bios_limit(int cpu, unsigned int *limit)
 
 /* in processor_core.c */
 void acpi_processor_set_pdc(acpi_handle handle);
+int acpi_get_apicid(acpi_handle, int type, u32 acpi_id);
+int acpi_map_cpuid(int apic_id, u32 acpi_id);
 int acpi_get_cpuid(acpi_handle, int type, u32 acpi_id);
 
 /* in processor_throttling.c */
@@ -327,15 +332,19 @@ extern void acpi_processor_reevaluate_tstate(struct acpi_processor *pr,
 extern const struct file_operations acpi_processor_throttling_fops;
 extern void acpi_processor_throttling_init(void);
 /* in processor_idle.c */
-int acpi_processor_power_init(struct acpi_processor *pr,
-			      struct acpi_device *device);
+int acpi_processor_power_init(struct acpi_processor *pr);
+int acpi_processor_power_exit(struct acpi_processor *pr);
 int acpi_processor_cst_has_changed(struct acpi_processor *pr);
 int acpi_processor_hotplug(struct acpi_processor *pr);
-int acpi_processor_power_exit(struct acpi_processor *pr,
-			      struct acpi_device *device);
-int acpi_processor_suspend(struct acpi_device * device, pm_message_t state);
-int acpi_processor_resume(struct acpi_device * device);
 extern struct cpuidle_driver acpi_idle_driver;
+
+#ifdef CONFIG_PM_SLEEP
+void acpi_processor_syscore_init(void);
+void acpi_processor_syscore_exit(void);
+#else
+static inline void acpi_processor_syscore_init(void) {}
+static inline void acpi_processor_syscore_exit(void) {}
+#endif
 
 /* in processor_thermal.c */
 int acpi_processor_get_limit_info(struct acpi_processor *pr);

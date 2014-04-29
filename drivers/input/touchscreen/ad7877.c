@@ -37,7 +37,6 @@
 
 
 #include <linux/device.h>
-#include <linux/init.h>
 #include <linux/delay.h>
 #include <linux/input.h>
 #include <linux/interrupt.h>
@@ -273,7 +272,7 @@ static int ad7877_write(struct spi_device *spi, u16 reg, u16 val)
 
 static int ad7877_read_adc(struct spi_device *spi, unsigned command)
 {
-	struct ad7877 *ts = dev_get_drvdata(&spi->dev);
+	struct ad7877 *ts = spi_get_drvdata(spi);
 	struct ser_req *req;
 	int status;
 	int sample;
@@ -682,11 +681,11 @@ static void ad7877_setup_ts_def_msg(struct spi_device *spi, struct ad7877 *ts)
 	}
 }
 
-static int __devinit ad7877_probe(struct spi_device *spi)
+static int ad7877_probe(struct spi_device *spi)
 {
 	struct ad7877			*ts;
 	struct input_dev		*input_dev;
-	struct ad7877_platform_data	*pdata = spi->dev.platform_data;
+	struct ad7877_platform_data	*pdata = dev_get_platdata(&spi->dev);
 	int				err;
 	u16				verify;
 
@@ -720,7 +719,7 @@ static int __devinit ad7877_probe(struct spi_device *spi)
 		goto err_free_mem;
 	}
 
-	dev_set_drvdata(&spi->dev, ts);
+	spi_set_drvdata(spi, ts);
 	ts->spi = spi;
 	ts->input = input_dev;
 
@@ -806,13 +805,12 @@ err_free_irq:
 err_free_mem:
 	input_free_device(input_dev);
 	kfree(ts);
-	dev_set_drvdata(&spi->dev, NULL);
 	return err;
 }
 
-static int __devexit ad7877_remove(struct spi_device *spi)
+static int ad7877_remove(struct spi_device *spi)
 {
-	struct ad7877 *ts = dev_get_drvdata(&spi->dev);
+	struct ad7877 *ts = spi_get_drvdata(spi);
 
 	sysfs_remove_group(&spi->dev.kobj, &ad7877_attr_group);
 
@@ -823,7 +821,6 @@ static int __devexit ad7877_remove(struct spi_device *spi)
 	kfree(ts);
 
 	dev_dbg(&spi->dev, "unregistered touchscreen\n");
-	dev_set_drvdata(&spi->dev, NULL);
 
 	return 0;
 }
@@ -857,20 +854,10 @@ static struct spi_driver ad7877_driver = {
 		.pm	= &ad7877_pm,
 	},
 	.probe		= ad7877_probe,
-	.remove		= __devexit_p(ad7877_remove),
+	.remove		= ad7877_remove,
 };
 
-static int __init ad7877_init(void)
-{
-	return spi_register_driver(&ad7877_driver);
-}
-module_init(ad7877_init);
-
-static void __exit ad7877_exit(void)
-{
-	spi_unregister_driver(&ad7877_driver);
-}
-module_exit(ad7877_exit);
+module_spi_driver(ad7877_driver);
 
 MODULE_AUTHOR("Michael Hennerich <hennerich@blackfin.uclinux.org>");
 MODULE_DESCRIPTION("AD7877 touchscreen Driver");

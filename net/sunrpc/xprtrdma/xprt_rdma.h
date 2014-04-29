@@ -235,13 +235,13 @@ struct rpcrdma_create_data_internal {
 };
 
 #define RPCRDMA_INLINE_READ_THRESHOLD(rq) \
-	(rpcx_to_rdmad(rq->rq_task->tk_xprt).inline_rsize)
+	(rpcx_to_rdmad(rq->rq_xprt).inline_rsize)
 
 #define RPCRDMA_INLINE_WRITE_THRESHOLD(rq)\
-	(rpcx_to_rdmad(rq->rq_task->tk_xprt).inline_wsize)
+	(rpcx_to_rdmad(rq->rq_xprt).inline_wsize)
 
 #define RPCRDMA_INLINE_PAD_VALUE(rq)\
-	rpcx_to_rdmad(rq->rq_task->tk_xprt).padding
+	rpcx_to_rdmad(rq->rq_xprt).padding
 
 /*
  * Statistics for RPCRDMA
@@ -342,5 +342,12 @@ void rpcrdma_reply_handler(struct rpcrdma_rep *);
  * RPC/RDMA protocol calls - xprtrdma/rpc_rdma.c
  */
 int rpcrdma_marshal_req(struct rpc_rqst *);
+
+/* Temporary NFS request map cache. Created in svc_rdma.c  */
+extern struct kmem_cache *svc_rdma_map_cachep;
+/* WR context cache. Created in svc_rdma.c  */
+extern struct kmem_cache *svc_rdma_ctxt_cachep;
+/* Workqueue created in svc_rdma.c */
+extern struct workqueue_struct *svc_rdma_wq;
 
 #endif				/* _LINUX_SUNRPC_XPRT_RDMA_H */

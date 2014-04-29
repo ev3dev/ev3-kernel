@@ -6,299 +6,286 @@
 
 #include <linux/kernel.h>
 #include <linux/init.h>
+#include <linux/bug.h>
+#include <linux/string.h>
+#include <linux/pinctrl/machine.h>
+#include <linux/pinctrl/pinconf-generic.h>
 
 #include <asm/mach-types.h>
-#include <plat/pincfg.h>
-#include <plat/gpio-nomadik.h>
-#include <mach/hardware.h>
 
-#include "pins-db8500.h"
+#include "board-mop500.h"
 
-static pin_cfg_t mop500_pins_common[] = {
-	/* I2C */
-	GPIO147_I2C0_SCL,
-	GPIO148_I2C0_SDA,
-	GPIO16_I2C1_SCL,
-	GPIO17_I2C1_SDA,
-	GPIO10_I2C2_SDA,
-	GPIO11_I2C2_SCL,
-	GPIO229_I2C3_SDA,
-	GPIO230_I2C3_SCL,
+/* These simply sets bias for pins */
+#define BIAS(a,b) static unsigned long a[] = { b }
 
-	/* MSP0 */
-	GPIO12_MSP0_TXD,
-	GPIO13_MSP0_TFS,
-	GPIO14_MSP0_TCK,
-	GPIO15_MSP0_RXD,
+BIAS(abx500_out_lo, PIN_CONF_PACKED(PIN_CONFIG_OUTPUT, 0));
+BIAS(abx500_in_pd, PIN_CONF_PACKED(PIN_CONFIG_BIAS_PULL_DOWN, 1));
+BIAS(abx500_in_nopull, PIN_CONF_PACKED(PIN_CONFIG_BIAS_PULL_DOWN, 0));
 
-	/* MSP2: HDMI */
-	GPIO193_MSP2_TXD,
-	GPIO194_MSP2_TCK,
-	GPIO195_MSP2_TFS,
-	GPIO196_MSP2_RXD | PIN_OUTPUT_LOW,
+#define AB8500_MUX_HOG(group, func) \
+	PIN_MAP_MUX_GROUP_HOG_DEFAULT("pinctrl-ab8500.0", group, func)
+#define AB8500_PIN_HOG(pin, conf) \
+	PIN_MAP_CONFIGS_PIN_HOG_DEFAULT("pinctrl-ab8500.0", pin, abx500_##conf)
 
-	/* Touch screen INTERFACE */
-	GPIO84_GPIO	| PIN_INPUT_PULLUP, /* TOUCH_INT1 */
+#define AB8500_MUX_STATE(group, func, dev, state) \
+	PIN_MAP_MUX_GROUP(dev, state, "pinctrl-ab8500.0", group, func)
+#define AB8500_PIN_STATE(pin, conf, dev, state) \
+	PIN_MAP_CONFIGS_PIN(dev, state, "pinctrl-ab8500.0", pin, abx500_##conf)
 
-	/* STMPE1601/tc35893 keypad  IRQ */
-	GPIO218_GPIO	| PIN_INPUT_PULLUP,
+#define AB8505_MUX_HOG(group, func) \
+	PIN_MAP_MUX_GROUP_HOG_DEFAULT("pinctrl-ab8505.0", group, func)
+#define AB8505_PIN_HOG(pin, conf) \
+	PIN_MAP_CONFIGS_PIN_HOG_DEFAULT("pinctrl-ab8505.0", pin, abx500_##conf)
 
-	/* MMC0 (MicroSD card) */
-	GPIO18_MC0_CMDDIR	| PIN_OUTPUT_HIGH,
-	GPIO19_MC0_DAT0DIR	| PIN_OUTPUT_HIGH,
-	GPIO20_MC0_DAT2DIR	| PIN_OUTPUT_HIGH,
+#define AB8505_MUX_STATE(group, func, dev, state) \
+	PIN_MAP_MUX_GROUP(dev, state, "pinctrl-ab8505.0", group, func)
+#define AB8505_PIN_STATE(pin, conf, dev, state) \
+	PIN_MAP_CONFIGS_PIN(dev, state, "pinctrl-ab8505.0", pin, abx500_##conf)
 
-	GPIO22_MC0_FBCLK	| PIN_INPUT_NOPULL,
-	GPIO23_MC0_CLK		| PIN_OUTPUT_LOW,
-	GPIO24_MC0_CMD		| PIN_INPUT_PULLUP,
-	GPIO25_MC0_DAT0		| PIN_INPUT_PULLUP,
-	GPIO26_MC0_DAT1		| PIN_INPUT_PULLUP,
-	GPIO27_MC0_DAT2		| PIN_INPUT_PULLUP,
-	GPIO28_MC0_DAT3		| PIN_INPUT_PULLUP,
+static struct pinctrl_map __initdata ab8500_pinmap[] = {
+	/* Sysclkreq2 */
+	AB8500_MUX_STATE("sysclkreq2_d_1", "sysclkreq", "regulator.35", PINCTRL_STATE_DEFAULT),
+	AB8500_PIN_STATE("GPIO1_T10", in_nopull, "regulator.35", PINCTRL_STATE_DEFAULT),
+	/* sysclkreq2 disable, mux in gpio configured in input pulldown */
+	AB8500_MUX_STATE("gpio1_a_1", "gpio", "regulator.35", PINCTRL_STATE_SLEEP),
+	AB8500_PIN_STATE("GPIO1_T10", in_pd, "regulator.35", PINCTRL_STATE_SLEEP),
 
-	/* SDI1 (SDIO) */
-	GPIO208_MC1_CLK		| PIN_OUTPUT_LOW,
-	GPIO209_MC1_FBCLK	| PIN_INPUT_NOPULL,
-	GPIO210_MC1_CMD		| PIN_INPUT_PULLUP,
-	GPIO211_MC1_DAT0	| PIN_INPUT_PULLUP,
-	GPIO212_MC1_DAT1	| PIN_INPUT_PULLUP,
-	GPIO213_MC1_DAT2	| PIN_INPUT_PULLUP,
-	GPIO214_MC1_DAT3	| PIN_INPUT_PULLUP,
+	/* pins 2 is muxed in GPIO, configured in INPUT PULL DOWN */
+	AB8500_MUX_HOG("gpio2_a_1", "gpio"),
+	AB8500_PIN_HOG("GPIO2_T9", in_pd),
 
-	/* MMC2 (On-board DATA INTERFACE eMMC) */
-	GPIO128_MC2_CLK		| PIN_OUTPUT_LOW,
-	GPIO129_MC2_CMD		| PIN_INPUT_PULLUP,
-	GPIO130_MC2_FBCLK	| PIN_INPUT_NOPULL,
-	GPIO131_MC2_DAT0	| PIN_INPUT_PULLUP,
-	GPIO132_MC2_DAT1	| PIN_INPUT_PULLUP,
-	GPIO133_MC2_DAT2	| PIN_INPUT_PULLUP,
-	GPIO134_MC2_DAT3	| PIN_INPUT_PULLUP,
-	GPIO135_MC2_DAT4	| PIN_INPUT_PULLUP,
-	GPIO136_MC2_DAT5	| PIN_INPUT_PULLUP,
-	GPIO137_MC2_DAT6	| PIN_INPUT_PULLUP,
-	GPIO138_MC2_DAT7	| PIN_INPUT_PULLUP,
+	/* Sysclkreq4 */
+	AB8500_MUX_STATE("sysclkreq4_d_1", "sysclkreq", "regulator.36", PINCTRL_STATE_DEFAULT),
+	AB8500_PIN_STATE("GPIO3_U9", in_nopull, "regulator.36", PINCTRL_STATE_DEFAULT),
+	/* sysclkreq4 disable, mux in gpio configured in input pulldown */
+	AB8500_MUX_STATE("gpio3_a_1", "gpio", "regulator.36", PINCTRL_STATE_SLEEP),
+	AB8500_PIN_STATE("GPIO3_U9", in_pd, "regulator.36", PINCTRL_STATE_SLEEP),
 
-	/* MMC4 (On-board STORAGE INTERFACE eMMC) */
-	GPIO197_MC4_DAT3	| PIN_INPUT_PULLUP,
-	GPIO198_MC4_DAT2	| PIN_INPUT_PULLUP,
-	GPIO199_MC4_DAT1	| PIN_INPUT_PULLUP,
-	GPIO200_MC4_DAT0	| PIN_INPUT_PULLUP,
-	GPIO201_MC4_CMD		| PIN_INPUT_PULLUP,
-	GPIO202_MC4_FBCLK	| PIN_INPUT_NOPULL,
-	GPIO203_MC4_CLK		| PIN_OUTPUT_LOW,
-	GPIO204_MC4_DAT7	| PIN_INPUT_PULLUP,
-	GPIO205_MC4_DAT6	| PIN_INPUT_PULLUP,
-	GPIO206_MC4_DAT5	| PIN_INPUT_PULLUP,
-	GPIO207_MC4_DAT4	| PIN_INPUT_PULLUP,
+	/* pins 4 is muxed in GPIO, configured in INPUT PULL DOWN */
+	AB8500_MUX_HOG("gpio4_a_1", "gpio"),
+	AB8500_PIN_HOG("GPIO4_W2", in_pd),
 
-	/* SKE keypad */
-	GPIO153_KP_I7,
-	GPIO154_KP_I6,
-	GPIO155_KP_I5,
-	GPIO156_KP_I4,
-	GPIO157_KP_O7,
-	GPIO158_KP_O6,
-	GPIO159_KP_O5,
-	GPIO160_KP_O4,
-	GPIO161_KP_I3,
-	GPIO162_KP_I2,
-	GPIO163_KP_I1,
-	GPIO164_KP_I0,
-	GPIO165_KP_O3,
-	GPIO166_KP_O2,
-	GPIO167_KP_O1,
-	GPIO168_KP_O0,
-
-	/* UART */
-	/* uart-0 pins gpio configuration should be
-	 * kept intact to prevent glitch in tx line
-	 * when tty dev is opened. Later these pins
-	 * are configured to uart mop500_pins_uart0
-	 *
-	 * It will be replaced with uart configuration
-	 * once the issue is solved.
+	/*
+	 * pins 6,7,8 and 9 are muxed in YCBCR0123
+	 * configured in INPUT PULL UP
 	 */
-	GPIO0_GPIO	| PIN_INPUT_PULLUP,
-	GPIO1_GPIO	| PIN_OUTPUT_HIGH,
-	GPIO2_GPIO	| PIN_INPUT_PULLUP,
-	GPIO3_GPIO	| PIN_OUTPUT_HIGH,
+	AB8500_MUX_HOG("ycbcr0123_d_1", "ycbcr"),
+	AB8500_PIN_HOG("GPIO6_Y18", in_nopull),
+	AB8500_PIN_HOG("GPIO7_AA20", in_nopull),
+	AB8500_PIN_HOG("GPIO8_W18", in_nopull),
+	AB8500_PIN_HOG("GPIO9_AA19", in_nopull),
 
-	GPIO29_U2_RXD	| PIN_INPUT_PULLUP,
-	GPIO30_U2_TXD	| PIN_OUTPUT_HIGH,
-	GPIO31_U2_CTSn	| PIN_INPUT_PULLUP,
-	GPIO32_U2_RTSn	| PIN_OUTPUT_HIGH,
+	/*
+	 * pins 10,11,12 and 13 are muxed in GPIO
+	 * configured in INPUT PULL DOWN
+	 */
+	AB8500_MUX_HOG("gpio10_d_1", "gpio"),
+	AB8500_PIN_HOG("GPIO10_U17", in_pd),
 
-	/* Display & HDMI HW sync */
-	GPIO68_LCD_VSI0	| PIN_INPUT_PULLUP,
-	GPIO69_LCD_VSI1	| PIN_INPUT_PULLUP,
+	AB8500_MUX_HOG("gpio11_d_1", "gpio"),
+	AB8500_PIN_HOG("GPIO11_AA18", in_pd),
+
+	AB8500_MUX_HOG("gpio12_d_1", "gpio"),
+	AB8500_PIN_HOG("GPIO12_U16", in_pd),
+
+	AB8500_MUX_HOG("gpio13_d_1", "gpio"),
+	AB8500_PIN_HOG("GPIO13_W17", in_pd),
+
+	/*
+	 * pins 14,15 are muxed in PWM1 and PWM2
+	 * configured in INPUT PULL DOWN
+	 */
+	AB8500_MUX_HOG("pwmout1_d_1", "pwmout"),
+	AB8500_PIN_HOG("GPIO14_F14", in_pd),
+
+	AB8500_MUX_HOG("pwmout2_d_1", "pwmout"),
+	AB8500_PIN_HOG("GPIO15_B17", in_pd),
+
+	/*
+	 * pins 16 is muxed in GPIO
+	 * configured in INPUT PULL DOWN
+	 */
+	AB8500_MUX_HOG("gpio16_a_1", "gpio"),
+	AB8500_PIN_HOG("GPIO14_F14", in_pd),
+
+	/*
+	 * pins 17,18,19 and 20 are muxed in AUDIO interface 1
+	 * configured in INPUT PULL DOWN
+	 */
+	AB8500_MUX_HOG("adi1_d_1", "adi1"),
+	AB8500_PIN_HOG("GPIO17_P5", in_pd),
+	AB8500_PIN_HOG("GPIO18_R5", in_pd),
+	AB8500_PIN_HOG("GPIO19_U5", in_pd),
+	AB8500_PIN_HOG("GPIO20_T5", in_pd),
+
+	/*
+	 * pins 21,22 and 23 are muxed in USB UICC
+	 * configured in INPUT PULL DOWN
+	 */
+	AB8500_MUX_HOG("usbuicc_d_1", "usbuicc"),
+	AB8500_PIN_HOG("GPIO21_H19", in_pd),
+	AB8500_PIN_HOG("GPIO22_G20", in_pd),
+	AB8500_PIN_HOG("GPIO23_G19", in_pd),
+
+	/*
+	 * pins 24,25 are muxed in GPIO
+	 * configured in INPUT PULL DOWN
+	 */
+	AB8500_MUX_HOG("gpio24_a_1", "gpio"),
+	AB8500_PIN_HOG("GPIO24_T14", in_pd),
+
+	AB8500_MUX_HOG("gpio25_a_1", "gpio"),
+	AB8500_PIN_HOG("GPIO25_R16", in_pd),
+
+	/*
+	 * pins 26 is muxed in GPIO
+	 * configured in OUTPUT LOW
+	 */
+	AB8500_MUX_HOG("gpio26_d_1", "gpio"),
+	AB8500_PIN_HOG("GPIO26_M16", out_lo),
+
+	/*
+	 * pins 27,28 are muxed in DMIC12
+	 * configured in INPUT PULL DOWN
+	 */
+	AB8500_MUX_HOG("dmic12_d_1", "dmic"),
+	AB8500_PIN_HOG("GPIO27_J6", in_pd),
+	AB8500_PIN_HOG("GPIO28_K6", in_pd),
+
+	/*
+	 * pins 29,30 are muxed in DMIC34
+	 * configured in INPUT PULL DOWN
+	 */
+	AB8500_MUX_HOG("dmic34_d_1", "dmic"),
+	AB8500_PIN_HOG("GPIO29_G6", in_pd),
+	AB8500_PIN_HOG("GPIO30_H6", in_pd),
+
+	/*
+	 * pins 31,32 are muxed in DMIC56
+	 * configured in INPUT PULL DOWN
+	 */
+	AB8500_MUX_HOG("dmic56_d_1", "dmic"),
+	AB8500_PIN_HOG("GPIO31_F5", in_pd),
+	AB8500_PIN_HOG("GPIO32_G5", in_pd),
+
+	/*
+	 * pins 34 is muxed in EXTCPENA
+	 * configured INPUT PULL DOWN
+	 */
+	AB8500_MUX_HOG("extcpena_d_1", "extcpena"),
+	AB8500_PIN_HOG("GPIO34_R17", in_pd),
+
+	/*
+	 * pins 35 is muxed in GPIO
+	 * configured in OUTPUT LOW
+	 */
+	AB8500_MUX_HOG("gpio35_d_1", "gpio"),
+	AB8500_PIN_HOG("GPIO35_W15", in_pd),
+
+	/*
+	 * pins 36,37,38 and 39 are muxed in GPIO
+	 * configured in INPUT PULL DOWN
+	 */
+	AB8500_MUX_HOG("gpio36_a_1", "gpio"),
+	AB8500_PIN_HOG("GPIO36_A17", in_pd),
+
+	AB8500_MUX_HOG("gpio37_a_1", "gpio"),
+	AB8500_PIN_HOG("GPIO37_E15", in_pd),
+
+	AB8500_MUX_HOG("gpio38_a_1", "gpio"),
+	AB8500_PIN_HOG("GPIO38_C17", in_pd),
+
+	AB8500_MUX_HOG("gpio39_a_1", "gpio"),
+	AB8500_PIN_HOG("GPIO39_E16", in_pd),
+
+	/*
+	 * pins 40 and 41 are muxed in MODCSLSDA
+	 * configured INPUT PULL DOWN
+	 */
+	AB8500_MUX_HOG("modsclsda_d_1", "modsclsda"),
+	AB8500_PIN_HOG("GPIO40_T19", in_pd),
+	AB8500_PIN_HOG("GPIO41_U19", in_pd),
+
+	/*
+	 * pins 42 is muxed in GPIO
+	 * configured INPUT PULL DOWN
+	 */
+	AB8500_MUX_HOG("gpio42_a_1", "gpio"),
+	AB8500_PIN_HOG("GPIO42_U2", in_pd),
 };
 
-static pin_cfg_t mop500_pins_default[] = {
-	/* SSP0 */
-	GPIO143_SSP0_CLK,
-	GPIO144_SSP0_FRM,
-	GPIO145_SSP0_RXD | PIN_PULL_DOWN,
-	GPIO146_SSP0_TXD,
+static struct pinctrl_map __initdata ab8505_pinmap[] = {
+	/* Sysclkreq2 */
+	AB8505_MUX_STATE("sysclkreq2_d_1", "sysclkreq", "regulator.36", PINCTRL_STATE_DEFAULT),
+	AB8505_PIN_STATE("GPIO1_N4", in_nopull, "regulator.36", PINCTRL_STATE_DEFAULT),
+	/* sysclkreq2 disable, mux in gpio configured in input pulldown */
+	AB8505_MUX_STATE("gpio1_a_1", "gpio", "regulator.36", PINCTRL_STATE_SLEEP),
+	AB8505_PIN_STATE("GPIO1_N4", in_pd, "regulator.36", PINCTRL_STATE_SLEEP),
 
+	/* pins 2 is muxed in GPIO, configured in INPUT PULL DOWN */
+	AB8505_MUX_HOG("gpio2_a_1", "gpio"),
+	AB8505_PIN_HOG("GPIO2_R5", in_pd),
 
-	GPIO217_GPIO	| PIN_INPUT_PULLUP, /* TC35892 IRQ */
+	/* Sysclkreq4 */
+	AB8505_MUX_STATE("sysclkreq4_d_1", "sysclkreq", "regulator.37", PINCTRL_STATE_DEFAULT),
+	AB8505_PIN_STATE("GPIO3_P5", in_nopull, "regulator.37", PINCTRL_STATE_DEFAULT),
+	/* sysclkreq4 disable, mux in gpio configured in input pulldown */
+	AB8505_MUX_STATE("gpio3_a_1", "gpio", "regulator.37", PINCTRL_STATE_SLEEP),
+	AB8505_PIN_STATE("GPIO3_P5", in_pd, "regulator.37", PINCTRL_STATE_SLEEP),
 
-	/* SDI0 (MicroSD card) */
-	GPIO21_MC0_DAT31DIR	| PIN_OUTPUT_HIGH,
+	AB8505_MUX_HOG("gpio10_d_1", "gpio"),
+	AB8505_PIN_HOG("GPIO10_B16", in_pd),
 
-	/* UART */
-	GPIO4_U1_RXD	| PIN_INPUT_PULLUP,
-	GPIO5_U1_TXD	| PIN_OUTPUT_HIGH,
-	GPIO6_U1_CTSn	| PIN_INPUT_PULLUP,
-	GPIO7_U1_RTSn	| PIN_OUTPUT_HIGH,
+	AB8505_MUX_HOG("gpio11_d_1", "gpio"),
+	AB8505_PIN_HOG("GPIO11_B17", in_pd),
+
+	AB8505_MUX_HOG("gpio13_d_1", "gpio"),
+	AB8505_PIN_HOG("GPIO13_D17", in_nopull),
+
+	AB8505_MUX_HOG("pwmout1_d_1", "pwmout"),
+	AB8505_PIN_HOG("GPIO14_C16", in_pd),
+
+	AB8505_MUX_HOG("adi2_d_1", "adi2"),
+	AB8505_PIN_HOG("GPIO17_P2", in_pd),
+	AB8505_PIN_HOG("GPIO18_N3", in_pd),
+	AB8505_PIN_HOG("GPIO19_T1", in_pd),
+	AB8505_PIN_HOG("GPIO20_P3", in_pd),
+
+	AB8505_MUX_HOG("gpio34_a_1", "gpio"),
+	AB8505_PIN_HOG("GPIO34_H14", in_pd),
+
+	AB8505_MUX_HOG("modsclsda_d_1", "modsclsda"),
+	AB8505_PIN_HOG("GPIO40_J15", in_pd),
+	AB8505_PIN_HOG("GPIO41_J14", in_pd),
+
+	AB8505_MUX_HOG("gpio50_d_1", "gpio"),
+	AB8505_PIN_HOG("GPIO50_L4", in_nopull),
+
+	AB8505_MUX_HOG("resethw_d_1", "resethw"),
+	AB8505_PIN_HOG("GPIO52_D16", in_pd),
+
+	AB8505_MUX_HOG("service_d_1", "service"),
+	AB8505_PIN_HOG("GPIO53_D15", in_pd),
 };
 
-static pin_cfg_t hrefv60_pins[] = {
-	/* WLAN */
-	GPIO4_GPIO		| PIN_INPUT_PULLUP,/* WLAN_IRQ */
-	GPIO85_GPIO		| PIN_OUTPUT_LOW,/* WLAN_ENA */
-
-	/* XENON Flashgun INTERFACE */
-	GPIO6_IP_GPIO0	| PIN_INPUT_PULLUP,/* XENON_FLASH_ID */
-	GPIO7_IP_GPIO1	| PIN_INPUT_PULLUP,/* XENON_READY */
-	GPIO170_GPIO	| PIN_OUTPUT_LOW, /* XENON_CHARGE */
-
-	/* Assistant LED INTERFACE */
-	GPIO21_GPIO | PIN_OUTPUT_LOW,  /* XENON_EN1 */
-	GPIO64_IP_GPIO4 | PIN_OUTPUT_LOW,  /* XENON_EN2 */
-
-	/* Magnetometer */
-	GPIO31_GPIO | PIN_INPUT_PULLUP,  /* magnetometer_INT */
-	GPIO32_GPIO | PIN_INPUT_PULLDOWN, /* Magnetometer DRDY */
-
-	/* Display Interface */
-	GPIO65_GPIO		| PIN_OUTPUT_LOW, /* DISP1 RST */
-	GPIO66_GPIO		| PIN_OUTPUT_LOW, /* DISP2 RST */
-
-	/* Touch screen INTERFACE */
-	GPIO143_GPIO	| PIN_OUTPUT_LOW,/*TOUCH_RST1 */
-
-	/* Touch screen INTERFACE 2 */
-	GPIO67_GPIO	| PIN_INPUT_PULLUP, /* TOUCH_INT2 */
-	GPIO146_GPIO	| PIN_OUTPUT_LOW,/*TOUCH_RST2 */
-
-	/* ETM_PTM_TRACE INTERFACE */
-	GPIO70_GPIO	| PIN_OUTPUT_LOW,/* ETM_PTM_DATA23 */
-	GPIO71_GPIO	| PIN_OUTPUT_LOW,/* ETM_PTM_DATA22 */
-	GPIO72_GPIO	| PIN_OUTPUT_LOW,/* ETM_PTM_DATA21 */
-	GPIO73_GPIO	| PIN_OUTPUT_LOW,/* ETM_PTM_DATA20 */
-	GPIO74_GPIO	| PIN_OUTPUT_LOW,/* ETM_PTM_DATA19 */
-
-	/* NAHJ INTERFACE */
-	GPIO76_GPIO	| PIN_OUTPUT_LOW,/* NAHJ_CTRL */
-	GPIO216_GPIO	| PIN_OUTPUT_HIGH,/* NAHJ_CTRL_INV */
-
-	/* NFC INTERFACE */
-	GPIO77_GPIO	| PIN_OUTPUT_LOW, /* NFC_ENA */
-	GPIO144_GPIO	| PIN_INPUT_PULLDOWN, /* NFC_IRQ */
-	GPIO142_GPIO	| PIN_OUTPUT_LOW, /* NFC_RESET */
-
-	/* Keyboard MATRIX INTERFACE */
-	GPIO90_MC5_CMD	| PIN_OUTPUT_LOW, /* KP_O_1 */
-	GPIO87_MC5_DAT1	| PIN_OUTPUT_LOW, /* KP_O_2 */
-	GPIO86_MC5_DAT0	| PIN_OUTPUT_LOW, /* KP_O_3 */
-	GPIO96_KP_O6	| PIN_OUTPUT_LOW, /* KP_O_6 */
-	GPIO94_KP_O7	| PIN_OUTPUT_LOW, /* KP_O_7 */
-	GPIO93_MC5_DAT4	| PIN_INPUT_PULLUP, /* KP_I_0 */
-	GPIO89_MC5_DAT3	| PIN_INPUT_PULLUP, /* KP_I_2 */
-	GPIO88_MC5_DAT2	| PIN_INPUT_PULLUP, /* KP_I_3 */
-	GPIO91_GPIO	| PIN_INPUT_PULLUP, /* FORCE_SENSING_INT */
-	GPIO92_GPIO	| PIN_OUTPUT_LOW, /* FORCE_SENSING_RST */
-	GPIO97_GPIO	| PIN_OUTPUT_LOW, /* FORCE_SENSING_WU */
-
-	/* DiPro Sensor Interface */
-	GPIO139_GPIO	| PIN_INPUT_PULLUP, /* DIPRO_INT */
-
-	/* HAL SWITCH INTERFACE */
-	GPIO145_GPIO	| PIN_INPUT_PULLDOWN,/* HAL_SW */
-
-	/* Audio Amplifier Interface */
-	GPIO149_GPIO	| PIN_OUTPUT_LOW, /* VAUDIO_HF_EN */
-
-	/* GBF INTERFACE */
-	GPIO171_GPIO	| PIN_OUTPUT_LOW, /* GBF_ENA_RESET */
-
-	/* MSP : HDTV INTERFACE */
-	GPIO192_GPIO	| PIN_INPUT_PULLDOWN,
-
-	/* ACCELEROMETER_INTERFACE */
-	GPIO82_GPIO		| PIN_INPUT_PULLUP, /* ACC_INT1 */
-	GPIO83_GPIO		| PIN_INPUT_PULLUP, /* ACC_INT2 */
-
-	/* Proximity Sensor */
-	GPIO217_GPIO		| PIN_INPUT_PULLUP,
-
-
-};
-
-static pin_cfg_t snowball_pins[] = {
-	/* SSP0, to AB8500 */
-	GPIO143_SSP0_CLK,
-	GPIO144_SSP0_FRM,
-	GPIO145_SSP0_RXD	| PIN_PULL_DOWN,
-	GPIO146_SSP0_TXD,
-
-	/* MMC0: MicroSD card */
-	GPIO21_MC0_DAT31DIR     | PIN_OUTPUT_HIGH,
-
-	/* MMC2: LAN */
-	GPIO86_SM_ADQ0,
-	GPIO87_SM_ADQ1,
-	GPIO88_SM_ADQ2,
-	GPIO89_SM_ADQ3,
-	GPIO90_SM_ADQ4,
-	GPIO91_SM_ADQ5,
-	GPIO92_SM_ADQ6,
-	GPIO93_SM_ADQ7,
-
-	GPIO94_SM_ADVn,
-	GPIO95_SM_CS0n,
-	GPIO96_SM_OEn,
-	GPIO97_SM_WEn,
-
-	GPIO128_SM_CKO,
-	GPIO130_SM_FBCLK,
-	GPIO131_SM_ADQ8,
-	GPIO132_SM_ADQ9,
-	GPIO133_SM_ADQ10,
-	GPIO134_SM_ADQ11,
-	GPIO135_SM_ADQ12,
-	GPIO136_SM_ADQ13,
-	GPIO137_SM_ADQ14,
-	GPIO138_SM_ADQ15,
-
-	/* RSTn_LAN */
-	GPIO141_GPIO		| PIN_OUTPUT_HIGH,
-};
-
-void __init mop500_pins_init(void)
+void __init mop500_pinmaps_init(void)
 {
-	nmk_config_pins(mop500_pins_common,
-			ARRAY_SIZE(mop500_pins_common));
-
-	nmk_config_pins(mop500_pins_default,
-			ARRAY_SIZE(mop500_pins_default));
+	if (machine_is_u8520())
+		pinctrl_register_mappings(ab8505_pinmap,
+					  ARRAY_SIZE(ab8505_pinmap));
+	else
+		pinctrl_register_mappings(ab8500_pinmap,
+					  ARRAY_SIZE(ab8500_pinmap));
 }
 
-void __init snowball_pins_init(void)
+void __init snowball_pinmaps_init(void)
 {
-	nmk_config_pins(mop500_pins_common,
-			ARRAY_SIZE(mop500_pins_common));
-
-	nmk_config_pins(snowball_pins,
-			ARRAY_SIZE(snowball_pins));
+	pinctrl_register_mappings(ab8500_pinmap,
+				  ARRAY_SIZE(ab8500_pinmap));
 }
 
-void __init hrefv60_pins_init(void)
+void __init hrefv60_pinmaps_init(void)
 {
-	nmk_config_pins(mop500_pins_common,
-			ARRAY_SIZE(mop500_pins_common));
-
-	nmk_config_pins(hrefv60_pins,
-			ARRAY_SIZE(hrefv60_pins));
+	pinctrl_register_mappings(ab8500_pinmap,
+				  ARRAY_SIZE(ab8500_pinmap));
 }

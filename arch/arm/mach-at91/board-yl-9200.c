@@ -43,10 +43,12 @@
 #include <asm/mach/irq.h>
 
 #include <mach/hardware.h>
-#include <mach/board.h>
 #include <mach/at91rm9200_mc.h>
+#include <mach/at91_ramc.h>
 #include <mach/cpu.h>
 
+#include "at91_aic.h"
+#include "board.h"
 #include "generic.h"
 
 
@@ -57,26 +59,6 @@ static void __init yl9200_init_early(void)
 
 	/* Initialize processor: 18.432 MHz crystal */
 	at91_initialize(18432000);
-
-	/* Setup the LEDs D2=PB17 (timer), D3=PB16 (cpu) */
-	at91_init_leds(AT91_PIN_PB16, AT91_PIN_PB17);
-
-	/* DBGU on ttyS0. (Rx & Tx only) */
-	at91_register_uart(0, 0, 0);
-
-	/* USART1 on ttyS1. (Rx, Tx, CTS, RTS, DTR, DSR, DCD, RI) */
-	at91_register_uart(AT91RM9200_ID_US1, 1, ATMEL_UART_CTS | ATMEL_UART_RTS
-			| ATMEL_UART_DTR | ATMEL_UART_DSR | ATMEL_UART_DCD
-			| ATMEL_UART_RI);
-
-	/* USART0 on ttyS2. (Rx & Tx only to JP3) */
-	at91_register_uart(AT91RM9200_ID_US0, 2, 0);
-
-	/* USART3 on ttyS3. (Rx, Tx, RTS - RS485 interface) */
-	at91_register_uart(AT91RM9200_ID_US3, 3, ATMEL_UART_RTS);
-
-	/* set serial console to ttyS0 (ie, DBGU) */
-	at91_set_serial_console(0);
 }
 
 /*
@@ -137,11 +119,12 @@ static struct at91_udc_data __initdata yl9200_udc_data = {
 /*
  * MMC
  */
-static struct at91_mmc_data __initdata yl9200_mmc_data = {
-	.det_pin	= AT91_PIN_PB9,
-	.wire4		= 1,
-	.wp_pin		= -EINVAL,
-	.vcc_pin	= -EINVAL,
+static struct mci_platform_data __initdata yl9200_mci0_data = {
+	.slot[0] = {
+		.bus_width	= 4,
+		.detect_pin	= AT91_PIN_PB9,
+		.wp_pin		= -EINVAL,
+	},
 };
 
 /*
@@ -181,6 +164,7 @@ static struct atmel_nand_data __initdata yl9200_nand_data = {
 	.det_pin	= -EINVAL,
 	.rdy_pin	= AT91_PIN_PC14,	/* R/!B (Sheet10) */
 	.enable_pin	= AT91_PIN_PC15,	/* !CE  (Sheet10) */
+	.ecc_mode	= NAND_ECC_SOFT,
 	.parts		= yl9200_nand_partition,
 	.num_parts	= ARRAY_SIZE(yl9200_nand_partition),
 };
@@ -393,7 +377,7 @@ static void yl9200_init_video(void)
 	at91_set_A_periph(AT91_PIN_PC6, 0);
 
 	/* Initialization of the Static Memory Controller for Chip Select 2 */
-	at91_sys_write(AT91_SMC_CSR(2), AT91_SMC_DBW_16		/* 16 bit */
+	at91_ramc_write(0, AT91_SMC_CSR(2), AT91_SMC_DBW_16		/* 16 bit */
 			| AT91_SMC_WSEN | AT91_SMC_NWS_(0x4)	/* wait states */
 			| AT91_SMC_TDF_(0x100)			/* float time */
 	);
@@ -559,6 +543,19 @@ void __init yl9200_add_device_video(void) {}
 static void __init yl9200_board_init(void)
 {
 	/* Serial */
+	/* DBGU on ttyS0. (Rx & Tx only) */
+	at91_register_uart(0, 0, 0);
+
+	/* USART1 on ttyS1. (Rx, Tx, CTS, RTS, DTR, DSR, DCD, RI) */
+	at91_register_uart(AT91RM9200_ID_US1, 1, ATMEL_UART_CTS | ATMEL_UART_RTS
+			| ATMEL_UART_DTR | ATMEL_UART_DSR | ATMEL_UART_DCD
+			| ATMEL_UART_RI);
+
+	/* USART0 on ttyS2. (Rx & Tx only to JP3) */
+	at91_register_uart(AT91RM9200_ID_US0, 2, 0);
+
+	/* USART3 on ttyS3. (Rx, Tx, RTS - RS485 interface) */
+	at91_register_uart(AT91RM9200_ID_US3, 3, ATMEL_UART_RTS);
 	at91_add_device_serial();
 	/* Ethernet */
 	at91_add_device_eth(&yl9200_eth_data);
@@ -569,7 +566,7 @@ static void __init yl9200_board_init(void)
 	/* I2C */
 	at91_add_device_i2c(yl9200_i2c_devices, ARRAY_SIZE(yl9200_i2c_devices));
 	/* MMC */
-	at91_add_device_mmc(0, &yl9200_mmc_data);
+	at91_add_device_mci(0, &yl9200_mci0_data);
 	/* NAND */
 	at91_add_device_nand(&yl9200_nand_data);
 	/* NOR Flash */
@@ -590,8 +587,9 @@ static void __init yl9200_board_init(void)
 
 MACHINE_START(YL9200, "uCdragon YL-9200")
 	/* Maintainer: S.Birtles */
-	.timer		= &at91rm9200_timer,
+	.init_time	= at91rm9200_timer_init,
 	.map_io		= at91_map_io,
+	.handle_irq	= at91_aic_handle_irq,
 	.init_early	= yl9200_init_early,
 	.init_irq	= at91_init_irq_default,
 	.init_machine	= yl9200_board_init,

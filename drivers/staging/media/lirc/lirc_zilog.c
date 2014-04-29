@@ -61,6 +61,9 @@
 #include <media/lirc_dev.h>
 #include <media/lirc.h>
 
+/* Max transfer size done by I2C transfer functions */
+#define MAX_XFER_SIZE  64
+
 struct IR;
 
 struct IR_rx {
@@ -658,8 +661,7 @@ static int send_data_block(struct IR_tx *tx, unsigned char *data_block)
 		buf[0] = (unsigned char)(i + 1);
 		for (j = 0; j < tosend; ++j)
 			buf[1 + j] = data_block[i + j];
-		dprintk("%02x %02x %02x %02x %02x",
-			buf[0], buf[1], buf[2], buf[3], buf[4]);
+		dprintk("%*ph", 5, buf);
 		ret = i2c_master_send(tx->c, buf, tosend + 1);
 		if (ret != tosend + 1) {
 			zilog_error("i2c_master_send failed with %d\n", ret);
@@ -765,8 +767,8 @@ static int fw_load(struct IR_tx *tx)
 	/* Request codeset data file */
 	ret = request_firmware(&fw_entry, "haup-ir-blaster.bin", tx->ir->l.dev);
 	if (ret != 0) {
-		zilog_error("firmware haup-ir-blaster.bin not available "
-			    "(%d)\n", ret);
+		zilog_error("firmware haup-ir-blaster.bin not available (%d)\n",
+			    ret);
 		ret = ret < 0 ? ret : -EFAULT;
 		goto out;
 	}
@@ -942,7 +944,14 @@ static ssize_t read(struct file *filep, char *outbuf, size_t n, loff_t *ppos)
 			schedule();
 			set_current_state(TASK_INTERRUPTIBLE);
 		} else {
-			unsigned char buf[rbuf->chunk_size];
+			unsigned char buf[MAX_XFER_SIZE];
+
+			if (rbuf->chunk_size > sizeof(buf)) {
+				zilog_error("chunk_size is too big (%d)!\n",
+					    rbuf->chunk_size);
+				ret = -EINVAL;
+				break;
+			}
 			m = lirc_buffer_read(rbuf, buf);
 			if (m == rbuf->chunk_size) {
 				ret = copy_to_user((void *)outbuf+written, buf,

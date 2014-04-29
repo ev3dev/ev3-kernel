@@ -5,7 +5,7 @@
  *****************************************************************************/
 
 /*
- * Copyright (C) 2000 - 2012, Intel Corp.
+ * Copyright (C) 2000 - 2013, Intel Corp.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -47,6 +47,13 @@
 acpi_status acpi_allocate_root_table(u32 initial_table_count);
 
 /*
+ * tbxfroot - Root pointer utilities
+ */
+acpi_status acpi_tb_validate_rsdp(struct acpi_table_rsdp *rsdp);
+
+u8 *acpi_tb_scan_memory_for_rsdp(u8 *start_address, u32 length);
+
+/*
  * tbfadt - FADT parse/convert/validate
  */
 void acpi_tb_parse_fadt(u32 table_index);
@@ -66,6 +73,11 @@ acpi_tb_find_table(char *signature,
 acpi_status acpi_tb_resize_root_table_list(void);
 
 acpi_status acpi_tb_verify_table(struct acpi_table_desc *table_desc);
+
+struct acpi_table_header *acpi_tb_table_override(struct acpi_table_header
+						 *table_header,
+						 struct acpi_table_desc
+						 *table_desc);
 
 acpi_status
 acpi_tb_add_table(struct acpi_table_desc *table_desc, u32 *table_index);

@@ -12,13 +12,14 @@
 #include <linux/spi/flash.h>
 #include <linux/spi/spi.h>
 #include <linux/i2c.h>
-#include <linux/i2c/at24.h>
+#include <linux/platform_data/at24.h>
 #include <linux/gpio.h>
 #include <asm/mach/time.h>
 #include <mach/kirkwood.h>
 #include <mach/irqs.h>
 #include <plat/time.h>
 #include "common.h"
+#include "lacie_v2-common.h"
 
 /*****************************************************************************
  * 512KB SPI Flash on Boot Device (MACRONIX MX25L4005)

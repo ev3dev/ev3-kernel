@@ -5,7 +5,7 @@
  *****************************************************************************/
 
 /*
- * Copyright (C) 2000 - 2012, Intel Corp.
+ * Copyright (C) 2000 - 2013, Intel Corp.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -70,7 +70,7 @@
 
 /*
  * Enable "slack" in the AML interpreter?  Default is FALSE, and the
- * interpreter strictly follows the ACPI specification.  Setting to TRUE
+ * interpreter strictly follows the ACPI specification. Setting to TRUE
  * allows the interpreter to ignore certain errors and/or bad AML constructs.
  *
  * Currently, these features are enabled by this flag:
@@ -108,7 +108,7 @@ u8 ACPI_INIT_GLOBAL(acpi_gbl_use_default_register_widths, TRUE);
 /*
  * Optionally enable output from the AML Debug Object.
  */
-bool ACPI_INIT_GLOBAL(acpi_gbl_enable_aml_debug_object, FALSE);
+u8 ACPI_INIT_GLOBAL(acpi_gbl_enable_aml_debug_object, FALSE);
 
 /*
  * Optionally copy the entire DSDT to local memory (instead of simply
@@ -117,6 +117,24 @@ bool ACPI_INIT_GLOBAL(acpi_gbl_enable_aml_debug_object, FALSE);
  * the DSDT.
  */
 u8 ACPI_INIT_GLOBAL(acpi_gbl_copy_dsdt_locally, FALSE);
+
+/*
+ * Optionally ignore an XSDT if present and use the RSDT instead.
+ * Although the ACPI specification requires that an XSDT be used instead
+ * of the RSDT, the XSDT has been found to be corrupt or ill-formed on
+ * some machines. Default behavior is to use the XSDT if present.
+ */
+u8 ACPI_INIT_GLOBAL(acpi_gbl_do_not_use_xsdt, FALSE);
+
+/*
+ * Optionally use 32-bit FADT addresses if and when there is a conflict
+ * (address mismatch) between the 32-bit and 64-bit versions of the
+ * address. Although ACPICA adheres to the ACPI specification which
+ * requires the use of the corresponding 64-bit address if it is non-zero,
+ * some machines have been found to have a corrupted non-zero 64-bit
+ * address. Default is FALSE, do not favor the 32-bit addresses.
+ */
+u8 ACPI_INIT_GLOBAL(acpi_gbl_use32_bit_fadt_addresses, FALSE);
 
 /*
  * Optionally truncate I/O addresses to 16 bits. Provides compatibility
@@ -131,6 +149,18 @@ u8 ACPI_INIT_GLOBAL(acpi_gbl_truncate_io_addresses, FALSE);
  * Use only if the repair is causing a problem on a particular machine.
  */
 u8 ACPI_INIT_GLOBAL(acpi_gbl_disable_auto_repair, FALSE);
+
+/*
+ * Optionally do not load any SSDTs from the RSDT/XSDT during initialization.
+ * This can be useful for debugging ACPI problems on some machines.
+ */
+u8 ACPI_INIT_GLOBAL(acpi_gbl_disable_ssdt_table_load, FALSE);
+
+/*
+ * We keep track of the latest version of Windows that has been requested by
+ * the BIOS.
+ */
+u8 ACPI_INIT_GLOBAL(acpi_gbl_osi_data, 0);
 
 /* acpi_gbl_FADT is a local copy of the FADT, converted to a common format. */
 
@@ -147,31 +177,11 @@ u8 acpi_gbl_system_awake_and_running;
  */
 u8 acpi_gbl_reduced_hardware;
 
-#endif
+#endif				/* DEFINE_ACPI_GLOBALS */
 
 /* Do not disassemble buffers to resource descriptors */
 
 ACPI_EXTERN u8 ACPI_INIT_GLOBAL(acpi_gbl_no_resource_disassembly, FALSE);
-
-/*****************************************************************************
- *
- * Debug support
- *
- ****************************************************************************/
-
-/* Procedure nesting level for debug output */
-
-extern u32 acpi_gbl_nesting_level;
-
-ACPI_EXTERN u32 acpi_gpe_count;
-ACPI_EXTERN u32 acpi_fixed_event_count[ACPI_NUM_FIXED_EVENTS];
-
-/* Support for dynamic control method tracing mechanism */
-
-ACPI_EXTERN u32 acpi_gbl_original_dbg_level;
-ACPI_EXTERN u32 acpi_gbl_original_dbg_layer;
-ACPI_EXTERN u32 acpi_gbl_trace_dbg_level;
-ACPI_EXTERN u32 acpi_gbl_trace_dbg_layer;
 
 /*****************************************************************************
  *
@@ -184,7 +194,11 @@ ACPI_EXTERN u32 acpi_gbl_trace_dbg_layer;
  * found in the RSDT/XSDT.
  */
 ACPI_EXTERN struct acpi_table_list acpi_gbl_root_table_list;
+
+#if (!ACPI_REDUCED_HARDWARE)
 ACPI_EXTERN struct acpi_table_facs *acpi_gbl_FACS;
+
+#endif				/* !ACPI_REDUCED_HARDWARE */
 
 /* These addresses are calculated from the FADT Event Block addresses */
 
@@ -207,14 +221,6 @@ ACPI_EXTERN struct acpi_table_header acpi_gbl_original_dsdt_header;
 ACPI_EXTERN u8 acpi_gbl_integer_bit_width;
 ACPI_EXTERN u8 acpi_gbl_integer_byte_width;
 ACPI_EXTERN u8 acpi_gbl_integer_nybble_width;
-
-/* Mutex for _OSI support */
-
-ACPI_EXTERN acpi_mutex acpi_gbl_osi_mutex;
-
-/* Reader/Writer lock is used for namespace walk and dynamic table unload */
-
-ACPI_EXTERN struct acpi_rw_lock acpi_gbl_namespace_rw_lock;
 
 /*****************************************************************************
  *
@@ -248,21 +254,21 @@ ACPI_EXTERN u8 acpi_gbl_global_lock_pending;
  */
 ACPI_EXTERN acpi_spinlock acpi_gbl_gpe_lock;	/* For GPE data structs and registers */
 ACPI_EXTERN acpi_spinlock acpi_gbl_hardware_lock;	/* For ACPI H/W except GPE registers */
+ACPI_EXTERN acpi_spinlock acpi_gbl_reference_count_lock;
+
+/* Mutex for _OSI support */
+
+ACPI_EXTERN acpi_mutex acpi_gbl_osi_mutex;
+
+/* Reader/Writer lock is used for namespace walk and dynamic table unload */
+
+ACPI_EXTERN struct acpi_rw_lock acpi_gbl_namespace_rw_lock;
 
 /*****************************************************************************
  *
  * Miscellaneous globals
  *
  ****************************************************************************/
-
-#ifdef ACPI_DBG_TRACK_ALLOCATIONS
-
-/* Lists for tracking memory allocations */
-
-ACPI_EXTERN struct acpi_memory_list *acpi_gbl_global_list;
-ACPI_EXTERN struct acpi_memory_list *acpi_gbl_ns_node_list;
-ACPI_EXTERN u8 acpi_gbl_display_final_mem_stats;
-#endif
 
 /* Object caches */
 
@@ -274,14 +280,14 @@ ACPI_EXTERN acpi_cache_t *acpi_gbl_operand_cache;
 
 /* Global handlers */
 
-ACPI_EXTERN struct acpi_object_notify_handler acpi_gbl_device_notify;
-ACPI_EXTERN struct acpi_object_notify_handler acpi_gbl_system_notify;
+ACPI_EXTERN struct acpi_global_notify_handler acpi_gbl_global_notify[2];
 ACPI_EXTERN acpi_exception_handler acpi_gbl_exception_handler;
 ACPI_EXTERN acpi_init_handler acpi_gbl_init_handler;
-ACPI_EXTERN acpi_tbl_handler acpi_gbl_table_handler;
+ACPI_EXTERN acpi_table_handler acpi_gbl_table_handler;
 ACPI_EXTERN void *acpi_gbl_table_handler_context;
 ACPI_EXTERN struct acpi_walk_state *acpi_gbl_breakpoint_walk;
 ACPI_EXTERN acpi_interface_handler acpi_gbl_interface_handler;
+ACPI_EXTERN struct acpi_sci_handler_info *acpi_gbl_sci_handler_list;
 
 /* Owner ID support */
 
@@ -304,7 +310,6 @@ ACPI_EXTERN u8 acpi_gbl_debugger_configuration;
 ACPI_EXTERN u8 acpi_gbl_step_to_next_call;
 ACPI_EXTERN u8 acpi_gbl_acpi_hardware_present;
 ACPI_EXTERN u8 acpi_gbl_events_initialized;
-ACPI_EXTERN u8 acpi_gbl_osi_data;
 ACPI_EXTERN struct acpi_interface_info *acpi_gbl_supported_interfaces;
 ACPI_EXTERN struct acpi_address_range
     *acpi_gbl_address_range_list[ACPI_ADDRESS_RANGE_MAX];
@@ -323,13 +328,15 @@ extern const char *acpi_gbl_region_types[ACPI_NUM_PREDEFINED_REGIONS];
 
 #endif
 
-/* Exception codes */
+#ifdef ACPI_DBG_TRACK_ALLOCATIONS
 
-extern char const *acpi_gbl_exception_names_env[];
-extern char const *acpi_gbl_exception_names_pgm[];
-extern char const *acpi_gbl_exception_names_tbl[];
-extern char const *acpi_gbl_exception_names_aml[];
-extern char const *acpi_gbl_exception_names_ctrl[];
+/* Lists for tracking memory allocations */
+
+ACPI_EXTERN struct acpi_memory_list *acpi_gbl_global_list;
+ACPI_EXTERN struct acpi_memory_list *acpi_gbl_ns_node_list;
+ACPI_EXTERN u8 acpi_gbl_display_final_mem_stats;
+ACPI_EXTERN u8 acpi_gbl_disable_mem_tracking;
+#endif
 
 /*****************************************************************************
  *
@@ -390,20 +397,48 @@ ACPI_EXTERN u8 acpi_gbl_sleep_type_b;
  *
  ****************************************************************************/
 
-extern struct acpi_fixed_event_info
-    acpi_gbl_fixed_event_info[ACPI_NUM_FIXED_EVENTS];
-ACPI_EXTERN struct acpi_fixed_event_handler
-    acpi_gbl_fixed_event_handlers[ACPI_NUM_FIXED_EVENTS];
+#if (!ACPI_REDUCED_HARDWARE)
+
+ACPI_EXTERN u8 acpi_gbl_all_gpes_initialized;
 ACPI_EXTERN struct acpi_gpe_xrupt_info *acpi_gbl_gpe_xrupt_list_head;
 ACPI_EXTERN struct acpi_gpe_block_info
-*acpi_gbl_gpe_fadt_blocks[ACPI_MAX_GPE_BLOCKS];
-ACPI_EXTERN u8 acpi_gbl_all_gpes_initialized;
-ACPI_EXTERN ACPI_GBL_EVENT_HANDLER acpi_gbl_global_event_handler;
+    *acpi_gbl_gpe_fadt_blocks[ACPI_MAX_GPE_BLOCKS];
+ACPI_EXTERN acpi_gbl_event_handler acpi_gbl_global_event_handler;
 ACPI_EXTERN void *acpi_gbl_global_event_handler_context;
+ACPI_EXTERN struct acpi_fixed_event_handler
+    acpi_gbl_fixed_event_handlers[ACPI_NUM_FIXED_EVENTS];
+extern struct acpi_fixed_event_info
+    acpi_gbl_fixed_event_info[ACPI_NUM_FIXED_EVENTS];
+
+#endif				/* !ACPI_REDUCED_HARDWARE */
 
 /*****************************************************************************
  *
- * Debugger globals
+ * Debug support
+ *
+ ****************************************************************************/
+
+/* Procedure nesting level for debug output */
+
+extern u32 acpi_gbl_nesting_level;
+
+/* Event counters */
+
+ACPI_EXTERN u32 acpi_method_count;
+ACPI_EXTERN u32 acpi_gpe_count;
+ACPI_EXTERN u32 acpi_sci_count;
+ACPI_EXTERN u32 acpi_fixed_event_count[ACPI_NUM_FIXED_EVENTS];
+
+/* Support for dynamic control method tracing mechanism */
+
+ACPI_EXTERN u32 acpi_gbl_original_dbg_level;
+ACPI_EXTERN u32 acpi_gbl_original_dbg_layer;
+ACPI_EXTERN u32 acpi_gbl_trace_dbg_level;
+ACPI_EXTERN u32 acpi_gbl_trace_dbg_layer;
+
+/*****************************************************************************
+ *
+ * Debugger and Disassembler globals
  *
  ****************************************************************************/
 
@@ -411,8 +446,14 @@ ACPI_EXTERN u8 acpi_gbl_db_output_flags;
 
 #ifdef ACPI_DISASSEMBLER
 
+ACPI_EXTERN u8 ACPI_INIT_GLOBAL(acpi_gbl_ignore_noop_operator, FALSE);
+
 ACPI_EXTERN u8 acpi_gbl_db_opt_disasm;
 ACPI_EXTERN u8 acpi_gbl_db_opt_verbose;
+ACPI_EXTERN u8 acpi_gbl_num_external_methods;
+ACPI_EXTERN u32 acpi_gbl_resolved_external_methods;
+ACPI_EXTERN struct acpi_external_list *acpi_gbl_external_list;
+ACPI_EXTERN struct acpi_external_file *acpi_gbl_external_file_list;
 #endif
 
 #ifdef ACPI_DEBUGGER
@@ -424,18 +465,23 @@ extern u8 acpi_gbl_db_terminate_threads;
 ACPI_EXTERN u8 acpi_gbl_db_opt_tables;
 ACPI_EXTERN u8 acpi_gbl_db_opt_stats;
 ACPI_EXTERN u8 acpi_gbl_db_opt_ini_methods;
-
-ACPI_EXTERN char *acpi_gbl_db_args[ACPI_DEBUGGER_MAX_ARGS];
-ACPI_EXTERN char acpi_gbl_db_line_buf[80];
-ACPI_EXTERN char acpi_gbl_db_parsed_buf[80];
-ACPI_EXTERN char acpi_gbl_db_scope_buf[40];
-ACPI_EXTERN char acpi_gbl_db_debug_filename[40];
+ACPI_EXTERN u8 acpi_gbl_db_opt_no_region_support;
 ACPI_EXTERN u8 acpi_gbl_db_output_to_file;
 ACPI_EXTERN char *acpi_gbl_db_buffer;
 ACPI_EXTERN char *acpi_gbl_db_filename;
 ACPI_EXTERN u32 acpi_gbl_db_debug_level;
 ACPI_EXTERN u32 acpi_gbl_db_console_debug_level;
 ACPI_EXTERN struct acpi_namespace_node *acpi_gbl_db_scope_node;
+
+ACPI_EXTERN char *acpi_gbl_db_args[ACPI_DEBUGGER_MAX_ARGS];
+ACPI_EXTERN acpi_object_type acpi_gbl_db_arg_types[ACPI_DEBUGGER_MAX_ARGS];
+
+/* These buffers should all be the same size */
+
+ACPI_EXTERN char acpi_gbl_db_line_buf[ACPI_DB_LINE_BUFFER_SIZE];
+ACPI_EXTERN char acpi_gbl_db_parsed_buf[ACPI_DB_LINE_BUFFER_SIZE];
+ACPI_EXTERN char acpi_gbl_db_scope_buf[ACPI_DB_LINE_BUFFER_SIZE];
+ACPI_EXTERN char acpi_gbl_db_debug_filename[ACPI_DB_LINE_BUFFER_SIZE];
 
 /*
  * Statistic globals
@@ -453,5 +499,25 @@ ACPI_EXTERN u32 acpi_gbl_size_of_node_entries;
 ACPI_EXTERN u32 acpi_gbl_size_of_acpi_objects;
 
 #endif				/* ACPI_DEBUGGER */
+
+/*****************************************************************************
+ *
+ * Application globals
+ *
+ ****************************************************************************/
+
+#ifdef ACPI_APPLICATION
+
+ACPI_FILE ACPI_INIT_GLOBAL(acpi_gbl_debug_file, NULL);
+
+#endif				/* ACPI_APPLICATION */
+
+/*****************************************************************************
+ *
+ * Info/help support
+ *
+ ****************************************************************************/
+
+extern const struct ah_predefined_name asl_predefined_info[];
 
 #endif				/* __ACGLOBAL_H__ */

@@ -14,6 +14,7 @@
 #include <linux/io.h>
 #include <linux/gpio.h>
 #include <linux/sh_timer.h>
+#include <linux/sh_intc.h>
 #include <cpu/shx3.h>
 #include <asm/mmzone.h>
 
@@ -27,51 +28,72 @@
  * all rather than adding infrastructure to hack around it.
  */
 static struct plat_sci_port scif0_platform_data = {
-	.mapbase	= 0xffc30000,
 	.flags		= UPF_BOOT_AUTOCONF,
 	.scscr		= SCSCR_RE | SCSCR_TE | SCSCR_REIE,
-	.scbrr_algo_id	= SCBRR_ALGO_2,
 	.type		= PORT_SCIF,
-	.irqs		= { 40, 41, 43, 42 },
+};
+
+static struct resource scif0_resources[] = {
+	DEFINE_RES_MEM(0xffc30000, 0x100),
+	DEFINE_RES_IRQ(evt2irq(0x700)),
+	DEFINE_RES_IRQ(evt2irq(0x720)),
+	DEFINE_RES_IRQ(evt2irq(0x760)),
+	DEFINE_RES_IRQ(evt2irq(0x740)),
 };
 
 static struct platform_device scif0_device = {
 	.name		= "sh-sci",
 	.id		= 0,
+	.resource	= scif0_resources,
+	.num_resources	= ARRAY_SIZE(scif0_resources),
 	.dev		= {
 		.platform_data	= &scif0_platform_data,
 	},
 };
 
 static struct plat_sci_port scif1_platform_data = {
-	.mapbase	= 0xffc40000,
 	.flags		= UPF_BOOT_AUTOCONF,
 	.scscr		= SCSCR_RE | SCSCR_TE | SCSCR_REIE,
-	.scbrr_algo_id	= SCBRR_ALGO_2,
 	.type		= PORT_SCIF,
-	.irqs		= { 44, 45, 47, 46 },
+};
+
+static struct resource scif1_resources[] = {
+	DEFINE_RES_MEM(0xffc40000, 0x100),
+	DEFINE_RES_IRQ(evt2irq(0x780)),
+	DEFINE_RES_IRQ(evt2irq(0x7a0)),
+	DEFINE_RES_IRQ(evt2irq(0x7e0)),
+	DEFINE_RES_IRQ(evt2irq(0x7c0)),
 };
 
 static struct platform_device scif1_device = {
 	.name		= "sh-sci",
 	.id		= 1,
+	.resource	= scif1_resources,
+	.num_resources	= ARRAY_SIZE(scif1_resources),
 	.dev		= {
 		.platform_data	= &scif1_platform_data,
 	},
 };
 
 static struct plat_sci_port scif2_platform_data = {
-	.mapbase	= 0xffc60000,
 	.flags		= UPF_BOOT_AUTOCONF,
 	.scscr		= SCSCR_RE | SCSCR_TE | SCSCR_REIE,
-	.scbrr_algo_id	= SCBRR_ALGO_2,
 	.type		= PORT_SCIF,
-	.irqs		= { 52, 53, 55, 54 },
+};
+
+static struct resource scif2_resources[] = {
+	DEFINE_RES_MEM(0xffc60000, 0x100),
+	DEFINE_RES_IRQ(evt2irq(0x880)),
+	DEFINE_RES_IRQ(evt2irq(0x8a0)),
+	DEFINE_RES_IRQ(evt2irq(0x8e0)),
+	DEFINE_RES_IRQ(evt2irq(0x8c0)),
 };
 
 static struct platform_device scif2_device = {
 	.name		= "sh-sci",
 	.id		= 2,
+	.resource	= scif2_resources,
+	.num_resources	= ARRAY_SIZE(scif2_resources),
 	.dev		= {
 		.platform_data	= &scif2_platform_data,
 	},
@@ -90,7 +112,7 @@ static struct resource tmu0_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 16,
+		.start	= evt2irq(0x400),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -118,7 +140,7 @@ static struct resource tmu1_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 17,
+		.start	= evt2irq(0x420),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -145,7 +167,7 @@ static struct resource tmu2_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 18,
+		.start	= evt2irq(0x440),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -172,7 +194,7 @@ static struct resource tmu3_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 19,
+		.start	= evt2irq(0x460),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -199,7 +221,7 @@ static struct resource tmu4_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 20,
+		.start	= evt2irq(0x480),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -226,7 +248,7 @@ static struct resource tmu5_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
-		.start	= 21,
+		.start	= evt2irq(0x4a0),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -484,9 +506,6 @@ void __init plat_irq_setup_pins(int mode)
 
 void __init plat_irq_setup(void)
 {
-	reserve_intc_vectors(vectors_irq, ARRAY_SIZE(vectors_irq));
-	reserve_intc_vectors(vectors_irl, ARRAY_SIZE(vectors_irl));
-
 	register_intc_controller(&intc_desc);
 }
 

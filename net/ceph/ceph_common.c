@@ -15,8 +15,12 @@
 #include <linux/slab.h>
 #include <linux/statfs.h>
 #include <linux/string.h>
+#include <linux/vmalloc.h>
+#include <linux/nsproxy.h>
+#include <net/net_namespace.h>
 
 
+#include <linux/ceph/ceph_features.h>
 #include <linux/ceph/libceph.h>
 #include <linux/ceph/debugfs.h>
 #include <linux/ceph/decode.h>
@@ -25,6 +29,22 @@
 #include "crypto.h"
 
 
+/*
+ * Module compatibility interface.  For now it doesn't do anything,
+ * but its existence signals a certain level of functionality.
+ *
+ * The data buffer is used to pass information both to and from
+ * libceph.  The return value indicates whether libceph determines
+ * it is compatible with the caller (from another kernel module),
+ * given the provided data.
+ *
+ * The data pointer can be null.
+ */
+bool libceph_compatible(void *data)
+{
+	return true;
+}
+EXPORT_SYMBOL(libceph_compatible);
 
 /*
  * find filename portion of a path (/foo/bar/baz -> baz)
@@ -83,7 +103,6 @@ int ceph_check_fsid(struct ceph_client *client, struct ceph_fsid *fsid)
 			return -1;
 		}
 	} else {
-		pr_info("client%lld fsid %pU\n", ceph_client_id(client), fsid);
 		memcpy(&client->fsid, fsid, sizeof(*fsid));
 	}
 	return 0;
@@ -152,6 +171,25 @@ int ceph_compare_options(struct ceph_options *new_opt,
 }
 EXPORT_SYMBOL(ceph_compare_options);
 
+void *ceph_kvmalloc(size_t size, gfp_t flags)
+{
+	if (size <= (PAGE_SIZE << PAGE_ALLOC_COSTLY_ORDER)) {
+		void *ptr = kmalloc(size, flags | __GFP_NOWARN);
+		if (ptr)
+			return ptr;
+	}
+
+	return __vmalloc(size, flags | __GFP_HIGHMEM, PAGE_KERNEL);
+}
+
+void ceph_kvfree(const void *ptr)
+{
+	if (is_vmalloc_addr(ptr))
+		vfree(ptr);
+	else
+		kfree(ptr);
+}
+
 
 static int parse_fsid(const char *str, struct ceph_fsid *fsid)
 {
@@ -201,7 +239,9 @@ enum {
 	Opt_ip,
 	Opt_last_string,
 	/* string args above */
+	Opt_share,
 	Opt_noshare,
+	Opt_crc,
 	Opt_nocrc,
 };
 
@@ -217,7 +257,9 @@ static match_table_t opt_tokens = {
 	{Opt_key, "key=%s"},
 	{Opt_ip, "ip=%s"},
 	/* string args above */
+	{Opt_share, "share"},
 	{Opt_noshare, "noshare"},
+	{Opt_crc, "crc"},
 	{Opt_nocrc, "nocrc"},
 	{-1, NULL}
 };
@@ -277,19 +319,23 @@ out:
 	return err;
 }
 
-int ceph_parse_options(struct ceph_options **popt, char *options,
-		       const char *dev_name, const char *dev_name_end,
-		       int (*parse_extra_token)(char *c, void *private),
-		       void *private)
+struct ceph_options *
+ceph_parse_options(char *options, const char *dev_name,
+			const char *dev_name_end,
+			int (*parse_extra_token)(char *c, void *private),
+			void *private)
 {
 	struct ceph_options *opt;
 	const char *c;
 	int err = -ENOMEM;
 	substring_t argstr[MAX_OPT_ARGS];
 
+	if (current->nsproxy->net_ns != &init_net)
+		return ERR_PTR(-EINVAL);
+
 	opt = kzalloc(sizeof(*opt), GFP_KERNEL);
 	if (!opt)
-		return err;
+		return ERR_PTR(-ENOMEM);
 	opt->mon_addr = kcalloc(CEPH_MAX_MON, sizeof(*opt->mon_addr),
 				GFP_KERNEL);
 	if (!opt->mon_addr)
@@ -300,7 +346,6 @@ int ceph_parse_options(struct ceph_options **popt, char *options,
 
 	/* start with defaults */
 	opt->flags = CEPH_OPT_DEFAULT;
-	opt->osd_timeout = CEPH_OSD_TIMEOUT_DEFAULT;
 	opt->osd_keepalive_timeout = CEPH_OSD_KEEPALIVE_DEFAULT;
 	opt->mount_timeout = CEPH_MOUNT_TIMEOUT_DEFAULT; /* seconds */
 	opt->osd_idle_ttl = CEPH_OSD_IDLE_TTL_DEFAULT;   /* seconds */
@@ -386,7 +431,7 @@ int ceph_parse_options(struct ceph_options **popt, char *options,
 
 			/* misc */
 		case Opt_osdtimeout:
-			opt->osd_timeout = intval;
+			pr_warning("ignoring deprecated osdtimeout option\n");
 			break;
 		case Opt_osdkeepalivetimeout:
 			opt->osd_keepalive_timeout = intval;
@@ -398,10 +443,16 @@ int ceph_parse_options(struct ceph_options **popt, char *options,
 			opt->mount_timeout = intval;
 			break;
 
+		case Opt_share:
+			opt->flags &= ~CEPH_OPT_NOSHARE;
+			break;
 		case Opt_noshare:
 			opt->flags |= CEPH_OPT_NOSHARE;
 			break;
 
+		case Opt_crc:
+			opt->flags &= ~CEPH_OPT_NOCRC;
+			break;
 		case Opt_nocrc:
 			opt->flags |= CEPH_OPT_NOCRC;
 			break;
@@ -412,12 +463,11 @@ int ceph_parse_options(struct ceph_options **popt, char *options,
 	}
 
 	/* success */
-	*popt = opt;
-	return 0;
+	return opt;
 
 out:
 	ceph_destroy_options(opt);
-	return err;
+	return ERR_PTR(err);
 }
 EXPORT_SYMBOL(ceph_parse_options);
 
@@ -431,8 +481,8 @@ EXPORT_SYMBOL(ceph_client_id);
  * create a fresh client instance
  */
 struct ceph_client *ceph_create_client(struct ceph_options *opt, void *private,
-				       unsigned supported_features,
-				       unsigned required_features)
+				       u64 supported_features,
+				       u64 required_features)
 {
 	struct ceph_client *client;
 	struct ceph_entity_addr *myaddr = NULL;
@@ -450,27 +500,23 @@ struct ceph_client *ceph_create_client(struct ceph_options *opt, void *private,
 	client->auth_err = 0;
 
 	client->extra_mon_dispatch = NULL;
-	client->supported_features = CEPH_FEATURE_SUPPORTED_DEFAULT |
+	client->supported_features = CEPH_FEATURES_SUPPORTED_DEFAULT |
 		supported_features;
-	client->required_features = CEPH_FEATURE_REQUIRED_DEFAULT |
+	client->required_features = CEPH_FEATURES_REQUIRED_DEFAULT |
 		required_features;
 
 	/* msgr */
 	if (ceph_test_opt(client, MYIP))
 		myaddr = &client->options->my_addr;
-	client->msgr = ceph_messenger_create(myaddr,
-					     client->supported_features,
-					     client->required_features);
-	if (IS_ERR(client->msgr)) {
-		err = PTR_ERR(client->msgr);
-		goto fail;
-	}
-	client->msgr->nocrc = ceph_test_opt(client, NOCRC);
+	ceph_messenger_init(&client->msgr, myaddr,
+		client->supported_features,
+		client->required_features,
+		ceph_test_opt(client, NOCRC));
 
 	/* subsystems */
 	err = ceph_monc_init(&client->monc, client);
 	if (err < 0)
-		goto fail_msgr;
+		goto fail;
 	err = ceph_osdc_init(&client->osdc, client);
 	if (err < 0)
 		goto fail_monc;
@@ -479,8 +525,6 @@ struct ceph_client *ceph_create_client(struct ceph_options *opt, void *private,
 
 fail_monc:
 	ceph_monc_stop(&client->monc);
-fail_msgr:
-	ceph_messenger_destroy(client->msgr);
 fail:
 	kfree(client);
 	return ERR_PTR(err);
@@ -491,21 +535,14 @@ void ceph_destroy_client(struct ceph_client *client)
 {
 	dout("destroy_client %p\n", client);
 
+	atomic_set(&client->msgr.stopping, 1);
+
 	/* unmount */
 	ceph_osdc_stop(&client->osdc);
-
-	/*
-	 * make sure osd connections close out before destroying the
-	 * auth module, which is needed to free those connections'
-	 * ceph_authorizers.
-	 */
-	ceph_msgr_flush();
 
 	ceph_monc_stop(&client->monc);
 
 	ceph_debugfs_client_cleanup(client);
-
-	ceph_messenger_destroy(client->msgr);
 
 	ceph_destroy_options(client->options);
 
@@ -589,13 +626,17 @@ static int __init init_ceph_lib(void)
 	if (ret < 0)
 		goto out_crypto;
 
-	pr_info("loaded (mon/osd proto %d/%d, osdmap %d/%d %d/%d)\n",
-		CEPH_MONC_PROTOCOL, CEPH_OSDC_PROTOCOL,
-		CEPH_OSDMAP_VERSION, CEPH_OSDMAP_VERSION_EXT,
-		CEPH_OSDMAP_INC_VERSION, CEPH_OSDMAP_INC_VERSION_EXT);
+	ret = ceph_osdc_setup();
+	if (ret < 0)
+		goto out_msgr;
+
+	pr_info("loaded (mon/osd proto %d/%d)\n",
+		CEPH_MONC_PROTOCOL, CEPH_OSDC_PROTOCOL);
 
 	return 0;
 
+out_msgr:
+	ceph_msgr_exit();
 out_crypto:
 	ceph_crypto_shutdown();
 out_debugfs:
@@ -607,6 +648,7 @@ out:
 static void __exit exit_ceph_lib(void)
 {
 	dout("exit_ceph_lib\n");
+	ceph_osdc_cleanup();
 	ceph_msgr_exit();
 	ceph_crypto_shutdown();
 	ceph_debugfs_cleanup();

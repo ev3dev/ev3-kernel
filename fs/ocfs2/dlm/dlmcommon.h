@@ -679,7 +679,7 @@ struct dlm_query_join_packet {
 };
 
 union dlm_query_join_response {
-	u32 intval;
+	__be32 intval;
 	struct dlm_query_join_packet packet;
 };
 
@@ -755,8 +755,8 @@ struct dlm_query_region {
 struct dlm_node_info {
 	u8 ni_nodenum;
 	u8 pad1;
-	u16 ni_ipv4_port;
-	u32 ni_ipv4_address;
+	__be16 ni_ipv4_port;
+	__be32 ni_ipv4_address;
 };
 
 struct dlm_query_nodeinfo {
@@ -1079,11 +1079,9 @@ static inline int dlm_lock_compatible(int existing, int request)
 static inline int dlm_lock_on_list(struct list_head *head,
 				   struct dlm_lock *lock)
 {
-	struct list_head *iter;
 	struct dlm_lock *tmplock;
 
-	list_for_each(iter, head) {
-		tmplock = list_entry(iter, struct dlm_lock, list);
+	list_for_each_entry(tmplock, head, list) {
 		if (tmplock == lock)
 			return 1;
 	}

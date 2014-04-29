@@ -28,6 +28,7 @@
 #include <asm/mach/map.h>
 
 #include "board.h"
+#include "iomap.h"
 
 static struct map_desc tegra_io_desc[] __initdata = {
 	{
@@ -58,5 +59,6 @@ static struct map_desc tegra_io_desc[] __initdata = {
 
 void __init tegra_map_common_io(void)
 {
+	debug_ll_io_init();
 	iotable_init(tegra_io_desc, ARRAY_SIZE(tegra_io_desc));
 }

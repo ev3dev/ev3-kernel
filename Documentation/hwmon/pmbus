@@ -15,19 +15,26 @@ Supported chips:
 	http://www.onsemi.com/pub_link/Collateral/NCP4200-D.PDF
 	http://www.onsemi.com/pub_link/Collateral/JUNE%202009-%20REV.%200.PDF
   * Lineage Power
-    Prefixes: 'pdt003', 'pdt006', 'pdt012', 'udt020'
+    Prefixes: 'mdt040', 'pdt003', 'pdt006', 'pdt012', 'udt020'
     Addresses scanned: -
     Datasheets:
 	http://www.lineagepower.com/oem/pdf/PDT003A0X.pdf
 	http://www.lineagepower.com/oem/pdf/PDT006A0X.pdf
 	http://www.lineagepower.com/oem/pdf/PDT012A0X.pdf
 	http://www.lineagepower.com/oem/pdf/UDT020A0X.pdf
+	http://www.lineagepower.com/oem/pdf/MDT040A0X.pdf
+  * Texas Instruments TPS40400, TPS40422
+    Prefixes: 'tps40400', 'tps40422'
+    Addresses scanned: -
+    Datasheets:
+	http://www.ti.com/lit/gpn/tps40400
+	http://www.ti.com/lit/gpn/tps40422
   * Generic PMBus devices
     Prefix: 'pmbus'
     Addresses scanned: -
     Datasheet: n.a.
 
-Author: Guenter Roeck <guenter.roeck@ericsson.com>
+Author: Guenter Roeck <linux@roeck-us.net>
 
 
 Description
@@ -131,7 +138,7 @@ Sysfs entries
 
 When probing the chip, the driver identifies which PMBus registers are
 supported, and determines available sensors from this information.
-Attribute files only exist if respective sensors are suported by the chip.
+Attribute files only exist if respective sensors are supported by the chip.
 Labels are provided to inform the user about the sensor associated with
 a given sysfs entry.
 

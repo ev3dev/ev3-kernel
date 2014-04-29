@@ -86,6 +86,19 @@ struct x86_instruction_info {
 
 struct x86_emulate_ops {
 	/*
+	 * read_gpr: read a general purpose register (rax - r15)
+	 *
+	 * @reg: gpr number.
+	 */
+	ulong (*read_gpr)(struct x86_emulate_ctxt *ctxt, unsigned reg);
+	/*
+	 * write_gpr: write a general purpose register (rax - r15)
+	 *
+	 * @reg: gpr number.
+	 * @val: value to write.
+	 */
+	void (*write_gpr)(struct x86_emulate_ctxt *ctxt, unsigned reg, ulong val);
+	/*
 	 * read_std: Read bytes of standard (non-emulated/special) memory.
 	 *           Used for descriptor reading.
 	 *  @addr:  [IN ] Linear address from which to read.
@@ -176,6 +189,7 @@ struct x86_emulate_ops {
 	void (*set_idt)(struct x86_emulate_ctxt *ctxt, struct desc_ptr *dt);
 	ulong (*get_cr)(struct x86_emulate_ctxt *ctxt, int cr);
 	int (*set_cr)(struct x86_emulate_ctxt *ctxt, int cr, ulong val);
+	void (*set_rflags)(struct x86_emulate_ctxt *ctxt, ulong val);
 	int (*cpl)(struct x86_emulate_ctxt *ctxt);
 	int (*get_dr)(struct x86_emulate_ctxt *ctxt, int dr, ulong *dest);
 	int (*set_dr)(struct x86_emulate_ctxt *ctxt, int dr, ulong value);
@@ -191,16 +205,17 @@ struct x86_emulate_ops {
 			 struct x86_instruction_info *info,
 			 enum x86_intercept_stage stage);
 
-	bool (*get_cpuid)(struct x86_emulate_ctxt *ctxt,
-			 u32 *eax, u32 *ebx, u32 *ecx, u32 *edx);
+	void (*get_cpuid)(struct x86_emulate_ctxt *ctxt,
+			  u32 *eax, u32 *ebx, u32 *ecx, u32 *edx);
 };
 
 typedef u32 __attribute__((vector_size(16))) sse128_t;
 
 /* Type, address-of, and value of an instruction's operand. */
 struct operand {
-	enum { OP_REG, OP_MEM, OP_IMM, OP_XMM, OP_NONE } type;
+	enum { OP_REG, OP_MEM, OP_MEM_STR, OP_IMM, OP_XMM, OP_MM, OP_NONE } type;
 	unsigned int bytes;
+	unsigned int count;
 	union {
 		unsigned long orig_val;
 		u64 orig_val64;
@@ -212,12 +227,15 @@ struct operand {
 			unsigned seg;
 		} mem;
 		unsigned xmm;
+		unsigned mm;
 	} addr;
 	union {
 		unsigned long val;
 		u64 val64;
 		char valptr[sizeof(unsigned long) + 2];
 		sse128_t vec_val;
+		u64 mm_val;
+		void *data;
 	};
 };
 
@@ -233,27 +251,40 @@ struct read_cache {
 	unsigned long end;
 };
 
+/* Execution mode, passed to the emulator. */
+enum x86emul_mode {
+	X86EMUL_MODE_REAL,	/* Real mode.             */
+	X86EMUL_MODE_VM86,	/* Virtual 8086 mode.     */
+	X86EMUL_MODE_PROT16,	/* 16-bit protected mode. */
+	X86EMUL_MODE_PROT32,	/* 32-bit protected mode. */
+	X86EMUL_MODE_PROT64,	/* 64-bit (long) mode.    */
+};
+
 struct x86_emulate_ctxt {
-	struct x86_emulate_ops *ops;
+	const struct x86_emulate_ops *ops;
 
 	/* Register state before/after emulation. */
 	unsigned long eflags;
 	unsigned long eip; /* eip before instruction emulation */
 	/* Emulated execution mode, represented by an X86EMUL_MODE value. */
-	int mode;
+	enum x86emul_mode mode;
 
 	/* interruptibility state, as a result of execution of STI or MOV SS */
 	int interruptibility;
 
 	bool guest_mode; /* guest running a nested guest */
 	bool perm_ok; /* do not check permissions if true */
-	bool only_vendor_specific_insn;
+	bool ud;	/* inject an #UD if host doesn't support insn */
 
 	bool have_exception;
 	struct x86_exception exception;
 
-	/* decode cache */
-	u8 twobyte;
+	/*
+	 * decode cache
+	 */
+
+	/* current opcode length in bytes */
+	u8 opcode_len;
 	u8 b;
 	u8 intercept;
 	u8 lock_prefix;
@@ -277,9 +308,11 @@ struct x86_emulate_ctxt {
 	u8 modrm_seg;
 	bool rip_relative;
 	unsigned long _eip;
-	/* Fields above regs are cleared together. */
-	unsigned long regs[NR_VCPU_REGS];
 	struct operand memop;
+	u32 regs_valid;  /* bitmaps of registers in _regs[] that can be read */
+	u32 regs_dirty;  /* bitmaps of registers in _regs[] that have been written */
+	/* Fields above regs are cleared together. */
+	unsigned long _regs[NR_VCPU_REGS];
 	struct operand *memopp;
 	struct fetch_cache fetch;
 	struct read_cache io_read;
@@ -289,17 +322,6 @@ struct x86_emulate_ctxt {
 /* Repeat String Operation Prefix */
 #define REPE_PREFIX	0xf3
 #define REPNE_PREFIX	0xf2
-
-/* Execution mode, passed to the emulator. */
-#define X86EMUL_MODE_REAL     0	/* Real mode.             */
-#define X86EMUL_MODE_VM86     1	/* Virtual 8086 mode.     */
-#define X86EMUL_MODE_PROT16   2	/* 16-bit protected mode. */
-#define X86EMUL_MODE_PROT32   4	/* 32-bit protected mode. */
-#define X86EMUL_MODE_PROT64   8	/* 64-bit (long) mode.    */
-
-/* any protected mode   */
-#define X86EMUL_MODE_PROT     (X86EMUL_MODE_PROT16|X86EMUL_MODE_PROT32| \
-			       X86EMUL_MODE_PROT64)
 
 /* CPUID vendors */
 #define X86EMUL_CPUID_VENDOR_AuthenticAMD_ebx 0x68747541
@@ -388,7 +410,10 @@ bool x86_page_table_writing_insn(struct x86_emulate_ctxt *ctxt);
 #define EMULATION_INTERCEPTED 2
 int x86_emulate_insn(struct x86_emulate_ctxt *ctxt);
 int emulator_task_switch(struct x86_emulate_ctxt *ctxt,
-			 u16 tss_selector, int reason,
+			 u16 tss_selector, int idt_index, int reason,
 			 bool has_error_code, u32 error_code);
 int emulate_int_real(struct x86_emulate_ctxt *ctxt, int irq);
+void emulator_invalidate_register_cache(struct x86_emulate_ctxt *ctxt);
+void emulator_writeback_register_cache(struct x86_emulate_ctxt *ctxt);
+
 #endif /* _ASM_X86_KVM_X86_EMULATE_H */

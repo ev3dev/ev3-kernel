@@ -2,9 +2,7 @@
  * This file contains the iSCSI Virtual Device and Disk Transport
  * agnostic related functions.
  *
- \u00a9 Copyright 2007-2011 RisingTide Systems LLC.
- *
- * Licensed to the Linux Foundation under the General Public License (GPL) version 2.
+ * (c) Copyright 2007-2013 Datera, Inc.
  *
  * Author: Nicholas A. Bellinger <nab@linux-iscsi.org>
  *
@@ -27,25 +25,6 @@
 #include "iscsi_target_device.h"
 #include "iscsi_target_tpg.h"
 #include "iscsi_target_util.h"
-
-int iscsit_get_lun_for_tmr(
-	struct iscsi_cmd *cmd,
-	u64 lun)
-{
-	u32 unpacked_lun = scsilun_to_int((struct scsi_lun *)&lun);
-
-	return transport_lookup_tmr_lun(&cmd->se_cmd, unpacked_lun);
-}
-
-int iscsit_get_lun_for_cmd(
-	struct iscsi_cmd *cmd,
-	unsigned char *cdb,
-	u64 lun)
-{
-	u32 unpacked_lun = scsilun_to_int((struct scsi_lun *)&lun);
-
-	return transport_lookup_cmd_lun(&cmd->se_cmd, unpacked_lun);
-}
 
 void iscsit_determine_maxcmdsn(struct iscsi_session *sess)
 {
@@ -84,3 +63,4 @@ void iscsit_increment_maxcmdsn(struct iscsi_cmd *cmd, struct iscsi_session *sess
 	pr_debug("Updated MaxCmdSN to 0x%08x\n", sess->max_cmd_sn);
 	mutex_unlock(&sess->cmdsn_mutex);
 }
+EXPORT_SYMBOL(iscsit_increment_maxcmdsn);

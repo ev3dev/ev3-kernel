@@ -1,8 +1,10 @@
 #ifndef MFD_TMIO_H
 #define MFD_TMIO_H
 
+#include <linux/device.h>
 #include <linux/fb.h>
 #include <linux/io.h>
+#include <linux/jiffies.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 
@@ -63,26 +65,38 @@
  */
 #define TMIO_MMC_SDIO_IRQ		(1 << 2)
 /*
- * Some platforms can detect card insertion events with controller powered
- * down, in which case they have to call tmio_mmc_cd_wakeup() to power up the
- * controller and report the event to the driver.
- */
-#define TMIO_MMC_HAS_COLD_CD		(1 << 3)
-/*
  * Some controllers require waiting for the SD bus to become
  * idle before writing to some registers.
  */
 #define TMIO_MMC_HAS_IDLE_WAIT		(1 << 4)
+/*
+ * A GPIO is used for card hotplug detection. We need an extra flag for this,
+ * because 0 is a valid GPIO number too, and requiring users to specify
+ * cd_gpio < 0 to disable GPIO hotplug would break backwards compatibility.
+ */
+#define TMIO_MMC_USE_GPIO_CD		(1 << 5)
+
+/*
+ * Some controllers doesn't have over 0x100 register.
+ * it is used to checking accessibility of
+ * CTL_SD_CARD_CLK_CTL / CTL_CLK_AND_WAIT_CTL
+ */
+#define TMIO_MMC_HAVE_HIGH_REG		(1 << 6)
 
 int tmio_core_mmc_enable(void __iomem *cnf, int shift, unsigned long base);
 int tmio_core_mmc_resume(void __iomem *cnf, int shift, unsigned long base);
 void tmio_core_mmc_pwr(void __iomem *cnf, int shift, int state);
 void tmio_core_mmc_clk_div(void __iomem *cnf, int shift, int state);
 
+struct dma_chan;
+
 struct tmio_mmc_dma {
 	void *chan_priv_tx;
 	void *chan_priv_rx;
+	int slave_id_tx;
+	int slave_id_rx;
 	int alignment_shift;
+	bool (*filter)(struct dma_chan *chan, void *arg);
 };
 
 struct tmio_mmc_host;
@@ -93,24 +107,20 @@ struct tmio_mmc_host;
 struct tmio_mmc_data {
 	unsigned int			hclk;
 	unsigned long			capabilities;
+	unsigned long			capabilities2;
 	unsigned long			flags;
+	unsigned long			bus_shift;
 	u32				ocr_mask;	/* available voltages */
 	struct tmio_mmc_dma		*dma;
 	struct device			*dev;
-	bool				power;
+	unsigned int			cd_gpio;
 	void (*set_pwr)(struct platform_device *host, int state);
 	void (*set_clk_div)(struct platform_device *host, int state);
-	int (*get_cd)(struct platform_device *host);
 	int (*write16_hook)(struct tmio_mmc_host *host, int addr);
+	/* clock management callbacks */
+	int (*clk_enable)(struct platform_device *pdev, unsigned int *f);
+	void (*clk_disable)(struct platform_device *pdev);
 };
-
-static inline void tmio_mmc_cd_wakeup(struct tmio_mmc_data *pdata)
-{
-	if (pdata && !pdata->power) {
-		pdata->power = true;
-		pm_runtime_get(pdata->dev);
-	}
-}
 
 /*
  * data for the NAND controller

@@ -5,7 +5,7 @@
  *****************************************************************************/
 
 /*
- * Copyright (C) 2000 - 2012, Intel Corp.
+ * Copyright (C) 2000 - 2013, Intel Corp.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -80,16 +80,10 @@ acpi_status acpi_tb_verify_table(struct acpi_table_desc *table_desc)
 		}
 	}
 
-	/* FACS is the odd table, has no standard ACPI header and no checksum */
+	/* Always calculate checksum, ignore bad checksum if requested */
 
-	if (!ACPI_COMPARE_NAME(&table_desc->signature, ACPI_SIG_FACS)) {
-
-		/* Always calculate checksum, ignore bad checksum if requested */
-
-		status =
-		    acpi_tb_verify_checksum(table_desc->pointer,
-					    table_desc->length);
-	}
+	status =
+	    acpi_tb_verify_checksum(table_desc->pointer, table_desc->length);
 
 	return_ACPI_STATUS(status);
 }
@@ -114,7 +108,6 @@ acpi_tb_add_table(struct acpi_table_desc *table_desc, u32 *table_index)
 {
 	u32 i;
 	acpi_status status = AE_OK;
-	struct acpi_table_header *override_table = NULL;
 
 	ACPI_FUNCTION_TRACE(tb_add_table);
 
@@ -139,13 +132,13 @@ acpi_tb_add_table(struct acpi_table_desc *table_desc, u32 *table_index)
 	if ((table_desc->pointer->signature[0] != 0x00) &&
 	    (!ACPI_COMPARE_NAME(table_desc->pointer->signature, ACPI_SIG_SSDT))
 	    && (ACPI_STRNCMP(table_desc->pointer->signature, "OEM", 3))) {
-		ACPI_ERROR((AE_INFO,
-			    "Table has invalid signature [%4.4s] (0x%8.8X), must be SSDT or OEMx",
-			    acpi_ut_valid_acpi_name(*(u32 *)table_desc->
-						    pointer->
-						    signature) ? table_desc->
-			    pointer->signature : "????",
-			    *(u32 *)table_desc->pointer->signature));
+		ACPI_BIOS_ERROR((AE_INFO,
+				 "Table has invalid signature [%4.4s] (0x%8.8X), "
+				 "must be SSDT or OEMx",
+				 acpi_ut_valid_acpi_name(table_desc->pointer->
+							 signature) ?
+				 table_desc->pointer->signature : "????",
+				 *(u32 *)table_desc->pointer->signature));
 
 		return_ACPI_STATUS(AE_BAD_SIGNATURE);
 	}
@@ -224,25 +217,10 @@ acpi_tb_add_table(struct acpi_table_desc *table_desc, u32 *table_index)
 	/*
 	 * ACPI Table Override:
 	 * Allow the host to override dynamically loaded tables.
+	 * NOTE: the table is fully mapped at this point, and the mapping will
+	 * be deleted by tb_table_override if the table is actually overridden.
 	 */
-	status = acpi_os_table_override(table_desc->pointer, &override_table);
-	if (ACPI_SUCCESS(status) && override_table) {
-		ACPI_INFO((AE_INFO,
-			   "%4.4s @ 0x%p Table override, replaced with:",
-			   table_desc->pointer->signature,
-			   ACPI_CAST_PTR(void, table_desc->address)));
-
-		/* We can delete the table that was passed as a parameter */
-
-		acpi_tb_delete_table(table_desc);
-
-		/* Setup descriptor for the new table */
-
-		table_desc->address = ACPI_PTR_TO_PHYSADDR(override_table);
-		table_desc->pointer = override_table;
-		table_desc->length = override_table->length;
-		table_desc->flags = ACPI_TABLE_ORIGIN_OVERRIDE;
-	}
+	(void)acpi_tb_table_override(table_desc->pointer, table_desc);
 
 	/* Add the table to the global root table list */
 
@@ -253,12 +231,101 @@ acpi_tb_add_table(struct acpi_table_desc *table_desc, u32 *table_index)
 		goto release;
 	}
 
-      print_header:
+print_header:
 	acpi_tb_print_table_header(table_desc->address, table_desc->pointer);
 
-      release:
+release:
 	(void)acpi_ut_release_mutex(ACPI_MTX_TABLES);
 	return_ACPI_STATUS(status);
+}
+
+/*******************************************************************************
+ *
+ * FUNCTION:    acpi_tb_table_override
+ *
+ * PARAMETERS:  table_header        - Header for the original table
+ *              table_desc          - Table descriptor initialized for the
+ *                                    original table. May or may not be mapped.
+ *
+ * RETURN:      Pointer to the entire new table. NULL if table not overridden.
+ *              If overridden, installs the new table within the input table
+ *              descriptor.
+ *
+ * DESCRIPTION: Attempt table override by calling the OSL override functions.
+ *              Note: If the table is overridden, then the entire new table
+ *              is mapped and returned by this function.
+ *
+ ******************************************************************************/
+
+struct acpi_table_header *acpi_tb_table_override(struct acpi_table_header
+						 *table_header,
+						 struct acpi_table_desc
+						 *table_desc)
+{
+	acpi_status status;
+	struct acpi_table_header *new_table = NULL;
+	acpi_physical_address new_address = 0;
+	u32 new_table_length = 0;
+	u8 new_flags;
+	char *override_type;
+
+	/* (1) Attempt logical override (returns a logical address) */
+
+	status = acpi_os_table_override(table_header, &new_table);
+	if (ACPI_SUCCESS(status) && new_table) {
+		new_address = ACPI_PTR_TO_PHYSADDR(new_table);
+		new_table_length = new_table->length;
+		new_flags = ACPI_TABLE_ORIGIN_OVERRIDE;
+		override_type = "Logical";
+		goto finish_override;
+	}
+
+	/* (2) Attempt physical override (returns a physical address) */
+
+	status = acpi_os_physical_table_override(table_header,
+						 &new_address,
+						 &new_table_length);
+	if (ACPI_SUCCESS(status) && new_address && new_table_length) {
+
+		/* Map the entire new table */
+
+		new_table = acpi_os_map_memory(new_address, new_table_length);
+		if (!new_table) {
+			ACPI_EXCEPTION((AE_INFO, AE_NO_MEMORY,
+					"%4.4s %p Attempted physical table override failed",
+					table_header->signature,
+					ACPI_CAST_PTR(void,
+						      table_desc->address)));
+			return (NULL);
+		}
+
+		override_type = "Physical";
+		new_flags = ACPI_TABLE_ORIGIN_MAPPED;
+		goto finish_override;
+	}
+
+	return (NULL);		/* There was no override */
+
+finish_override:
+
+	ACPI_INFO((AE_INFO,
+		   "%4.4s %p %s table override, new table: %p",
+		   table_header->signature,
+		   ACPI_CAST_PTR(void, table_desc->address),
+		   override_type, new_table));
+
+	/* We can now unmap/delete the original table (if fully mapped) */
+
+	acpi_tb_delete_table(table_desc);
+
+	/* Setup descriptor for the new table */
+
+	table_desc->address = new_address;
+	table_desc->pointer = new_table;
+	table_desc->length = new_table_length;
+	table_desc->flags = new_flags;
+
+	return (new_table);
 }
 
 /*******************************************************************************
@@ -276,6 +343,7 @@ acpi_tb_add_table(struct acpi_table_desc *table_desc, u32 *table_index)
 acpi_status acpi_tb_resize_root_table_list(void)
 {
 	struct acpi_table_desc *tables;
+	u32 table_count;
 
 	ACPI_FUNCTION_TRACE(tb_resize_root_table_list);
 
@@ -289,8 +357,13 @@ acpi_status acpi_tb_resize_root_table_list(void)
 
 	/* Increase the Table Array size */
 
-	tables = ACPI_ALLOCATE_ZEROED(((acpi_size) acpi_gbl_root_table_list.
-				       max_table_count +
+	if (acpi_gbl_root_table_list.flags & ACPI_ROOT_ORIGIN_ALLOCATED) {
+		table_count = acpi_gbl_root_table_list.max_table_count;
+	} else {
+		table_count = acpi_gbl_root_table_list.current_table_count;
+	}
+
+	tables = ACPI_ALLOCATE_ZEROED(((acpi_size) table_count +
 				       ACPI_ROOT_TABLE_SIZE_INCREMENT) *
 				      sizeof(struct acpi_table_desc));
 	if (!tables) {
@@ -303,8 +376,8 @@ acpi_status acpi_tb_resize_root_table_list(void)
 
 	if (acpi_gbl_root_table_list.tables) {
 		ACPI_MEMCPY(tables, acpi_gbl_root_table_list.tables,
-			    (acpi_size) acpi_gbl_root_table_list.
-			    max_table_count * sizeof(struct acpi_table_desc));
+			    (acpi_size) table_count *
+			    sizeof(struct acpi_table_desc));
 
 		if (acpi_gbl_root_table_list.flags & ACPI_ROOT_ORIGIN_ALLOCATED) {
 			ACPI_FREE(acpi_gbl_root_table_list.tables);
@@ -312,9 +385,9 @@ acpi_status acpi_tb_resize_root_table_list(void)
 	}
 
 	acpi_gbl_root_table_list.tables = tables;
-	acpi_gbl_root_table_list.max_table_count +=
-	    ACPI_ROOT_TABLE_SIZE_INCREMENT;
-	acpi_gbl_root_table_list.flags |= (u8)ACPI_ROOT_ORIGIN_ALLOCATED;
+	acpi_gbl_root_table_list.max_table_count =
+	    table_count + ACPI_ROOT_TABLE_SIZE_INCREMENT;
+	acpi_gbl_root_table_list.flags |= ACPI_ROOT_ORIGIN_ALLOCATED;
 
 	return_ACPI_STATUS(AE_OK);
 }
@@ -323,10 +396,10 @@ acpi_status acpi_tb_resize_root_table_list(void)
  *
  * FUNCTION:    acpi_tb_store_table
  *
- * PARAMETERS:  Address             - Table address
- *              Table               - Table header
- *              Length              - Table length
- *              Flags               - flags
+ * PARAMETERS:  address             - Table address
+ *              table               - Table header
+ *              length              - Table length
+ *              flags               - flags
  *
  * RETURN:      Status and table index.
  *
@@ -391,12 +464,20 @@ void acpi_tb_delete_table(struct acpi_table_desc *table_desc)
 	}
 	switch (table_desc->flags & ACPI_TABLE_ORIGIN_MASK) {
 	case ACPI_TABLE_ORIGIN_MAPPED:
+
 		acpi_os_unmap_memory(table_desc->pointer, table_desc->length);
 		break;
+
 	case ACPI_TABLE_ORIGIN_ALLOCATED:
+
 		ACPI_FREE(table_desc->pointer);
 		break;
-	default:;
+
+		/* Not mapped or allocated, there is nothing we can do */
+
+	default:
+
+		return;
 	}
 
 	table_desc->pointer = NULL;
@@ -442,6 +523,8 @@ void acpi_tb_terminate(void)
 
 	ACPI_DEBUG_PRINT((ACPI_DB_INFO, "ACPI Tables freed\n"));
 	(void)acpi_ut_release_mutex(ACPI_MTX_TABLES);
+
+	return_VOID;
 }
 
 /*******************************************************************************

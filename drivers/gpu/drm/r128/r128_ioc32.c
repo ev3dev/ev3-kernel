@@ -31,9 +31,9 @@
  */
 #include <linux/compat.h>
 
-#include "drmP.h"
-#include "drm.h"
-#include "r128_drm.h"
+#include <drm/drmP.h>
+#include <drm/r128_drm.h>
+#include "r128_drv.h"
 
 typedef struct drm_r128_init32 {
 	int func;

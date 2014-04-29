@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- * Copyright(c) 2009-2010  Realtek Corporation.
+ * Copyright(c) 2009-2012  Realtek Corporation.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the GNU General Public License as
@@ -543,7 +543,7 @@
 #define	IMR_TIMEOUT1			BIT(16)
 #define	IMR_TXFOVW			BIT(15)
 #define	IMR_PSTIMEOUT			BIT(14)
-#define	IMR_BcnInt			BIT(13)
+#define	IMR_BCNINT			BIT(13)
 #define	IMR_RXFOVW			BIT(12)
 #define	IMR_RDU				BIT(11)
 #define	IMR_ATIMEND			BIT(10)
@@ -998,7 +998,6 @@
 #define SCR_RXBCUSEDK				BIT(7)
 
 /* General definitions */
-#define MAC_ADDR_LEN				6
 #define LAST_ENTRY_OF_TX_PKT_BUFFER		255
 #define LAST_ENTRY_OF_TX_PKT_BUFFER_DUAL_MAC	127
 

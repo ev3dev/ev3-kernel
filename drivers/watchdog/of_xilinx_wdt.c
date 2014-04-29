@@ -1,23 +1,15 @@
 /*
-*   of_xilinx_wdt.c  1.01  A Watchdog Device Driver for Xilinx xps_timebase_wdt
-*
-*   (C) Copyright 2011 (Alejandro Cabrera <aldaya@gmail.com>)
-*
-*       -----------------------
-*
-*   This program is free software; you can redistribute it and/or
-*   modify it under the terms of the GNU General Public License
-*   as published by the Free Software Foundation; either version
-*   2 of the License, or (at your option) any later version.
-*
-*       -----------------------
-*	30-May-2011 Alejandro Cabrera <aldaya@gmail.com>
-*		- If "xlnx,wdt-enable-once" wasn't found on device tree the
-*		  module will use CONFIG_WATCHDOG_NOWAYOUT
-*		- If the device tree parameters ("clock-frequency" and
-*		  "xlnx,wdt-interval") wasn't found the driver won't
-*		  know the wdt reset interval
-*/
+ * Watchdog Device Driver for Xilinx axi/xps_timebase_wdt
+ *
+ * (C) Copyright 2011 (Alejandro Cabrera <aldaya@gmail.com>)
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version
+ * 2 of the License, or (at your option) any later version.
+ */
+
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/module.h>
 #include <linux/types.h>
@@ -99,7 +91,7 @@ static void xwdt_stop(void)
 	iowrite32(0, xdev.base + XWT_TWCSR1_OFFSET);
 
 	spin_unlock(&spinlock);
-	printk(KERN_INFO PFX "Stopped!\n");
+	pr_info("Stopped!\n");
 }
 
 static void xwdt_keepalive(void)
@@ -165,7 +157,7 @@ static int xwdt_open(struct inode *inode, struct file *file)
 		__module_get(THIS_MODULE);
 
 	xwdt_start();
-	printk(KERN_INFO PFX "Started...\n");
+	pr_info("Started...\n");
 
 	return nonseekable_open(inode, file);
 }
@@ -175,8 +167,7 @@ static int xwdt_release(struct inode *inode, struct file *file)
 	if (expect_close == 42) {
 		xwdt_stop();
 	} else {
-		printk(KERN_CRIT PFX
-			"Unexpected close, not stopping watchdog!\n");
+		pr_crit("Unexpected close, not stopping watchdog!\n");
 		xwdt_keepalive();
 	}
 
@@ -288,7 +279,7 @@ static struct miscdevice xwdt_miscdev = {
 	.fops       = &xwdt_fops,
 };
 
-static int __devinit xwdt_probe(struct platform_device *pdev)
+static int xwdt_probe(struct platform_device *pdev)
 {
 	int rc;
 	u32 *tmptr;
@@ -296,26 +287,24 @@ static int __devinit xwdt_probe(struct platform_device *pdev)
 
 	no_timeout = 0;
 
-	pfreq = (u32 *)of_get_property(pdev->dev.of_node->parent,
+	pfreq = (u32 *)of_get_property(pdev->dev.of_node,
 					"clock-frequency", NULL);
 
 	if (pfreq == NULL) {
-		printk(KERN_WARNING PFX
-			"The watchdog clock frequency cannot be obtained!\n");
+		pr_warn("The watchdog clock frequency cannot be obtained!\n");
 		no_timeout = 1;
 	}
 
 	rc = of_address_to_resource(pdev->dev.of_node, 0, &xdev.res);
 	if (rc) {
-		printk(KERN_WARNING PFX "invalid address!\n");
+		pr_warn("invalid address!\n");
 		return rc;
 	}
 
 	tmptr = (u32 *)of_get_property(pdev->dev.of_node,
 					"xlnx,wdt-interval", NULL);
 	if (tmptr == NULL) {
-		printk(KERN_WARNING PFX "Parameter \"xlnx,wdt-interval\""
-					" not found in device tree!\n");
+		pr_warn("Parameter \"xlnx,wdt-interval\" not found in device tree!\n");
 		no_timeout = 1;
 	} else {
 		xdev.wdt_interval = *tmptr;
@@ -324,8 +313,7 @@ static int __devinit xwdt_probe(struct platform_device *pdev)
 	tmptr = (u32 *)of_get_property(pdev->dev.of_node,
 					"xlnx,wdt-enable-once", NULL);
 	if (tmptr == NULL) {
-		printk(KERN_WARNING PFX "Parameter \"xlnx,wdt-enable-once\""
-					" not found in device tree!\n");
+		pr_warn("Parameter \"xlnx,wdt-enable-once\" not found in device tree!\n");
 		xdev.nowayout = WATCHDOG_NOWAYOUT;
 	}
 
@@ -339,20 +327,20 @@ static int __devinit xwdt_probe(struct platform_device *pdev)
 	if (!request_mem_region(xdev.res.start,
 			xdev.res.end - xdev.res.start + 1, WATCHDOG_NAME)) {
 		rc = -ENXIO;
-		printk(KERN_ERR PFX "memory request failure!\n");
+		pr_err("memory request failure!\n");
 		goto err_out;
 	}
 
 	xdev.base = ioremap(xdev.res.start, xdev.res.end - xdev.res.start + 1);
 	if (xdev.base == NULL) {
 		rc = -ENOMEM;
-		printk(KERN_ERR PFX "ioremap failure!\n");
+		pr_err("ioremap failure!\n");
 		goto release_mem;
 	}
 
 	rc = xwdt_selftest();
 	if (rc == XWT_TIMER_FAILED) {
-		printk(KERN_ERR PFX "SelfTest routine error!\n");
+		pr_err("SelfTest routine error!\n");
 		goto unmap_io;
 	}
 
@@ -360,20 +348,17 @@ static int __devinit xwdt_probe(struct platform_device *pdev)
 
 	rc = misc_register(&xwdt_miscdev);
 	if (rc) {
-		printk(KERN_ERR PFX
-			"cannot register miscdev on minor=%d (err=%d)\n",
-						xwdt_miscdev.minor, rc);
+		pr_err("cannot register miscdev on minor=%d (err=%d)\n",
+		       xwdt_miscdev.minor, rc);
 		goto unmap_io;
 	}
 
 	if (no_timeout)
-		printk(KERN_INFO PFX
-			"driver loaded (timeout=? sec, nowayout=%d)\n",
-						    xdev.nowayout);
+		pr_info("driver loaded (timeout=? sec, nowayout=%d)\n",
+			xdev.nowayout);
 	else
-		printk(KERN_INFO PFX
-			"driver loaded (timeout=%d sec, nowayout=%d)\n",
-					timeout, xdev.nowayout);
+		pr_info("driver loaded (timeout=%d sec, nowayout=%d)\n",
+			timeout, xdev.nowayout);
 
 	expect_close = 0;
 	clear_bit(0, &driver_open);
@@ -388,7 +373,7 @@ err_out:
 	return rc;
 }
 
-static int __devexit xwdt_remove(struct platform_device *dev)
+static int xwdt_remove(struct platform_device *dev)
 {
 	misc_deregister(&xwdt_miscdev);
 	iounmap(xdev.base);
@@ -398,7 +383,8 @@ static int __devexit xwdt_remove(struct platform_device *dev)
 }
 
 /* Match table for of_platform binding */
-static struct of_device_id __devinitdata xwdt_of_match[] = {
+static struct of_device_id xwdt_of_match[] = {
+	{ .compatible = "xlnx,xps-timebase-wdt-1.00.a", },
 	{ .compatible = "xlnx,xps-timebase-wdt-1.01.a", },
 	{},
 };
@@ -406,7 +392,7 @@ MODULE_DEVICE_TABLE(of, xwdt_of_match);
 
 static struct platform_driver xwdt_driver = {
 	.probe       = xwdt_probe,
-	.remove      = __devexit_p(xwdt_remove),
+	.remove      = xwdt_remove,
 	.driver = {
 		.owner = THIS_MODULE,
 		.name  = WATCHDOG_NAME,
@@ -418,5 +404,4 @@ module_platform_driver(xwdt_driver);
 
 MODULE_AUTHOR("Alejandro Cabrera <aldaya@gmail.com>");
 MODULE_DESCRIPTION("Xilinx Watchdog driver");
-MODULE_LICENSE("GPL");
-MODULE_ALIAS_MISCDEV(WATCHDOG_MINOR);
+MODULE_LICENSE("GPL v2");

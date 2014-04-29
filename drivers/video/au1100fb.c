@@ -83,7 +83,7 @@ struct fb_bitfield rgb_bitfields[][4] =
 	{ { 8, 4, 0 },  { 4, 4, 0 }, { 0, 4, 0 }, { 0, 0, 0 } },
 };
 
-static struct fb_fix_screeninfo au1100fb_fix __devinitdata = {
+static struct fb_fix_screeninfo au1100fb_fix = {
 	.id		= "AU1100 FB",
 	.xpanstep 	= 1,
 	.ypanstep 	= 1,
@@ -91,7 +91,7 @@ static struct fb_fix_screeninfo au1100fb_fix __devinitdata = {
 	.accel		= FB_ACCEL_NONE,
 };
 
-static struct fb_var_screeninfo au1100fb_var __devinitdata = {
+static struct fb_var_screeninfo au1100fb_var = {
 	.activate	= FB_ACTIVATE_NOW,
 	.height		= -1,
 	.width		= -1,
@@ -111,30 +111,16 @@ static int au1100fb_fb_blank(int blank_mode, struct fb_info *fbi)
 	switch (blank_mode) {
 
 	case VESA_NO_BLANKING:
-			/* Turn on panel */
-			fbdev->regs->lcd_control |= LCD_CONTROL_GO;
-#ifdef CONFIG_MIPS_PB1100
-			if (fbdev->panel_idx == 1) {
-				au_writew(au_readw(PB1100_G_CONTROL)
-					  | (PB1100_G_CONTROL_BL | PB1100_G_CONTROL_VDD),
-			PB1100_G_CONTROL);
-			}
-#endif
+		/* Turn on panel */
+		fbdev->regs->lcd_control |= LCD_CONTROL_GO;
 		au_sync();
 		break;
 
 	case VESA_VSYNC_SUSPEND:
 	case VESA_HSYNC_SUSPEND:
 	case VESA_POWERDOWN:
-			/* Turn off panel */
-			fbdev->regs->lcd_control &= ~LCD_CONTROL_GO;
-#ifdef CONFIG_MIPS_PB1100
-			if (fbdev->panel_idx == 1) {
-				au_writew(au_readw(PB1100_G_CONTROL)
-				  	  & ~(PB1100_G_CONTROL_BL | PB1100_G_CONTROL_VDD),
-			PB1100_G_CONTROL);
-			}
-#endif
+		/* Turn off panel */
+		fbdev->regs->lcd_control &= ~LCD_CONTROL_GO;
 		au_sync();
 		break;
 	default:
@@ -375,39 +361,13 @@ void au1100fb_fb_rotate(struct fb_info *fbi, int angle)
 int au1100fb_fb_mmap(struct fb_info *fbi, struct vm_area_struct *vma)
 {
 	struct au1100fb_device *fbdev;
-	unsigned int len;
-	unsigned long start=0, off;
 
 	fbdev = to_au1100fb_device(fbi);
-
-	if (vma->vm_pgoff > (~0UL >> PAGE_SHIFT)) {
-		return -EINVAL;
-	}
-
-	start = fbdev->fb_phys & PAGE_MASK;
-	len = PAGE_ALIGN((start & ~PAGE_MASK) + fbdev->fb_len);
-
-	off = vma->vm_pgoff << PAGE_SHIFT;
-
-	if ((vma->vm_end - vma->vm_start + off) > len) {
-		return -EINVAL;
-	}
-
-	off += start;
-	vma->vm_pgoff = off >> PAGE_SHIFT;
 
 	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 	pgprot_val(vma->vm_page_prot) |= (6 << 9); //CCA=6
 
-	vma->vm_flags |= VM_IO;
-
-	if (io_remap_pfn_range(vma, vma->vm_start, off >> PAGE_SHIFT,
-				vma->vm_end - vma->vm_start,
-				vma->vm_page_prot)) {
-		return -EAGAIN;
-	}
-
-	return 0;
+	return vm_iomap_memory(vma, fbdev->fb_phys, fbdev->fb_len);
 }
 
 static struct fb_ops au1100fb_ops =
@@ -469,7 +429,7 @@ static int au1100fb_setup(struct au1100fb_device *fbdev)
 	return 0;
 }
 
-static int __devinit au1100fb_drv_probe(struct platform_device *dev)
+static int au1100fb_drv_probe(struct platform_device *dev)
 {
 	struct au1100fb_device *fbdev = NULL;
 	struct resource *regs_res;
@@ -477,7 +437,8 @@ static int __devinit au1100fb_drv_probe(struct platform_device *dev)
 	u32 sys_clksrc;
 
 	/* Allocate new device private */
-	fbdev = kzalloc(sizeof(struct au1100fb_device), GFP_KERNEL);
+	fbdev = devm_kzalloc(&dev->dev, sizeof(struct au1100fb_device),
+			     GFP_KERNEL);
 	if (!fbdev) {
 		print_err("fail to allocate device private record");
 		return -ENOMEM;
@@ -498,8 +459,10 @@ static int __devinit au1100fb_drv_probe(struct platform_device *dev)
 	au1100fb_fix.mmio_start = regs_res->start;
 	au1100fb_fix.mmio_len = resource_size(regs_res);
 
-	if (!request_mem_region(au1100fb_fix.mmio_start, au1100fb_fix.mmio_len,
-				DRIVER_NAME)) {
+	if (!devm_request_mem_region(&dev->dev,
+				     au1100fb_fix.mmio_start,
+				     au1100fb_fix.mmio_len,
+				     DRIVER_NAME)) {
 		print_err("fail to lock memory region at 0x%08lx",
 				au1100fb_fix.mmio_start);
 		return -EBUSY;
@@ -514,8 +477,9 @@ static int __devinit au1100fb_drv_probe(struct platform_device *dev)
 	fbdev->fb_len = fbdev->panel->xres * fbdev->panel->yres *
 		  	(fbdev->panel->bpp >> 3) * AU1100FB_NBR_VIDEO_BUFFERS;
 
-	fbdev->fb_mem = dma_alloc_coherent(&dev->dev, PAGE_ALIGN(fbdev->fb_len),
-					&fbdev->fb_phys, GFP_KERNEL);
+	fbdev->fb_mem = dmam_alloc_coherent(&dev->dev,
+					    PAGE_ALIGN(fbdev->fb_len),
+					    &fbdev->fb_phys, GFP_KERNEL);
 	if (!fbdev->fb_mem) {
 		print_err("fail to allocate frambuffer (size: %dK))",
 			  fbdev->fb_len / 1024);
@@ -532,7 +496,7 @@ static int __devinit au1100fb_drv_probe(struct platform_device *dev)
 	for (page = (unsigned long)fbdev->fb_mem;
 	     page < PAGE_ALIGN((unsigned long)fbdev->fb_mem + fbdev->fb_len);
 	     page += PAGE_SIZE) {
-#if CONFIG_DMA_NONCOHERENT
+#ifdef CONFIG_DMA_NONCOHERENT
 		SetPageReserved(virt_to_page(CAC_ADDR((void *)page)));
 #else
 		SetPageReserved(virt_to_page(page));
@@ -557,14 +521,14 @@ static int __devinit au1100fb_drv_probe(struct platform_device *dev)
 	fbdev->info.fbops = &au1100fb_ops;
 	fbdev->info.fix = au1100fb_fix;
 
-	if (!(fbdev->info.pseudo_palette = kzalloc(sizeof(u32) * 16, GFP_KERNEL))) {
+	fbdev->info.pseudo_palette =
+		devm_kzalloc(&dev->dev, sizeof(u32) * 16, GFP_KERNEL);
+	if (!fbdev->info.pseudo_palette)
 		return -ENOMEM;
-	}
 
 	if (fb_alloc_cmap(&fbdev->info.cmap, AU1100_LCD_NBR_PALETTE_ENTRIES, 0) < 0) {
 		print_err("Fail to allocate colormap (%d entries)",
 			   AU1100_LCD_NBR_PALETTE_ENTRIES);
-		kfree(fbdev->info.pseudo_palette);
 		return -EFAULT;
 	}
 
@@ -582,9 +546,6 @@ static int __devinit au1100fb_drv_probe(struct platform_device *dev)
 	return 0;
 
 failed:
-	if (fbdev->regs) {
-		release_mem_region(fbdev->regs_phys, fbdev->regs_len);
-	}
 	if (fbdev->fb_mem) {
 		dma_free_noncoherent(&dev->dev, fbdev->fb_len, fbdev->fb_mem,
 				     fbdev->fb_phys);
@@ -592,10 +553,8 @@ failed:
 	if (fbdev->info.cmap.len != 0) {
 		fb_dealloc_cmap(&fbdev->info.cmap);
 	}
-	kfree(fbdev);
-	platform_set_drvdata(dev, NULL);
 
-	return 0;
+	return -ENODEV;
 }
 
 int au1100fb_drv_remove(struct platform_device *dev)
@@ -605,7 +564,7 @@ int au1100fb_drv_remove(struct platform_device *dev)
 	if (!dev)
 		return -ENODEV;
 
-	fbdev = (struct au1100fb_device *) platform_get_drvdata(dev);
+	fbdev = platform_get_drvdata(dev);
 
 #if !defined(CONFIG_FRAMEBUFFER_CONSOLE) && defined(CONFIG_LOGO)
 	au1100fb_fb_blank(VESA_POWERDOWN, &fbdev->info);
@@ -615,14 +574,7 @@ int au1100fb_drv_remove(struct platform_device *dev)
 	/* Clean up all probe data */
 	unregister_framebuffer(&fbdev->info);
 
-	release_mem_region(fbdev->regs_phys, fbdev->regs_len);
-
-	dma_free_coherent(&dev->dev, PAGE_ALIGN(fbdev->fb_len), fbdev->fb_mem,
-			  fbdev->fb_phys);
-
 	fb_dealloc_cmap(&fbdev->info.cmap);
-	kfree(fbdev->info.pseudo_palette);
-	kfree((void*)fbdev);
 
 	return 0;
 }
@@ -684,19 +636,7 @@ static struct platform_driver au1100fb_driver = {
 	.suspend	= au1100fb_drv_suspend,
         .resume		= au1100fb_drv_resume,
 };
-
-static int __init au1100fb_load(void)
-{
-	return platform_driver_register(&au1100fb_driver);
-}
-
-static void __exit au1100fb_unload(void)
-{
-	platform_driver_unregister(&au1100fb_driver);
-}
-
-module_init(au1100fb_load);
-module_exit(au1100fb_unload);
+module_platform_driver(au1100fb_driver);
 
 MODULE_DESCRIPTION(DRIVER_DESC);
 MODULE_LICENSE("GPL");

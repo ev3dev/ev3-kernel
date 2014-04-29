@@ -3,7 +3,7 @@
  *                           Philip Edelbrock <phil@netroedge.com>
  * Copyright (C) 2003 Greg Kroah-Hartman <greg@kroah.com>
  * Copyright (C) 2003 IBM Corp.
- * Copyright (C) 2004 Jean Delvare <khali@linux-fr.org>
+ * Copyright (C) 2004 Jean Delvare <jdelvare@suse.de>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -229,22 +229,10 @@ static struct i2c_driver eeprom_driver = {
 	.address_list	= normal_i2c,
 };
 
-static int __init eeprom_init(void)
-{
-	return i2c_add_driver(&eeprom_driver);
-}
-
-static void __exit eeprom_exit(void)
-{
-	i2c_del_driver(&eeprom_driver);
-}
-
+module_i2c_driver(eeprom_driver);
 
 MODULE_AUTHOR("Frodo Looijaard <frodol@dds.nl> and "
 		"Philip Edelbrock <phil@netroedge.com> and "
 		"Greg Kroah-Hartman <greg@kroah.com>");
 MODULE_DESCRIPTION("I2C EEPROM driver");
 MODULE_LICENSE("GPL");
-
-module_init(eeprom_init);
-module_exit(eeprom_exit);

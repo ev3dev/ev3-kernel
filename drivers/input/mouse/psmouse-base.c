@@ -34,6 +34,7 @@
 #include "touchkit_ps2.h"
 #include "elantech.h"
 #include "sentelic.h"
+#include "cypress_ps2.h"
 
 #define DRIVER_DESC	"PS/2 mouse driver"
 
@@ -759,6 +760,28 @@ static int psmouse_extensions(struct psmouse *psmouse,
 	}
 
 /*
+ * Try Cypress Trackpad.
+ * Must try it before Finger Sensing Pad because Finger Sensing Pad probe
+ * upsets some modules of Cypress Trackpads.
+ */
+	if (max_proto > PSMOUSE_IMEX &&
+			cypress_detect(psmouse, set_properties) == 0) {
+		if (cypress_supported()) {
+			if (cypress_init(psmouse) == 0)
+				return PSMOUSE_CYPRESS;
+
+			/*
+			 * Finger Sensing Pad probe upsets some modules of
+			 * Cypress Trackpad, must avoid Finger Sensing Pad
+			 * probe if Cypress Trackpad device detected.
+			 */
+			return PSMOUSE_PS2;
+		}
+
+		max_proto = PSMOUSE_IMEX;
+	}
+
+/*
  * Try ALPS TouchPad
  */
 	if (max_proto > PSMOUSE_IMEX) {
@@ -896,6 +919,15 @@ static const struct psmouse_protocol psmouse_protocols[] = {
 		.alias		= "thinkps",
 		.detect		= thinking_detect,
 	},
+#ifdef CONFIG_MOUSE_PS2_CYPRESS
+	{
+		.type		= PSMOUSE_CYPRESS,
+		.name		= "CyPS/2",
+		.alias		= "cypress",
+		.detect		= cypress_detect,
+		.init		= cypress_init,
+	},
+#endif
 	{
 		.type		= PSMOUSE_GENPS,
 		.name		= "GenPS/2",
@@ -1092,28 +1124,33 @@ static void psmouse_initialize(struct psmouse *psmouse)
  * psmouse_activate() enables the mouse so that we get motion reports from it.
  */
 
-static void psmouse_activate(struct psmouse *psmouse)
+int psmouse_activate(struct psmouse *psmouse)
 {
-	if (ps2_command(&psmouse->ps2dev, NULL, PSMOUSE_CMD_ENABLE))
+	if (ps2_command(&psmouse->ps2dev, NULL, PSMOUSE_CMD_ENABLE)) {
 		psmouse_warn(psmouse, "Failed to enable mouse on %s\n",
 			     psmouse->ps2dev.serio->phys);
+		return -1;
+	}
 
 	psmouse_set_state(psmouse, PSMOUSE_ACTIVATED);
+	return 0;
 }
-
 
 /*
  * psmouse_deactivate() puts the mouse into poll mode so that we don't get motion
  * reports from it unless we explicitly request it.
  */
 
-static void psmouse_deactivate(struct psmouse *psmouse)
+int psmouse_deactivate(struct psmouse *psmouse)
 {
-	if (ps2_command(&psmouse->ps2dev, NULL, PSMOUSE_CMD_DISABLE))
+	if (ps2_command(&psmouse->ps2dev, NULL, PSMOUSE_CMD_DISABLE)) {
 		psmouse_warn(psmouse, "Failed to deactivate mouse on %s\n",
 			     psmouse->ps2dev.serio->phys);
+		return -1;
+	}
 
 	psmouse_set_state(psmouse, PSMOUSE_CMD_MODE);
+	return 0;
 }
 
 

@@ -11,6 +11,7 @@
  */
 
 #include <stdarg.h>
+#include <linux/init.h>
 #include <linux/types.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>
@@ -18,7 +19,6 @@
 #include <linux/irq.h>
 
 #include <asm/setup.h>
-#include <asm/system.h>
 #include <asm/pgtable.h>
 #include <asm/machdep.h>
 #include <asm/m68360.h>
@@ -36,6 +36,7 @@ extern void m360_cpm_reset(void);
 #define OSCILLATOR  (unsigned long int)33000000
 #endif
 
+static irq_handler_t timer_interrupt;
 unsigned long int system_clock;
 
 extern QUICC *pquicc;
@@ -53,16 +54,16 @@ static irqreturn_t hw_tick(int irq, void *dummy)
 
   pquicc->timer_ter1 = 0x0002; /* clear timer event */
 
-  return arch_timer_interrupt(irq, dummy);
+  return timer_interrupt(irq, dummy);
 }
 
 static struct irqaction m68360_timer_irq = {
 	.name	 = "timer",
-	.flags	 = IRQF_DISABLED | IRQF_TIMER,
+	.flags	 = IRQF_TIMER,
 	.handler = hw_tick,
 };
 
-void hw_timer_init(void)
+void hw_timer_init(irq_handler_t handler)
 {
   unsigned char prescaler;
   unsigned short tgcr_save;
@@ -95,17 +96,14 @@ void hw_timer_init(void)
 
   pquicc->timer_ter1 = 0x0003; /* clear timer events */
 
+  timer_interrupt = handler;
+
   /* enable timer 1 interrupt in CIMR */
   setup_irq(CPMVEC_TIMER1, &m68360_timer_irq);
 
   /* Start timer 1: */
   tgcr_save = (pquicc->timer_tgcr & 0xfff0) | 0x0001;
   pquicc->timer_tgcr  = tgcr_save;
-}
-
-void BSP_gettod (int *yearp, int *monp, int *dayp,
-		   int *hourp, int *minp, int *secp)
-{
 }
 
 int BSP_set_clock_mmss(unsigned long nowtime)
@@ -143,7 +141,7 @@ _bsc1(char *, getbenv, char *, a)
 #endif
 
 
-void config_BSP(char *command, int len)
+void __init config_BSP(char *command, int len)
 {
   unsigned char *p;
 
@@ -181,6 +179,5 @@ void config_BSP(char *command, int len)
   scc1_hwaddr = "\00\01\02\03\04\05";
 #endif
  
-  mach_gettod          = BSP_gettod;
-  mach_reset           = BSP_reset;
+  mach_reset = BSP_reset;
 }

@@ -25,7 +25,7 @@
 #define DRV_MODULE_VERSION	"1.0"
 #define DRV_MODULE_RELDATE	"June 25, 2007"
 
-static char version[] __devinitdata =
+static char version[] =
 	DRV_MODULE_NAME ".c:v" DRV_MODULE_VERSION " (" DRV_MODULE_RELDATE ")\n";
 MODULE_AUTHOR("David S. Miller (davem@davemloft.net)");
 MODULE_DESCRIPTION("Sun LDOM virtual network driver");
@@ -614,11 +614,10 @@ struct vnet_port *__tx_port_find(struct vnet *vp, struct sk_buff *skb)
 {
 	unsigned int hash = vnet_hashfn(skb->data);
 	struct hlist_head *hp = &vp->port_hash[hash];
-	struct hlist_node *n;
 	struct vnet_port *port;
 
-	hlist_for_each_entry(port, n, hp, hash) {
-		if (!compare_ether_addr(port->raddr, skb->data))
+	hlist_for_each_entry(port, hp, hash) {
+		if (ether_addr_equal(port->raddr, skb->data))
 			return port;
 	}
 	port = NULL;
@@ -752,7 +751,7 @@ static struct vnet_mcast_entry *__vnet_mc_find(struct vnet *vp, u8 *addr)
 	struct vnet_mcast_entry *m;
 
 	for (m = vp->mcast_list; m; m = m->next) {
-		if (!memcmp(m->addr, addr, ETH_ALEN))
+		if (ether_addr_equal(m->addr, addr))
 			return m;
 	}
 	return NULL;
@@ -882,8 +881,8 @@ static int vnet_set_mac_addr(struct net_device *dev, void *p)
 static void vnet_get_drvinfo(struct net_device *dev,
 			     struct ethtool_drvinfo *info)
 {
-	strcpy(info->driver, DRV_MODULE_NAME);
-	strcpy(info->version, DRV_MODULE_VERSION);
+	strlcpy(info->driver, DRV_MODULE_NAME, sizeof(info->driver));
+	strlcpy(info->version, DRV_MODULE_VERSION, sizeof(info->version));
 }
 
 static u32 vnet_get_msglevel(struct net_device *dev)
@@ -937,7 +936,7 @@ static void vnet_port_free_tx_bufs(struct vnet_port *port)
 	}
 }
 
-static int __devinit vnet_port_alloc_tx_bufs(struct vnet_port *port)
+static int vnet_port_alloc_tx_bufs(struct vnet_port *port)
 {
 	struct vio_dring_state *dr;
 	unsigned long len;
@@ -949,10 +948,9 @@ static int __devinit vnet_port_alloc_tx_bufs(struct vnet_port *port)
 		int map_len = (ETH_FRAME_LEN + 7) & ~7;
 
 		err = -ENOMEM;
-		if (!buf) {
-			pr_err("TX buffer allocation failure\n");
+		if (!buf)
 			goto err_out;
-		}
+
 		err = -EFAULT;
 		if ((unsigned long)buf & (8UL - 1)) {
 			pr_err("TX buffer misaligned\n");
@@ -1020,22 +1018,18 @@ static const struct net_device_ops vnet_ops = {
 	.ndo_start_xmit		= vnet_start_xmit,
 };
 
-static struct vnet * __devinit vnet_new(const u64 *local_mac)
+static struct vnet *vnet_new(const u64 *local_mac)
 {
 	struct net_device *dev;
 	struct vnet *vp;
 	int err, i;
 
 	dev = alloc_etherdev(sizeof(*vp));
-	if (!dev) {
-		pr_err("Etherdev alloc failed, aborting\n");
+	if (!dev)
 		return ERR_PTR(-ENOMEM);
-	}
 
 	for (i = 0; i < ETH_ALEN; i++)
 		dev->dev_addr[i] = (*local_mac >> (5 - i) * 8) & 0xff;
-
-	memcpy(dev->perm_addr, dev->dev_addr, dev->addr_len);
 
 	vp = netdev_priv(dev);
 
@@ -1070,7 +1064,7 @@ err_out_free_dev:
 	return ERR_PTR(err);
 }
 
-static struct vnet * __devinit vnet_find_or_create(const u64 *local_mac)
+static struct vnet *vnet_find_or_create(const u64 *local_mac)
 {
 	struct vnet *iter, *vp;
 
@@ -1091,7 +1085,7 @@ static struct vnet * __devinit vnet_find_or_create(const u64 *local_mac)
 
 static const char *local_mac_prop = "local-mac-address";
 
-static struct vnet * __devinit vnet_find_parent(struct mdesc_handle *hp,
+static struct vnet *vnet_find_parent(struct mdesc_handle *hp,
 						u64 port_node)
 {
 	const u64 *local_mac = NULL;
@@ -1128,15 +1122,14 @@ static struct vio_driver_ops vnet_vio_ops = {
 	.handshake_complete	= vnet_handshake_complete,
 };
 
-static void __devinit print_version(void)
+static void print_version(void)
 {
 	printk_once(KERN_INFO "%s", version);
 }
 
 const char *remote_macaddr_prop = "remote-mac-address";
 
-static int __devinit vnet_port_probe(struct vio_dev *vdev,
-				     const struct vio_device_id *id)
+static int vnet_port_probe(struct vio_dev *vdev, const struct vio_device_id *id)
 {
 	struct mdesc_handle *hp;
 	struct vnet_port *port;
@@ -1165,10 +1158,8 @@ static int __devinit vnet_port_probe(struct vio_dev *vdev,
 
 	port = kzalloc(sizeof(*port), GFP_KERNEL);
 	err = -ENOMEM;
-	if (!port) {
-		pr_err("Cannot allocate vnet_port\n");
+	if (!port)
 		goto err_out_put_mdesc;
-	}
 
 	for (i = 0; i < ETH_ALEN; i++)
 		port->raddr[i] = (*rmac >> (5 - i) * 8) & 0xff;
@@ -1248,6 +1239,8 @@ static int vnet_port_remove(struct vio_dev *vdev)
 		dev_set_drvdata(&vdev->dev, NULL);
 
 		kfree(port);
+
+		unregister_netdev(vp->dev);
 	}
 	return 0;
 }
@@ -1264,10 +1257,7 @@ static struct vio_driver vnet_port_driver = {
 	.id_table	= vnet_port_match,
 	.probe		= vnet_port_probe,
 	.remove		= vnet_port_remove,
-	.driver		= {
-		.name	= "vnet_port",
-		.owner	= THIS_MODULE,
-	}
+	.name		= "vnet_port",
 };
 
 static int __init vnet_init(void)

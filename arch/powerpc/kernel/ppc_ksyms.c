@@ -26,7 +26,6 @@
 #include <linux/cuda.h>
 #include <linux/pmu.h>
 #include <asm/prom.h>
-#include <asm/system.h>
 #include <asm/pci-bridge.h>
 #include <asm/irq.h>
 #include <asm/pmac_feature.h>
@@ -43,6 +42,8 @@
 #include <asm/signal.h>
 #include <asm/dcr.h>
 #include <asm/ftrace.h>
+#include <asm/switch_to.h>
+#include <asm/epapr_hcalls.h>
 
 #ifdef CONFIG_PPC32
 extern void transfer_to_handler(void);
@@ -78,15 +79,15 @@ EXPORT_SYMBOL(strlen);
 EXPORT_SYMBOL(strcmp);
 EXPORT_SYMBOL(strncmp);
 
+#ifndef CONFIG_GENERIC_CSUM
 EXPORT_SYMBOL(csum_partial);
 EXPORT_SYMBOL(csum_partial_copy_generic);
 EXPORT_SYMBOL(ip_fast_csum);
 EXPORT_SYMBOL(csum_tcpudp_magic);
+#endif
 
 EXPORT_SYMBOL(__copy_tofrom_user);
 EXPORT_SYMBOL(__clear_user);
-EXPORT_SYMBOL(__strncpy_from_user);
-EXPORT_SYMBOL(__strnlen_user);
 EXPORT_SYMBOL(copy_page);
 
 #if defined(CONFIG_PCI) && defined(CONFIG_PPC32)
@@ -96,11 +97,16 @@ EXPORT_SYMBOL(pci_dram_offset);
 #endif /* CONFIG_PCI */
 
 EXPORT_SYMBOL(start_thread);
-EXPORT_SYMBOL(kernel_thread);
 
+#ifdef CONFIG_PPC_FPU
 EXPORT_SYMBOL(giveup_fpu);
+EXPORT_SYMBOL(load_fp_state);
+EXPORT_SYMBOL(store_fp_state);
+#endif
 #ifdef CONFIG_ALTIVEC
 EXPORT_SYMBOL(giveup_altivec);
+EXPORT_SYMBOL(load_vr_state);
+EXPORT_SYMBOL(store_vr_state);
 #endif /* CONFIG_ALTIVEC */
 #ifdef CONFIG_VSX
 EXPORT_SYMBOL(giveup_vsx);
@@ -113,7 +119,6 @@ EXPORT_SYMBOL(giveup_spe);
 #ifndef CONFIG_PPC64
 EXPORT_SYMBOL(flush_instruction_cache);
 #endif
-EXPORT_SYMBOL(__flush_icache_range);
 EXPORT_SYMBOL(flush_dcache_range);
 
 #ifdef CONFIG_SMP
@@ -144,9 +149,14 @@ EXPORT_SYMBOL(__ashldi3);
 EXPORT_SYMBOL(__lshrdi3);
 int __ucmpdi2(unsigned long long, unsigned long long);
 EXPORT_SYMBOL(__ucmpdi2);
+int __cmpdi2(long long, long long);
+EXPORT_SYMBOL(__cmpdi2);
 #endif
-
+long long __bswapdi2(long long);
+EXPORT_SYMBOL(__bswapdi2);
+#ifdef __BIG_ENDIAN__
 EXPORT_SYMBOL(memcpy);
+#endif
 EXPORT_SYMBOL(memset);
 EXPORT_SYMBOL(memmove);
 EXPORT_SYMBOL(memcmp);
@@ -189,4 +199,12 @@ EXPORT_SYMBOL(__arch_hweight8);
 EXPORT_SYMBOL(__arch_hweight16);
 EXPORT_SYMBOL(__arch_hweight32);
 EXPORT_SYMBOL(__arch_hweight64);
+#endif
+
+#ifdef CONFIG_PPC_BOOK3S_64
+EXPORT_SYMBOL_GPL(mmu_psize_defs);
+#endif
+
+#ifdef CONFIG_EPAPR_PARAVIRT
+EXPORT_SYMBOL(epapr_hypercall_start);
 #endif

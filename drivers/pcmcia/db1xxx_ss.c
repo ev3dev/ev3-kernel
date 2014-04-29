@@ -172,12 +172,12 @@ static int db1x_pcmcia_setup_irqs(struct db1x_pcmcia_sock *sock)
 	if ((sock->board_type == BOARD_TYPE_DB1200) ||
 	    (sock->board_type == BOARD_TYPE_DB1300)) {
 		ret = request_irq(sock->insert_irq, db1200_pcmcia_cdirq,
-				  IRQF_DISABLED, "pcmcia_insert", sock);
+				  0, "pcmcia_insert", sock);
 		if (ret)
 			goto out1;
 
 		ret = request_irq(sock->eject_irq, db1200_pcmcia_cdirq,
-				  IRQF_DISABLED, "pcmcia_eject", sock);
+				  0, "pcmcia_eject", sock);
 		if (ret) {
 			free_irq(sock->insert_irq, sock);
 			goto out1;
@@ -409,7 +409,7 @@ static struct pccard_operations db1x_pcmcia_operations = {
 	.set_mem_map		= au1x00_pcmcia_set_mem_map,
 };
 
-static int __devinit db1x_pcmcia_socket_probe(struct platform_device *pdev)
+static int db1x_pcmcia_socket_probe(struct platform_device *pdev)
 {
 	struct db1x_pcmcia_sock *sock;
 	struct resource *r;
@@ -559,7 +559,7 @@ out0:
 	return ret;
 }
 
-static int __devexit db1x_pcmcia_socket_remove(struct platform_device *pdev)
+static int db1x_pcmcia_socket_remove(struct platform_device *pdev)
 {
 	struct db1x_pcmcia_sock *sock = platform_get_drvdata(pdev);
 
@@ -577,21 +577,10 @@ static struct platform_driver db1x_pcmcia_socket_driver = {
 		.owner	= THIS_MODULE,
 	},
 	.probe		= db1x_pcmcia_socket_probe,
-	.remove		= __devexit_p(db1x_pcmcia_socket_remove),
+	.remove		= db1x_pcmcia_socket_remove,
 };
 
-int __init db1x_pcmcia_socket_load(void)
-{
-	return platform_driver_register(&db1x_pcmcia_socket_driver);
-}
-
-void  __exit db1x_pcmcia_socket_unload(void)
-{
-	platform_driver_unregister(&db1x_pcmcia_socket_driver);
-}
-
-module_init(db1x_pcmcia_socket_load);
-module_exit(db1x_pcmcia_socket_unload);
+module_platform_driver(db1x_pcmcia_socket_driver);
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("PCMCIA Socket Services for Alchemy Db/Pb1x00 boards");

@@ -19,8 +19,7 @@
  *   the GNU Lesser General Public License for more details.
  *
  *   You should have received a copy of the GNU Lesser General Public License
- *   along with this library; if not, write to the Free Software
- *   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+ *   along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 #include <linux/module.h>
 #include <linux/moduleparam.h>
@@ -38,7 +37,7 @@ MODULE_DESCRIPTION("DNS Resolver");
 MODULE_AUTHOR("Wang Lei");
 MODULE_LICENSE("GPL");
 
-unsigned dns_resolver_debug;
+unsigned int dns_resolver_debug;
 module_param_named(debug, dns_resolver_debug, uint, S_IWUSR | S_IRUGO);
 MODULE_PARM_DESC(debug, "DNS Resolver debugging mask");
 
@@ -59,13 +58,13 @@ const struct cred *dns_resolver_cache;
  *        "ip1,ip2,...#foo=bar"
  */
 static int
-dns_resolver_instantiate(struct key *key, const void *_data, size_t datalen)
+dns_resolver_instantiate(struct key *key, struct key_preparsed_payload *prep)
 {
 	struct user_key_payload *upayload;
 	unsigned long derrno;
 	int ret;
-	size_t result_len = 0;
-	const char *data = _data, *end, *opt;
+	size_t datalen = prep->datalen, result_len = 0;
+	const char *data = prep->data, *end, *opt;
 
 	kenter("%%%d,%s,'%*.*s',%zu",
 	       key->serial, key->description,
@@ -118,7 +117,7 @@ dns_resolver_instantiate(struct key *key, const void *_data, size_t datalen)
 				if (opt_vlen <= 0)
 					goto bad_option_value;
 
-				ret = strict_strtoul(eq, 10, &derrno);
+				ret = kstrtoul(eq, 10, &derrno);
 				if (ret < 0)
 					goto bad_option_value;
 
@@ -249,9 +248,6 @@ static int __init init_dns_resolver(void)
 	struct key *keyring;
 	int ret;
 
-	printk(KERN_NOTICE "Registering the %s key type\n",
-	       key_type_dns_resolver.name);
-
 	/* create an override credential set with a special thread keyring in
 	 * which DNS requests are cached
 	 *
@@ -262,18 +258,15 @@ static int __init init_dns_resolver(void)
 	if (!cred)
 		return -ENOMEM;
 
-	keyring = key_alloc(&key_type_keyring, ".dns_resolver", 0, 0, cred,
-			    (KEY_POS_ALL & ~KEY_POS_SETATTR) |
-			    KEY_USR_VIEW | KEY_USR_READ,
-			    KEY_ALLOC_NOT_IN_QUOTA);
+	keyring = keyring_alloc(".dns_resolver",
+				GLOBAL_ROOT_UID, GLOBAL_ROOT_GID, cred,
+				(KEY_POS_ALL & ~KEY_POS_SETATTR) |
+				KEY_USR_VIEW | KEY_USR_READ,
+				KEY_ALLOC_NOT_IN_QUOTA, NULL);
 	if (IS_ERR(keyring)) {
 		ret = PTR_ERR(keyring);
 		goto failed_put_cred;
 	}
-
-	ret = key_instantiate_and_link(keyring, NULL, 0, NULL, NULL);
-	if (ret < 0)
-		goto failed_put_key;
 
 	ret = register_key_type(&key_type_dns_resolver);
 	if (ret < 0)
@@ -281,6 +274,7 @@ static int __init init_dns_resolver(void)
 
 	/* instruct request_key() to use this special keyring as a cache for
 	 * the results it looks up */
+	set_bit(KEY_FLAG_ROOT_CAN_CLEAR, &keyring->flags);
 	cred->thread_keyring = keyring;
 	cred->jit_keyring = KEY_REQKEY_DEFL_THREAD_KEYRING;
 	dns_resolver_cache = cred;
@@ -300,10 +294,9 @@ static void __exit exit_dns_resolver(void)
 	key_revoke(dns_resolver_cache->thread_keyring);
 	unregister_key_type(&key_type_dns_resolver);
 	put_cred(dns_resolver_cache);
-	printk(KERN_NOTICE "Unregistered %s key type\n",
-	       key_type_dns_resolver.name);
 }
 
 module_init(init_dns_resolver)
 module_exit(exit_dns_resolver)
 MODULE_LICENSE("GPL");
+

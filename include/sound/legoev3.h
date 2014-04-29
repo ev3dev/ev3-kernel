@@ -11,7 +11,7 @@
 #ifndef __LEGOEV3_H__
 #define __LEGOEV3_H__
 
-#include <linux/pwm/pwm.h>
+#include <linux/pwm.h>
 
 struct snd_legoev3_platform_data {
 	char *pwm_dev_name;

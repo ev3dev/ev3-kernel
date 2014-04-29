@@ -31,10 +31,14 @@ usage() {
 	echo "  -h    display this help text"
 	echo "  -m    only merge the fragments, do not execute the make command"
 	echo "  -n    use allnoconfig instead of alldefconfig"
+	echo "  -r    list redundant entries when merging fragments"
+	echo "  -O    dir to put generated output files"
 }
 
 MAKE=true
 ALLTARGET=alldefconfig
+WARNREDUN=false
+OUTPUT=.
 
 while true; do
 	case $1 in
@@ -52,17 +56,36 @@ while true; do
 		usage
 		exit
 		;;
+	"-r")
+		WARNREDUN=true
+		shift
+		continue
+		;;
+	"-O")
+		if [ -d $2 ];then
+			OUTPUT=$(echo $2 | sed 's/\/*$//')
+		else
+			echo "output directory $2 does not exist" 1>&2
+			exit 1
+		fi
+		shift 2
+		continue
+		;;
 	*)
 		break
 		;;
 	esac
 done
 
-
+INITFILE=$1
+shift;
 
 MERGE_LIST=$*
 SED_CONFIG_EXP="s/^\(# \)\{0,1\}\(CONFIG_[a-zA-Z0-9_]*\)[= ].*/\2/p"
 TMP_FILE=$(mktemp ./.tmp.config.XXXXXXXXXX)
+
+echo "Using $INITFILE as base"
+cat $INITFILE > $TMP_FILE
 
 # Merge files, printing warnings on overrided values
 for MERGE_FILE in $MERGE_LIST ; do
@@ -79,6 +102,8 @@ for MERGE_FILE in $MERGE_LIST ; do
 			echo Previous  value: $PREV_VAL
 			echo New value:       $NEW_VAL
 			echo
+			elif [ "$WARNREDUN" = "true" ]; then
+			echo Value of $CFG is redundant by fragment $MERGE_FILE:
 			fi
 			sed -i "/$CFG[ =]/d" $TMP_FILE
 		fi
@@ -87,25 +112,33 @@ for MERGE_FILE in $MERGE_LIST ; do
 done
 
 if [ "$MAKE" = "false" ]; then
-	cp $TMP_FILE .config
+	cp $TMP_FILE $OUTPUT/.config
 	echo "#"
-	echo "# merged configuration written to .config (needs make)"
+	echo "# merged configuration written to $OUTPUT/.config (needs make)"
 	echo "#"
 	clean_up
 	exit
 fi
 
+# If we have an output dir, setup the O= argument, otherwise leave
+# it blank, since O=. will create an unnecessary ./source softlink
+OUTPUT_ARG=""
+if [ "$OUTPUT" != "." ] ; then
+	OUTPUT_ARG="O=$OUTPUT"
+fi
+
+
 # Use the merged file as the starting point for:
 # alldefconfig: Fills in any missing symbols with Kconfig default
 # allnoconfig: Fills in any missing symbols with # CONFIG_* is not set
-make KCONFIG_ALLCONFIG=$TMP_FILE $ALLTARGET
+make KCONFIG_ALLCONFIG=$TMP_FILE $OUTPUT_ARG $ALLTARGET
 
 
 # Check all specified config values took (might have missed-dependency issues)
 for CFG in $(sed -n "$SED_CONFIG_EXP" $TMP_FILE); do
 
 	REQUESTED_VAL=$(grep -w -e "$CFG" $TMP_FILE)
-	ACTUAL_VAL=$(grep -w -e "$CFG" .config)
+	ACTUAL_VAL=$(grep -w -e "$CFG" $OUTPUT/.config)
 	if [ "x$REQUESTED_VAL" != "x$ACTUAL_VAL" ] ; then
 		echo "Value requested for $CFG not in final .config"
 		echo "Requested value:  $REQUESTED_VAL"

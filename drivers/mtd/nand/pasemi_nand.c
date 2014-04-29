@@ -28,6 +28,8 @@
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/nand.h>
 #include <linux/mtd/nand_ecc.h>
+#include <linux/of_address.h>
+#include <linux/of_irq.h>
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
 #include <linux/pci.h>
@@ -89,7 +91,7 @@ int pasemi_device_ready(struct mtd_info *mtd)
 	return !!(inl(lpcctl) & LBICTRL_LPCCTL_NR);
 }
 
-static int __devinit pasemi_nand_probe(struct platform_device *ofdev)
+static int pasemi_nand_probe(struct platform_device *ofdev)
 {
 	struct pci_dev *pdev;
 	struct device_node *np = ofdev->dev.of_node;
@@ -155,7 +157,6 @@ static int __devinit pasemi_nand_probe(struct platform_device *ofdev)
 	chip->ecc.mode = NAND_ECC_SOFT;
 
 	/* Enable the following for a flash based bad block table */
-	chip->options = NAND_NO_AUTOINCR;
 	chip->bbt_options = NAND_BBT_USE_FLASH;
 
 	/* Scan to find existence of the device */
@@ -185,7 +186,7 @@ static int __devinit pasemi_nand_probe(struct platform_device *ofdev)
 	return err;
 }
 
-static int __devexit pasemi_nand_remove(struct platform_device *ofdev)
+static int pasemi_nand_remove(struct platform_device *ofdev)
 {
 	struct nand_chip *chip;
 
@@ -222,7 +223,7 @@ MODULE_DEVICE_TABLE(of, pasemi_nand_match);
 static struct platform_driver pasemi_nand_driver =
 {
 	.driver = {
-		.name = (char*)driver_name,
+		.name = driver_name,
 		.owner = THIS_MODULE,
 		.of_match_table = pasemi_nand_match,
 	},

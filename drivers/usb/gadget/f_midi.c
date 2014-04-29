@@ -21,7 +21,6 @@
 
 #include <linux/kernel.h>
 #include <linux/slab.h>
-#include <linux/utsname.h>
 #include <linux/device.h>
 
 #include <sound/core.h>
@@ -32,6 +31,8 @@
 #include <linux/usb/gadget.h>
 #include <linux/usb/audio.h>
 #include <linux/usb/midi.h>
+
+#include "u_f.h"
 
 MODULE_AUTHOR("Ben Williamson");
 MODULE_LICENSE("GPL v2");
@@ -192,20 +193,10 @@ static struct usb_gadget_strings *midi_strings[] = {
 	NULL,
 };
 
-static struct usb_request *alloc_ep_req(struct usb_ep *ep, unsigned length)
+static inline struct usb_request *midi_alloc_ep_req(struct usb_ep *ep,
+						    unsigned length)
 {
-	struct usb_request *req;
-
-	req = usb_ep_alloc_request(ep, GFP_ATOMIC);
-	if (req) {
-		req->length = length;
-		req->buf = kmalloc(length, GFP_ATOMIC);
-		if (!req->buf) {
-			usb_ep_free_request(ep, req);
-			req = NULL;
-		}
-	}
-	return req;
+	return alloc_ep_req(ep, length, length);
 }
 
 static void free_ep_req(struct usb_ep *ep, struct usb_request *req)
@@ -366,7 +357,7 @@ static int f_midi_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 	/* allocate a bunch of read buffers and queue them all at once. */
 	for (i = 0; i < midi->qlen && err == 0; i++) {
 		struct usb_request *req =
-			alloc_ep_req(midi->out_ep, midi->buflen);
+			midi_alloc_ep_req(midi->out_ep, midi->buflen);
 		if (req == NULL)
 			return -ENOMEM;
 
@@ -415,7 +406,7 @@ static void f_midi_unbind(struct usb_configuration *c, struct usb_function *f)
 	kfree(midi->id);
 	midi->id = NULL;
 
-	usb_free_descriptors(f->descriptors);
+	usb_free_all_descriptors(f);
 	kfree(midi);
 }
 
@@ -547,7 +538,7 @@ static void f_midi_transmit(struct f_midi *midi, struct usb_request *req)
 		return;
 
 	if (!req)
-		req = alloc_ep_req(ep, midi->buflen);
+		req = midi_alloc_ep_req(ep, midi->buflen);
 
 	if (!req) {
 		ERROR(midi, "gmidi_transmit: alloc_ep_request failed\n");
@@ -780,7 +771,7 @@ f_midi_bind(struct usb_configuration *c, struct usb_function *f)
 	midi->out_ep->driver_data = cdev;	/* claim */
 
 	/* allocate temporary function list */
-	midi_function = kcalloc((MAX_PORTS * 4) + 9, sizeof(midi_function),
+	midi_function = kcalloc((MAX_PORTS * 4) + 9, sizeof(*midi_function),
 				GFP_KERNEL);
 	if (!midi_function) {
 		status = -ENOMEM;
@@ -882,19 +873,25 @@ f_midi_bind(struct usb_configuration *c, struct usb_function *f)
 	 * both speeds
 	 */
 	/* copy descriptors, and track endpoint copies */
+	f->fs_descriptors = usb_copy_descriptors(midi_function);
+	if (!f->fs_descriptors)
+		goto fail_f_midi;
+
 	if (gadget_is_dualspeed(c->cdev->gadget)) {
-		c->highspeed = true;
 		bulk_in_desc.wMaxPacketSize = cpu_to_le16(512);
 		bulk_out_desc.wMaxPacketSize = cpu_to_le16(512);
 		f->hs_descriptors = usb_copy_descriptors(midi_function);
-	} else {
-		f->descriptors = usb_copy_descriptors(midi_function);
+		if (!f->hs_descriptors)
+			goto fail_f_midi;
 	}
 
 	kfree(midi_function);
 
 	return 0;
 
+fail_f_midi:
+	kfree(midi_function);
+	usb_free_descriptors(f->hs_descriptors);
 fail:
 	/* we might as well release our claims on endpoints */
 	if (midi->out_ep)

@@ -8,6 +8,8 @@
 #ifndef __ASM_MACH_IP22_CPU_FEATURE_OVERRIDES_H
 #define __ASM_MACH_IP22_CPU_FEATURE_OVERRIDES_H
 
+#include <asm/cpu.h>
+
 /*
  * IP22 with a variety of processors so we can't use defaults for everything.
  */
@@ -30,6 +32,7 @@
 #define cpu_has_ic_fills_f_dc	0
 
 #define cpu_has_dsp		0
+#define cpu_has_dsp2		0
 #define cpu_has_mipsmt		0
 #define cpu_has_userlocal	0
 

@@ -32,11 +32,10 @@
 
 #include <asm/mach-types.h>
 
-#include <plat/board-ams-delta.h>
-#include <plat/mcbsp.h>
+#include <mach/board-ams-delta.h>
+#include <linux/platform_data/asoc-ti-mcbsp.h>
 
 #include "omap-mcbsp.h"
-#include "omap-pcm.h"
 #include "../codecs/cx20442.h"
 
 
@@ -426,29 +425,6 @@ static struct snd_soc_ops ams_delta_ops = {
 };
 
 
-/* Board specific codec bias level control */
-static int ams_delta_set_bias_level(struct snd_soc_card *card,
-				    struct snd_soc_dapm_context *dapm,
-				    enum snd_soc_bias_level level)
-{
-	switch (level) {
-	case SND_SOC_BIAS_ON:
-	case SND_SOC_BIAS_PREPARE:
-	case SND_SOC_BIAS_STANDBY:
-		if (card->dapm.bias_level == SND_SOC_BIAS_OFF)
-			ams_delta_latch2_write(AMS_DELTA_LATCH2_MODEM_NRESET,
-						AMS_DELTA_LATCH2_MODEM_NRESET);
-		break;
-	case SND_SOC_BIAS_OFF:
-		if (card->dapm.bias_level != SND_SOC_BIAS_OFF)
-			ams_delta_latch2_write(AMS_DELTA_LATCH2_MODEM_NRESET,
-						0);
-	}
-	card->dapm.bias_level = level;
-
-	return 0;
-}
-
 /* Digital mute implemented using modem/CPU multiplexer.
  * Shares hardware with codec config pulse generation */
 static bool ams_delta_muted = 1;
@@ -512,9 +488,6 @@ static int ams_delta_cx20442_init(struct snd_soc_pcm_runtime *rtd)
 		ams_delta_ops.shutdown = ams_delta_shutdown;
 	}
 
-	/* Set codec bias level */
-	ams_delta_set_bias_level(card, dapm, SND_SOC_BIAS_STANDBY);
-
 	/* Add hook switch - can be used to control the codec from userspace
 	 * even if line discipline fails */
 	ret = snd_soc_jack_new(rtd->codec, "hook_switch",
@@ -570,7 +543,7 @@ static int ams_delta_cx20442_init(struct snd_soc_pcm_runtime *rtd)
 	snd_soc_dapm_disable_pin(dapm, "AGCOUT");
 
 	/* Add virtual switch */
-	ret = snd_soc_add_controls(codec, ams_delta_audio_controls,
+	ret = snd_soc_add_codec_controls(codec, ams_delta_audio_controls,
 					ARRAY_SIZE(ams_delta_audio_controls));
 	if (ret)
 		dev_warn(card->dev,
@@ -584,7 +557,7 @@ static int ams_delta_cx20442_init(struct snd_soc_pcm_runtime *rtd)
 static struct snd_soc_dai_link ams_delta_dai_link = {
 	.name = "CX20442",
 	.stream_name = "CX20442",
-	.cpu_dai_name ="omap-mcbsp-dai.0",
+	.cpu_dai_name = "omap-mcbsp.1",
 	.codec_dai_name = "cx20442-voice",
 	.init = ams_delta_cx20442_init,
 	.platform_name = "omap-pcm-audio",
@@ -598,65 +571,56 @@ static struct snd_soc_card ams_delta_audio_card = {
 	.owner = THIS_MODULE,
 	.dai_link = &ams_delta_dai_link,
 	.num_links = 1,
-	.set_bias_level = ams_delta_set_bias_level,
 };
 
 /* Module init/exit */
-static struct platform_device *ams_delta_audio_platform_device;
-static struct platform_device *cx20442_platform_device;
-
-static int __init ams_delta_module_init(void)
+static int ams_delta_probe(struct platform_device *pdev)
 {
+	struct snd_soc_card *card = &ams_delta_audio_card;
 	int ret;
 
-	if (!(machine_is_ams_delta()))
-		return -ENODEV;
+	card->dev = &pdev->dev;
 
-	ams_delta_audio_platform_device =
-			platform_device_alloc("soc-audio", -1);
-	if (!ams_delta_audio_platform_device)
-		return -ENOMEM;
-
-	platform_set_drvdata(ams_delta_audio_platform_device,
-				&ams_delta_audio_card);
-
-	ret = platform_device_add(ams_delta_audio_platform_device);
-	if (ret)
-		goto err;
-
-	/*
-	 * Codec platform device could be registered from elsewhere (board?),
-	 * but I do it here as it makes sense only if used with the card.
-	 */
-	cx20442_platform_device =
-		platform_device_register_simple("cx20442-codec", -1, NULL, 0);
+	ret = snd_soc_register_card(card);
+	if (ret) {
+		dev_err(&pdev->dev, "snd_soc_register_card failed (%d)\n", ret);
+		card->dev = NULL;
+		return ret;
+	}
 	return 0;
-err:
-	platform_device_put(ams_delta_audio_platform_device);
-	return ret;
 }
-module_init(ams_delta_module_init);
 
-static void __exit ams_delta_module_exit(void)
+static int ams_delta_remove(struct platform_device *pdev)
 {
+	struct snd_soc_card *card = platform_get_drvdata(pdev);
+
 	if (tty_unregister_ldisc(N_V253) != 0)
-		dev_warn(&ams_delta_audio_platform_device->dev,
+		dev_warn(&pdev->dev,
 			"failed to unregister V253 line discipline\n");
 
 	snd_soc_jack_free_gpios(&ams_delta_hook_switch,
 			ARRAY_SIZE(ams_delta_hook_switch_gpios),
 			ams_delta_hook_switch_gpios);
 
-	/* Keep modem power on */
-	ams_delta_set_bias_level(&ams_delta_audio_card,
-				 &ams_delta_audio_card.rtd[0].codec->dapm,
-				 SND_SOC_BIAS_STANDBY);
-
-	platform_device_unregister(cx20442_platform_device);
-	platform_device_unregister(ams_delta_audio_platform_device);
+	snd_soc_unregister_card(card);
+	card->dev = NULL;
+	return 0;
 }
-module_exit(ams_delta_module_exit);
+
+#define DRV_NAME "ams-delta-audio"
+
+static struct platform_driver ams_delta_driver = {
+	.driver = {
+		.name = DRV_NAME,
+		.owner = THIS_MODULE,
+	},
+	.probe = ams_delta_probe,
+	.remove = ams_delta_remove,
+};
+
+module_platform_driver(ams_delta_driver);
 
 MODULE_AUTHOR("Janusz Krzysztofik <jkrzyszt@tis.icnet.pl>");
 MODULE_DESCRIPTION("ALSA SoC driver for Amstrad E3 (Delta) videophone");
 MODULE_LICENSE("GPL");
+MODULE_ALIAS("platform:" DRV_NAME);

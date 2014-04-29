@@ -85,9 +85,6 @@ IS_DAVINCI_CPU(tnetv107x, DAVINCI_CPU_ID_TNETV107X)
 #define cpu_is_davinci_da850() 0
 #endif
 
-#define cpu_is_davinci_da8xx() (cpu_is_davinci_da850() || \
-					cpu_is_davinci_da830())
-
 #ifdef CONFIG_ARCH_DAVINCI_TNETV107X
 #define cpu_is_davinci_tnetv107x() is_davinci_tnetv107x()
 #else

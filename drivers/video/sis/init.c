@@ -2628,7 +2628,8 @@ SiS_SetVCLKState(struct SiS_Private *SiS_Pr, unsigned short ModeNo,
       else if(VCLK >= 135) data = 0x02;
 
       if(SiS_Pr->ChipType == SIS_540) {
-         if((VCLK == 203) || (VCLK < 234)) data = 0x02;
+         /* Was == 203 or < 234 which made no sense */
+         if (VCLK < 234) data = 0x02;
       }
 
       if(SiS_Pr->ChipType < SIS_315H) {
@@ -3319,9 +3320,8 @@ SiSSetMode(struct SiS_Private *SiS_Pr, unsigned short ModeNo)
 }
 
 #ifndef GETBITSTR
-#define BITMASK(h,l)    	(((unsigned)(1U << ((h)-(l)+1))-1)<<(l))
-#define GENMASK(mask)   	BITMASK(1?mask,0?mask)
-#define GETBITS(var,mask)   	(((var) & GENMASK(mask)) >> (0?mask))
+#define GENBITSMASK(mask)   	GENMASK(1?mask,0?mask)
+#define GETBITS(var,mask)   	(((var) & GENBITSMASK(mask)) >> (0?mask))
 #define GETBITSTR(val,from,to)  ((GETBITS(val,from)) << (0?to))
 #endif
 

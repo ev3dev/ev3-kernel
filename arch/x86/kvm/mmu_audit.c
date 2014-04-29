@@ -116,10 +116,8 @@ static void audit_mappings(struct kvm_vcpu *vcpu, u64 *sptep, int level)
 	gfn = kvm_mmu_page_get_gfn(sp, sptep - sp->spt);
 	pfn = gfn_to_pfn_atomic(vcpu->kvm, gfn);
 
-	if (is_error_pfn(pfn)) {
-		kvm_release_pfn_clean(pfn);
+	if (is_error_pfn(pfn))
 		return;
-	}
 
 	hpa =  pfn << PAGE_SHIFT;
 	if ((*sptep & PT64_BASE_ADDR_MASK) != hpa)
@@ -190,23 +188,21 @@ static void check_mappings_rmap(struct kvm *kvm, struct kvm_mmu_page *sp)
 
 static void audit_write_protection(struct kvm *kvm, struct kvm_mmu_page *sp)
 {
-	struct kvm_memory_slot *slot;
 	unsigned long *rmapp;
-	u64 *spte;
+	u64 *sptep;
+	struct rmap_iterator iter;
 
 	if (sp->role.direct || sp->unsync || sp->role.invalid)
 		return;
 
-	slot = gfn_to_memslot(kvm, sp->gfn);
-	rmapp = &slot->rmap[sp->gfn - slot->base_gfn];
+	rmapp = gfn_to_rmap(kvm, sp->gfn, PT_PAGE_TABLE_LEVEL);
 
-	spte = rmap_next(kvm, rmapp, NULL);
-	while (spte) {
-		if (is_writable_pte(*spte))
+	for (sptep = rmap_get_first(*rmapp, &iter); sptep;
+	     sptep = rmap_get_next(&iter)) {
+		if (is_writable_pte(*sptep))
 			audit_printk(kvm, "shadow page has writable "
 				     "mappings: gfn %llx role %x\n",
 				     sp->gfn, sp->role.word);
-		spte = rmap_next(kvm, rmapp, spte);
 	}
 }
 
@@ -234,7 +230,7 @@ static void audit_vcpu_spte(struct kvm_vcpu *vcpu)
 }
 
 static bool mmu_audit;
-static struct jump_label_key mmu_audit_key;
+static struct static_key mmu_audit_key;
 
 static void __kvm_mmu_audit(struct kvm_vcpu *vcpu, int point)
 {
@@ -250,7 +246,7 @@ static void __kvm_mmu_audit(struct kvm_vcpu *vcpu, int point)
 
 static inline void kvm_mmu_audit(struct kvm_vcpu *vcpu, int point)
 {
-	if (static_branch((&mmu_audit_key)))
+	if (static_key_false((&mmu_audit_key)))
 		__kvm_mmu_audit(vcpu, point);
 }
 
@@ -259,7 +255,7 @@ static void mmu_audit_enable(void)
 	if (mmu_audit)
 		return;
 
-	jump_label_inc(&mmu_audit_key);
+	static_key_slow_inc(&mmu_audit_key);
 	mmu_audit = true;
 }
 
@@ -268,7 +264,7 @@ static void mmu_audit_disable(void)
 	if (!mmu_audit)
 		return;
 
-	jump_label_dec(&mmu_audit_key);
+	static_key_slow_dec(&mmu_audit_key);
 	mmu_audit = false;
 }
 
@@ -300,4 +296,4 @@ static struct kernel_param_ops audit_param_ops = {
 	.get = param_get_bool,
 };
 
-module_param_cb(mmu_audit, &audit_param_ops, &mmu_audit, 0644);
+arch_param_cb(mmu_audit, &audit_param_ops, &mmu_audit, 0644);

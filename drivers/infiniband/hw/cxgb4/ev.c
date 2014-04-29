@@ -44,14 +44,6 @@ static void post_qp_event(struct c4iw_dev *dev, struct c4iw_cq *chp,
 	struct c4iw_qp_attributes attrs;
 	unsigned long flag;
 
-	if ((qhp->attr.state == C4IW_QP_STATE_ERROR) ||
-	    (qhp->attr.state == C4IW_QP_STATE_TERMINATE)) {
-		PDBG("%s AE received after RTS - "
-		     "qp state %d qpid 0x%x status 0x%x\n", __func__,
-		     qhp->attr.state, qhp->wq.sq.qid, CQE_STATUS(err_cqe));
-		return;
-	}
-
 	printk(KERN_ERR MOD "AE qpid 0x%x opcode %d status 0x%x "
 	       "type %d wrid.hi 0x%x wrid.lo 0x%x\n",
 	       CQE_QPID(err_cqe), CQE_OPCODE(err_cqe),
@@ -84,7 +76,7 @@ void c4iw_ev_dispatch(struct c4iw_dev *dev, struct t4_cqe *err_cqe)
 	struct c4iw_qp *qhp;
 	u32 cqid;
 
-	spin_lock(&dev->lock);
+	spin_lock_irq(&dev->lock);
 	qhp = get_qhp(dev, CQE_QPID(err_cqe));
 	if (!qhp) {
 		printk(KERN_ERR MOD "BAD AE qpid 0x%x opcode %d "
@@ -93,7 +85,7 @@ void c4iw_ev_dispatch(struct c4iw_dev *dev, struct t4_cqe *err_cqe)
 		       CQE_OPCODE(err_cqe), CQE_STATUS(err_cqe),
 		       CQE_TYPE(err_cqe), CQE_WRID_HI(err_cqe),
 		       CQE_WRID_LOW(err_cqe));
-		spin_unlock(&dev->lock);
+		spin_unlock_irq(&dev->lock);
 		goto out;
 	}
 
@@ -109,13 +101,13 @@ void c4iw_ev_dispatch(struct c4iw_dev *dev, struct t4_cqe *err_cqe)
 		       CQE_OPCODE(err_cqe), CQE_STATUS(err_cqe),
 		       CQE_TYPE(err_cqe), CQE_WRID_HI(err_cqe),
 		       CQE_WRID_LOW(err_cqe));
-		spin_unlock(&dev->lock);
+		spin_unlock_irq(&dev->lock);
 		goto out;
 	}
 
 	c4iw_qp_add_ref(&qhp->ibqp);
 	atomic_inc(&chp->refcnt);
-	spin_unlock(&dev->lock);
+	spin_unlock_irq(&dev->lock);
 
 	/* Bad incoming write */
 	if (RQ_TYPE(err_cqe) &&

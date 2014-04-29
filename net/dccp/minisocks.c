@@ -56,12 +56,9 @@ void dccp_time_wait(struct sock *sk, int state, int timeo)
 #if IS_ENABLED(CONFIG_IPV6)
 		if (tw->tw_family == PF_INET6) {
 			const struct ipv6_pinfo *np = inet6_sk(sk);
-			struct inet6_timewait_sock *tw6;
 
-			tw->tw_ipv6_offset = inet6_tw_offset(sk->sk_prot);
-			tw6 = inet6_twsk((struct sock *)tw);
-			tw6->tw_v6_daddr = np->daddr;
-			tw6->tw_v6_rcv_saddr = np->rcv_saddr;
+			tw->tw_v6_daddr = sk->sk_v6_daddr;
+			tw->tw_v6_rcv_saddr = sk->sk_v6_rcv_saddr;
 			tw->tw_ipv6only = np->ipv6only;
 		}
 #endif
@@ -127,9 +124,11 @@ struct sock *dccp_create_openreq_child(struct sock *sk,
 		 *    activation below, as these windows all depend on the local
 		 *    and remote Sequence Window feature values (7.5.2).
 		 */
-		newdp->dccps_gss = newdp->dccps_iss = dreq->dreq_iss;
+		newdp->dccps_iss = dreq->dreq_iss;
+		newdp->dccps_gss = dreq->dreq_gss;
 		newdp->dccps_gar = newdp->dccps_iss;
-		newdp->dccps_gsr = newdp->dccps_isr = dreq->dreq_isr;
+		newdp->dccps_isr = dreq->dreq_isr;
+		newdp->dccps_gsr = dreq->dreq_gsr;
 
 		/*
 		 * Activate features: initialise CCIDs, sequence windows etc.
@@ -164,16 +163,15 @@ struct sock *dccp_check_req(struct sock *sk, struct sk_buff *skb,
 	/* Check for retransmitted REQUEST */
 	if (dccp_hdr(skb)->dccph_type == DCCP_PKT_REQUEST) {
 
-		if (after48(DCCP_SKB_CB(skb)->dccpd_seq, dreq->dreq_isr)) {
+		if (after48(DCCP_SKB_CB(skb)->dccpd_seq, dreq->dreq_gsr)) {
 			dccp_pr_debug("Retransmitted REQUEST\n");
-			dreq->dreq_isr = DCCP_SKB_CB(skb)->dccpd_seq;
+			dreq->dreq_gsr = DCCP_SKB_CB(skb)->dccpd_seq;
 			/*
 			 * Send another RESPONSE packet
 			 * To protect against Request floods, increment retrans
 			 * counter (backoff, monitored by dccp_response_timer).
 			 */
-			req->retrans++;
-			req->rsk_ops->rtx_syn_ack(sk, req, NULL);
+			inet_rtx_syn_ack(sk, req);
 		}
 		/* Network Duplicate, discard packet */
 		return NULL;
@@ -186,12 +184,14 @@ struct sock *dccp_check_req(struct sock *sk, struct sk_buff *skb,
 		goto drop;
 
 	/* Invalid ACK */
-	if (DCCP_SKB_CB(skb)->dccpd_ack_seq != dreq->dreq_iss) {
+	if (!between48(DCCP_SKB_CB(skb)->dccpd_ack_seq,
+				dreq->dreq_iss, dreq->dreq_gss)) {
 		dccp_pr_debug("Invalid ACK number: ack_seq=%llu, "
-			      "dreq_iss=%llu\n",
+			      "dreq_iss=%llu, dreq_gss=%llu\n",
 			      (unsigned long long)
 			      DCCP_SKB_CB(skb)->dccpd_ack_seq,
-			      (unsigned long long) dreq->dreq_iss);
+			      (unsigned long long) dreq->dreq_iss,
+			      (unsigned long long) dreq->dreq_gss);
 		goto drop;
 	}
 
@@ -266,10 +266,10 @@ int dccp_reqsk_init(struct request_sock *req,
 {
 	struct dccp_request_sock *dreq = dccp_rsk(req);
 
-	inet_rsk(req)->rmt_port	  = dccp_hdr(skb)->dccph_sport;
-	inet_rsk(req)->loc_port	  = dccp_hdr(skb)->dccph_dport;
-	inet_rsk(req)->acked	  = 0;
-	dreq->dreq_timestamp_echo = 0;
+	inet_rsk(req)->ir_rmt_port = dccp_hdr(skb)->dccph_sport;
+	inet_rsk(req)->ir_num	   = ntohs(dccp_hdr(skb)->dccph_dport);
+	inet_rsk(req)->acked	   = 0;
+	dreq->dreq_timestamp_echo  = 0;
 
 	/* inherit feature negotiation options from listening socket */
 	return dccp_feat_clone_list(&dp->dccps_featneg, &dreq->dreq_featneg);

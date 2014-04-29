@@ -49,7 +49,6 @@
  * 	r3: contains virtual base DDR2 PLL controller
  * 	r4: contains virtual address of the DEEPSLEEP register
  */
-	.align 3
 ENTRY(davinci_cpu_suspend)
 	stmfd	sp!, {r0-r12, lr}		@ save registers on stack
 

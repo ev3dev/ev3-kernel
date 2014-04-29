@@ -10,8 +10,9 @@
 #include <linux/gpio.h>
 #include <linux/init.h>
 #include <linux/module.h>
-
+#include <linux/io.h>
 #include <mach/hardware.h>
+#include <mach/irqs.h>
 
 static int sa1100_gpio_get(struct gpio_chip *chip, unsigned offset)
 {

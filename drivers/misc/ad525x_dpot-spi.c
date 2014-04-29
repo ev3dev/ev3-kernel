@@ -75,7 +75,7 @@ static const struct ad_dpot_bus_ops bops = {
 	.write_r8d8	= write16,
 	.write_r8d16	= write24,
 };
-static int __devinit ad_dpot_spi_probe(struct spi_device *spi)
+static int ad_dpot_spi_probe(struct spi_device *spi)
 {
 	struct ad_dpot_bus_data bdata = {
 		.client = spi,
@@ -87,7 +87,7 @@ static int __devinit ad_dpot_spi_probe(struct spi_device *spi)
 			     spi_get_device_id(spi)->name);
 }
 
-static int __devexit ad_dpot_spi_remove(struct spi_device *spi)
+static int ad_dpot_spi_remove(struct spi_device *spi)
 {
 	return ad_dpot_remove(&spi->dev);
 }
@@ -131,21 +131,11 @@ static struct spi_driver ad_dpot_spi_driver = {
 		.owner	= THIS_MODULE,
 	},
 	.probe		= ad_dpot_spi_probe,
-	.remove		= __devexit_p(ad_dpot_spi_remove),
+	.remove		= ad_dpot_spi_remove,
 	.id_table	= ad_dpot_spi_id,
 };
 
-static int __init ad_dpot_spi_init(void)
-{
-	return spi_register_driver(&ad_dpot_spi_driver);
-}
-module_init(ad_dpot_spi_init);
-
-static void __exit ad_dpot_spi_exit(void)
-{
-	spi_unregister_driver(&ad_dpot_spi_driver);
-}
-module_exit(ad_dpot_spi_exit);
+module_spi_driver(ad_dpot_spi_driver);
 
 MODULE_AUTHOR("Michael Hennerich <hennerich@blackfin.uclinux.org>");
 MODULE_DESCRIPTION("digital potentiometer SPI bus driver");

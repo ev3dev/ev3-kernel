@@ -28,12 +28,13 @@ void ath9k_htc_beaconq_config(struct ath9k_htc_priv *priv)
 
 	ath9k_hw_get_txq_props(ah, priv->beaconq, &qi);
 
-	if (priv->ah->opmode == NL80211_IFTYPE_AP) {
+	if (priv->ah->opmode == NL80211_IFTYPE_AP ||
+	    priv->ah->opmode == NL80211_IFTYPE_MESH_POINT) {
 		qi.tqi_aifs = 1;
 		qi.tqi_cwmin = 0;
 		qi.tqi_cwmax = 0;
 	} else if (priv->ah->opmode == NL80211_IFTYPE_ADHOC) {
-		int qnum = priv->hwq_map[WME_AC_BE];
+		int qnum = priv->hwq_map[IEEE80211_AC_BE];
 
 		ath9k_hw_get_txq_props(ah, qnum, &qi_be);
 
@@ -69,11 +70,11 @@ static void ath9k_htc_beacon_config_sta(struct ath9k_htc_priv *priv,
 	struct ath9k_beacon_state bs;
 	enum ath9k_int imask = 0;
 	int dtimperiod, dtimcount, sleepduration;
-	int cfpperiod, cfpcount, bmiss_timeout;
+	int bmiss_timeout;
 	u32 nexttbtt = 0, intval, tsftu;
 	__be32 htc_imask = 0;
 	u64 tsf;
-	int num_beacons, offset, dtim_dec_count, cfp_dec_count;
+	int num_beacons, offset, dtim_dec_count;
 	int ret __attribute__ ((unused));
 	u8 cmd_rsp;
 
@@ -83,7 +84,7 @@ static void ath9k_htc_beacon_config_sta(struct ath9k_htc_priv *priv,
 	bmiss_timeout = (ATH_DEFAULT_BMISS_LIMIT * bss_conf->beacon_interval);
 
 	/*
-	 * Setup dtim and cfp parameters according to
+	 * Setup dtim parameters according to
 	 * last beacon we received (which may be none).
 	 */
 	dtimperiod = bss_conf->dtim_period;
@@ -92,8 +93,6 @@ static void ath9k_htc_beacon_config_sta(struct ath9k_htc_priv *priv,
 	dtimcount = 1;
 	if (dtimcount >= dtimperiod)	/* NB: sanity check */
 		dtimcount = 0;
-	cfpperiod = 1;			/* NB: no PCF support yet */
-	cfpcount = 0;
 
 	sleepduration = intval;
 	if (sleepduration <= 0)
@@ -101,7 +100,7 @@ static void ath9k_htc_beacon_config_sta(struct ath9k_htc_priv *priv,
 
 	/*
 	 * Pull nexttbtt forward to reflect the current
-	 * TSF and calculate dtim+cfp state for the result.
+	 * TSF and calculate dtim state for the result.
 	 */
 	tsf = ath9k_hw_gettsf64(priv->ah);
 	tsftu = TSF_TO_TU(tsf>>32, tsf) + FUDGE;
@@ -114,26 +113,14 @@ static void ath9k_htc_beacon_config_sta(struct ath9k_htc_priv *priv,
 
 	/* DTIM Beacon every dtimperiod Beacon */
 	dtim_dec_count = num_beacons % dtimperiod;
-	/* CFP every cfpperiod DTIM Beacon */
-	cfp_dec_count = (num_beacons / dtimperiod) % cfpperiod;
-	if (dtim_dec_count)
-		cfp_dec_count++;
-
 	dtimcount -= dtim_dec_count;
 	if (dtimcount < 0)
 		dtimcount += dtimperiod;
 
-	cfpcount -= cfp_dec_count;
-	if (cfpcount < 0)
-		cfpcount += cfpperiod;
-
-	bs.bs_intval = intval;
-	bs.bs_nexttbtt = nexttbtt;
-	bs.bs_dtimperiod = dtimperiod*intval;
-	bs.bs_nextdtim = bs.bs_nexttbtt + dtimcount*intval;
-	bs.bs_cfpperiod = cfpperiod*bs.bs_dtimperiod;
-	bs.bs_cfpnext = bs.bs_nextdtim + cfpcount*bs.bs_dtimperiod;
-	bs.bs_cfpmaxduration = 0;
+	bs.bs_intval = TU_TO_USEC(intval);
+	bs.bs_nexttbtt = TU_TO_USEC(nexttbtt);
+	bs.bs_dtimperiod = dtimperiod * bs.bs_intval;
+	bs.bs_nextdtim = bs.bs_nexttbtt + dtimcount * bs.bs_intval;
 
 	/*
 	 * Calculate the number of consecutive beacons to miss* before taking
@@ -160,7 +147,8 @@ static void ath9k_htc_beacon_config_sta(struct ath9k_htc_priv *priv,
 	 * XXX fixed at 100ms
 	 */
 
-	bs.bs_sleepduration = roundup(IEEE80211_MS_TO_TU(100), sleepduration);
+	bs.bs_sleepduration = TU_TO_USEC(roundup(IEEE80211_MS_TO_TU(100),
+						 sleepduration));
 	if (bs.bs_sleepduration > bs.bs_dtimperiod)
 		bs.bs_sleepduration = bs.bs_dtimperiod;
 
@@ -169,10 +157,8 @@ static void ath9k_htc_beacon_config_sta(struct ath9k_htc_priv *priv,
 
 	ath_dbg(common, CONFIG, "intval: %u tsf: %llu tsftu: %u\n",
 		intval, tsf, tsftu);
-	ath_dbg(common, CONFIG,
-		"bmiss: %u sleep: %u cfp-period: %u maxdur: %u next: %u\n",
-		bs.bs_bmissthreshold, bs.bs_sleepduration,
-		bs.bs_cfpperiod, bs.bs_cfpmaxduration, bs.bs_cfpnext);
+	ath_dbg(common, CONFIG, "bmiss: %u sleep: %u\n",
+		bs.bs_bmissthreshold, bs.bs_sleepduration);
 
 	/* Set the computed STA beacon timers */
 
@@ -207,9 +193,9 @@ static void ath9k_htc_beacon_config_ap(struct ath9k_htc_priv *priv,
 	else
 		priv->ah->config.sw_beacon_response_time = MIN_SWBA_RESPONSE;
 
-	if (priv->op_flags & OP_TSF_RESET) {
+	if (test_bit(OP_TSF_RESET, &priv->op_flags)) {
 		ath9k_hw_reset_tsf(priv->ah);
-		priv->op_flags &= ~OP_TSF_RESET;
+		clear_bit(OP_TSF_RESET, &priv->op_flags);
 	} else {
 		/*
 		 * Pull nexttbtt forward to reflect the current TSF.
@@ -221,7 +207,7 @@ static void ath9k_htc_beacon_config_ap(struct ath9k_htc_priv *priv,
 		} while (nexttbtt < tsftu);
 	}
 
-	if (priv->op_flags & OP_ENABLE_BEACON)
+	if (test_bit(OP_ENABLE_BEACON, &priv->op_flags))
 		imask |= ATH9K_INT_SWBA;
 
 	ath_dbg(common, CONFIG,
@@ -269,7 +255,7 @@ static void ath9k_htc_beacon_config_adhoc(struct ath9k_htc_priv *priv,
 	else
 		priv->ah->config.sw_beacon_response_time = MIN_SWBA_RESPONSE;
 
-	if (priv->op_flags & OP_ENABLE_BEACON)
+	if (test_bit(OP_ENABLE_BEACON, &priv->op_flags))
 		imask |= ATH9K_INT_SWBA;
 
 	ath_dbg(common, CONFIG,
@@ -308,7 +294,7 @@ static void ath9k_htc_send_buffered(struct ath9k_htc_priv *priv,
 	while(skb) {
 		hdr = (struct ieee80211_hdr *) skb->data;
 
-		padpos = ath9k_cmn_padpos(hdr->frame_control);
+		padpos = ieee80211_hdrlen(hdr->frame_control);
 		padsize = padpos & 3;
 		if (padsize && skb->len > padpos) {
 			if (skb_headroom(skb) < padsize) {
@@ -326,7 +312,7 @@ static void ath9k_htc_send_buffered(struct ath9k_htc_priv *priv,
 			goto next;
 		}
 
-		ret = ath9k_htc_tx_start(priv, skb, tx_slot, true);
+		ret = ath9k_htc_tx_start(priv, NULL, skb, tx_slot, true);
 		if (ret != 0) {
 			ath9k_htc_tx_clear_slot(priv, tx_slot);
 			dev_kfree_skb_any(skb);
@@ -365,7 +351,7 @@ static void ath9k_htc_send_beacon(struct ath9k_htc_priv *priv,
 	vif = priv->cur_beacon_conf.bslot[slot];
 	avp = (struct ath9k_htc_vif *)vif->drv_priv;
 
-	if (unlikely(priv->op_flags & OP_SCANNING)) {
+	if (unlikely(test_bit(OP_SCANNING, &priv->op_flags))) {
 		spin_unlock_bh(&priv->beacon_lock);
 		return;
 	}
@@ -587,9 +573,9 @@ static bool ath9k_htc_check_beacon_config(struct ath9k_htc_priv *priv,
 	    (priv->num_sta_vif > 1) &&
 	    (vif->type == NL80211_IFTYPE_STATION)) {
 		beacon_configured = false;
-		ieee80211_iterate_active_interfaces_atomic(priv->hw,
-							   ath9k_htc_beacon_iter,
-							   &beacon_configured);
+		ieee80211_iterate_active_interfaces_atomic(
+			priv->hw, IEEE80211_IFACE_ITER_RESUME_ALL,
+			ath9k_htc_beacon_iter, &beacon_configured);
 
 		if (beacon_configured) {
 			ath_dbg(common, CONFIG,
@@ -628,6 +614,7 @@ void ath9k_htc_beacon_config(struct ath9k_htc_priv *priv,
 	case NL80211_IFTYPE_ADHOC:
 		ath9k_htc_beacon_config_adhoc(priv, cur_conf);
 		break;
+	case NL80211_IFTYPE_MESH_POINT:
 	case NL80211_IFTYPE_AP:
 		ath9k_htc_beacon_config_ap(priv, cur_conf);
 		break;
@@ -649,6 +636,7 @@ void ath9k_htc_beacon_reconfig(struct ath9k_htc_priv *priv)
 	case NL80211_IFTYPE_ADHOC:
 		ath9k_htc_beacon_config_adhoc(priv, cur_conf);
 		break;
+	case NL80211_IFTYPE_MESH_POINT:
 	case NL80211_IFTYPE_AP:
 		ath9k_htc_beacon_config_ap(priv, cur_conf);
 		break;

@@ -16,17 +16,25 @@
 #include <linux/suspend.h>
 #include <linux/errno.h>
 #include <linux/delay.h>
+#include <linux/of.h>
 #include <linux/serial_core.h>
 #include <linux/io.h>
 
 #include <asm/cacheflush.h>
 #include <asm/suspend.h>
-#include <mach/hardware.h>
-#include <mach/map.h>
 
 #include <plat/regs-serial.h>
+
+#ifdef CONFIG_SAMSUNG_ATAGS
+#include <mach/hardware.h>
+#include <mach/map.h>
+#ifndef CONFIG_ARCH_EXYNOS
 #include <mach/regs-clock.h>
 #include <mach/regs-irq.h>
+#endif
+#include <mach/irqs.h>
+#endif
+
 #include <asm/irq.h>
 
 #include <plat/pm.h>
@@ -51,7 +59,7 @@ void s3c_pm_dbg(const char *fmt, ...)
 	char buff[256];
 
 	va_start(va, fmt);
-	vsprintf(buff, fmt, va);
+	vsnprintf(buff, sizeof(buff), fmt, va);
 	va_end(va);
 
 	printascii(buff);
@@ -74,7 +82,7 @@ unsigned char pm_uart_udivslot;
 
 #ifdef CONFIG_SAMSUNG_PM_DEBUG
 
-struct pm_uart_save uart_save[CONFIG_SERIAL_SAMSUNG_UARTS];
+static struct pm_uart_save uart_save;
 
 static void s3c_pm_save_uart(unsigned int uart, struct pm_uart_save *save)
 {
@@ -95,11 +103,7 @@ static void s3c_pm_save_uart(unsigned int uart, struct pm_uart_save *save)
 
 static void s3c_pm_save_uarts(void)
 {
-	struct pm_uart_save *save = uart_save;
-	unsigned int uart;
-
-	for (uart = 0; uart < CONFIG_SERIAL_SAMSUNG_UARTS; uart++, save++)
-		s3c_pm_save_uart(uart, save);
+	s3c_pm_save_uart(CONFIG_DEBUG_S3C_UART, &uart_save);
 }
 
 static void s3c_pm_restore_uart(unsigned int uart, struct pm_uart_save *save)
@@ -120,11 +124,7 @@ static void s3c_pm_restore_uart(unsigned int uart, struct pm_uart_save *save)
 
 static void s3c_pm_restore_uarts(void)
 {
-	struct pm_uart_save *save = uart_save;
-	unsigned int uart;
-
-	for (uart = 0; uart < CONFIG_SERIAL_SAMSUNG_UARTS; uart++, save++)
-		s3c_pm_restore_uart(uart, save);
+	s3c_pm_restore_uart(CONFIG_DEBUG_S3C_UART, &uart_save);
 }
 #else
 static void s3c_pm_save_uarts(void) { }
@@ -184,7 +184,7 @@ void s3c_pm_do_save(struct sleep_save *ptr, int count)
  * restore the UARTs state yet
 */
 
-void s3c_pm_do_restore(struct sleep_save *ptr, int count)
+void s3c_pm_do_restore(const struct sleep_save *ptr, int count)
 {
 	for (; count > 0; count--, ptr++) {
 		printk(KERN_DEBUG "restore %p (restore %08lx, was %08x)\n",
@@ -205,7 +205,7 @@ void s3c_pm_do_restore(struct sleep_save *ptr, int count)
  * peripherals, as things may be changing!
 */
 
-void s3c_pm_do_restore_core(struct sleep_save *ptr, int count)
+void s3c_pm_do_restore_core(const struct sleep_save *ptr, int count)
 {
 	for (; count > 0; count--, ptr++)
 		__raw_writel(ptr->val, ptr->reg);
@@ -243,6 +243,7 @@ int (*pm_cpu_sleep)(unsigned long);
 
 static int s3c_pm_enter(suspend_state_t state)
 {
+	int ret;
 	/* ensure the debug is initialised (if enabled) */
 
 	s3c_pm_debug_init();
@@ -259,7 +260,8 @@ static int s3c_pm_enter(suspend_state_t state)
 	 * require a full power-cycle)
 	*/
 
-	if (!any_allowed(s3c_irqwake_intmask, s3c_irqwake_intallow) &&
+	if (!of_have_populated_dt() &&
+	    !any_allowed(s3c_irqwake_intmask, s3c_irqwake_intallow) &&
 	    !any_allowed(s3c_irqwake_eintmask, s3c_irqwake_eintallow)) {
 		printk(KERN_ERR "%s: No wake-up sources!\n", __func__);
 		printk(KERN_ERR "%s: Aborting sleep\n", __func__);
@@ -268,8 +270,11 @@ static int s3c_pm_enter(suspend_state_t state)
 
 	/* save all necessary core registers not covered by the drivers */
 
-	samsung_pm_save_gpios();
-	samsung_pm_saved_gpios();
+	if (!of_have_populated_dt()) {
+		samsung_pm_save_gpios();
+		samsung_pm_saved_gpios();
+	}
+
 	s3c_pm_save_uarts();
 	s3c_pm_save_core();
 
@@ -300,14 +305,19 @@ static int s3c_pm_enter(suspend_state_t state)
 	 * we resume as it saves its own register state and restores it
 	 * during the resume.  */
 
-	cpu_suspend(0, pm_cpu_sleep);
+	ret = cpu_suspend(0, pm_cpu_sleep);
+	if (ret)
+		return ret;
 
 	/* restore the system state */
 
 	s3c_pm_restore_core();
 	s3c_pm_restore_uarts();
-	samsung_pm_restore_gpios();
-	s3c_pm_restored_gpios();
+
+	if (!of_have_populated_dt()) {
+		samsung_pm_restore_gpios();
+		s3c_pm_restored_gpios();
+	}
 
 	s3c_pm_debug_init();
 

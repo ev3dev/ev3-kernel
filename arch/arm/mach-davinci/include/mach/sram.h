@@ -10,11 +10,21 @@
 #ifndef __MACH_SRAM_H
 #define __MACH_SRAM_H
 
-#include <linux/genalloc.h>
-
 /* ARBITRARY:  SRAM allocations are multiples of this 2^N size */
 #define SRAM_GRANULARITY	512
 
-extern struct gen_pool *davinci_gen_pool;
+/*
+ * SRAM allocations return a CPU virtual address, or NULL on error.
+ * If a DMA address is requested and the SRAM supports DMA, its
+ * mapped address is also returned.
+ *
+ * Errors include SRAM memory not being available, and requesting
+ * DMA mapped SRAM on systems which don't allow that.
+ */
+extern void *sram_alloc(size_t len, dma_addr_t *dma);
+extern void sram_free(void *addr, size_t len);
+
+/* Get the struct gen_pool * for use in platform data */
+extern struct gen_pool *sram_get_gen_pool(void);
 
 #endif /* __MACH_SRAM_H */

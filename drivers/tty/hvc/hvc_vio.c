@@ -46,15 +46,15 @@
 #include <asm/hvconsole.h>
 #include <asm/vio.h>
 #include <asm/prom.h>
-#include <asm/firmware.h>
 #include <asm/hvsi.h>
 #include <asm/udbg.h>
+#include <asm/machdep.h>
 
 #include "hvc_console.h"
 
 static const char hvc_driver_name[] = "hvc_console";
 
-static struct vio_device_id hvc_driver_table[] __devinitdata = {
+static struct vio_device_id hvc_driver_table[] = {
 	{"serial", "hvterm1"},
 #ifndef HVC_OLD_HVSI
 	{"serial", "hvterm-protocol"},
@@ -231,7 +231,70 @@ static const struct hv_ops hvterm_hvsi_ops = {
 	.tiocmset = hvterm_hvsi_tiocmset,
 };
 
-static int __devinit hvc_vio_probe(struct vio_dev *vdev,
+static void udbg_hvc_putc(char c)
+{
+	int count = -1;
+
+	if (!hvterm_privs[0])
+		return;
+
+	if (c == '\n')
+		udbg_hvc_putc('\r');
+
+	do {
+		switch(hvterm_privs[0]->proto) {
+		case HV_PROTOCOL_RAW:
+			count = hvterm_raw_put_chars(0, &c, 1);
+			break;
+		case HV_PROTOCOL_HVSI:
+			count = hvterm_hvsi_put_chars(0, &c, 1);
+			break;
+		}
+	} while(count == 0);
+}
+
+static int udbg_hvc_getc_poll(void)
+{
+	int rc = 0;
+	char c;
+
+	if (!hvterm_privs[0])
+		return -1;
+
+	switch(hvterm_privs[0]->proto) {
+	case HV_PROTOCOL_RAW:
+		rc = hvterm_raw_get_chars(0, &c, 1);
+		break;
+	case HV_PROTOCOL_HVSI:
+		rc = hvterm_hvsi_get_chars(0, &c, 1);
+		break;
+	}
+	if (!rc)
+		return -1;
+	return c;
+}
+
+static int udbg_hvc_getc(void)
+{
+	int ch;
+
+	if (!hvterm_privs[0])
+		return -1;
+
+	for (;;) {
+		ch = udbg_hvc_getc_poll();
+		if (ch == -1) {
+			/* This shouldn't be needed...but... */
+			volatile unsigned long delay;
+			for (delay=0; delay < 2000000; delay++)
+				;
+		} else {
+			return ch;
+		}
+	}
+}
+
+static int hvc_vio_probe(struct vio_dev *vdev,
 				   const struct vio_device_id *id)
 {
 	const struct hv_ops *ops;
@@ -251,7 +314,7 @@ static int __devinit hvc_vio_probe(struct vio_dev *vdev,
 		proto = HV_PROTOCOL_HVSI;
 		ops = &hvterm_hvsi_ops;
 	} else {
-		pr_err("hvc_vio: Unkown protocol for %s\n", vdev->dev.of_node->full_name);
+		pr_err("hvc_vio: Unknown protocol for %s\n", vdev->dev.of_node->full_name);
 		return -ENXIO;
 	}
 
@@ -290,10 +353,17 @@ static int __devinit hvc_vio_probe(struct vio_dev *vdev,
 		return PTR_ERR(hp);
 	dev_set_drvdata(&vdev->dev, hp);
 
+	/* register udbg if it's not there already for console 0 */
+	if (hp->index == 0 && !udbg_putc) {
+		udbg_putc = udbg_hvc_putc;
+		udbg_getc = udbg_hvc_getc;
+		udbg_getc_poll = udbg_hvc_getc_poll;
+	}
+
 	return 0;
 }
 
-static int __devexit hvc_vio_remove(struct vio_dev *vdev)
+static int hvc_vio_remove(struct vio_dev *vdev)
 {
 	struct hvc_struct *hp = dev_get_drvdata(&vdev->dev);
 	int rc, termno;
@@ -311,19 +381,13 @@ static int __devexit hvc_vio_remove(struct vio_dev *vdev)
 static struct vio_driver hvc_vio_driver = {
 	.id_table	= hvc_driver_table,
 	.probe		= hvc_vio_probe,
-	.remove		= __devexit_p(hvc_vio_remove),
-	.driver		= {
-		.name	= hvc_driver_name,
-		.owner	= THIS_MODULE,
-	}
+	.remove		= hvc_vio_remove,
+	.name		= hvc_driver_name,
 };
 
 static int __init hvc_vio_init(void)
 {
 	int rc;
-
-	if (firmware_has_feature(FW_FEATURE_ISERIES))
-		return -EIO;
 
 	/* Register as a vio device to receive callbacks */
 	rc = vio_register_driver(&hvc_vio_driver);
@@ -338,63 +402,10 @@ static void __exit hvc_vio_exit(void)
 }
 module_exit(hvc_vio_exit);
 
-static void udbg_hvc_putc(char c)
-{
-	int count = -1;
-
-	if (c == '\n')
-		udbg_hvc_putc('\r');
-
-	do {
-		switch(hvterm_priv0.proto) {
-		case HV_PROTOCOL_RAW:
-			count = hvterm_raw_put_chars(0, &c, 1);
-			break;
-		case HV_PROTOCOL_HVSI:
-			count = hvterm_hvsi_put_chars(0, &c, 1);
-			break;
-		}
-	} while(count == 0);
-}
-
-static int udbg_hvc_getc_poll(void)
-{
-	int rc = 0;
-	char c;
-
-	switch(hvterm_priv0.proto) {
-	case HV_PROTOCOL_RAW:
-		rc = hvterm_raw_get_chars(0, &c, 1);
-		break;
-	case HV_PROTOCOL_HVSI:
-		rc = hvterm_hvsi_get_chars(0, &c, 1);
-		break;
-	}
-	if (!rc)
-		return -1;
-	return c;
-}
-
-static int udbg_hvc_getc(void)
-{
-	int ch;
-	for (;;) {
-		ch = udbg_hvc_getc_poll();
-		if (ch == -1) {
-			/* This shouldn't be needed...but... */
-			volatile unsigned long delay;
-			for (delay=0; delay < 2000000; delay++)
-				;
-		} else {
-			return ch;
-		}
-	}
-}
-
 void __init hvc_vio_init_early(void)
 {
 	struct device_node *stdout_node;
-	const u32 *termno;
+	const __be32 *termno;
 	const char *name;
 	const struct hv_ops *ops;
 
@@ -419,7 +430,7 @@ void __init hvc_vio_init_early(void)
 	termno = of_get_property(stdout_node, "reg", NULL);
 	if (termno == NULL)
 		goto out;
-	hvterm_priv0.termno = *termno;
+	hvterm_priv0.termno = of_read_number(termno, 1);
 	spin_lock_init(&hvterm_priv0.buf_lock);
 	hvterm_privs[0] = &hvterm_priv0;
 
@@ -447,7 +458,9 @@ void __init hvc_vio_init_early(void)
 	if (hvterm_priv0.proto == HV_PROTOCOL_HVSI)
 		goto out;
 #endif
-	add_preferred_console("hvc", 0, NULL);
+	/* Check whether the user has requested a different console. */
+	if (!strstr(cmd_line, "console="))
+		add_preferred_console("hvc", 0, NULL);
 	hvc_instantiate(0, 0, ops);
 out:
 	of_node_put(stdout_node);

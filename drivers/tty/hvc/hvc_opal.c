@@ -41,7 +41,7 @@
 
 static const char hvc_opal_name[] = "hvc_opal";
 
-static struct of_device_id hvc_opal_match[] __devinitdata = {
+static struct of_device_id hvc_opal_match[] = {
 	{ .name = "serial", .compatible = "ibm,opal-console-raw" },
 	{ .name = "serial", .compatible = "ibm,opal-console-hvsi" },
 	{ },
@@ -161,7 +161,7 @@ static const struct hv_ops hvc_opal_hvsi_ops = {
 	.tiocmset = hvc_opal_hvsi_tiocmset,
 };
 
-static int __devinit hvc_opal_probe(struct platform_device *dev)
+static int hvc_opal_probe(struct platform_device *dev)
 {
 	const struct hv_ops *ops;
 	struct hvc_struct *hp;
@@ -178,7 +178,7 @@ static int __devinit hvc_opal_probe(struct platform_device *dev)
 		proto = HV_PROTOCOL_HVSI;
 		ops = &hvc_opal_hvsi_ops;
 	} else {
-		pr_err("hvc_opal: Unkown protocol for %s\n",
+		pr_err("hvc_opal: Unknown protocol for %s\n",
 		       dev->dev.of_node->full_name);
 		return -ENXIO;
 	}
@@ -222,7 +222,7 @@ static int __devinit hvc_opal_probe(struct platform_device *dev)
 	return 0;
 }
 
-static int __devexit hvc_opal_remove(struct platform_device *dev)
+static int hvc_opal_remove(struct platform_device *dev)
 {
 	struct hvc_struct *hp = dev_get_drvdata(&dev->dev);
 	int rc, termno;
@@ -239,7 +239,7 @@ static int __devexit hvc_opal_remove(struct platform_device *dev)
 
 static struct platform_driver hvc_opal_driver = {
 	.probe		= hvc_opal_probe,
-	.remove		= __devexit_p(hvc_opal_remove),
+	.remove		= hvc_opal_remove,
 	.driver		= {
 		.name	= hvc_opal_name,
 		.owner	= THIS_MODULE,
@@ -255,13 +255,7 @@ static int __init hvc_opal_init(void)
 	/* Register as a vio device to receive callbacks */
 	return platform_driver_register(&hvc_opal_driver);
 }
-module_init(hvc_opal_init);
-
-static void __exit hvc_opal_exit(void)
-{
-	platform_driver_unregister(&hvc_opal_driver);
-}
-module_exit(hvc_opal_exit);
+device_initcall(hvc_opal_init);
 
 static void udbg_opal_putc(char c)
 {
@@ -329,7 +323,7 @@ static void udbg_init_opal_common(void)
 void __init hvc_opal_init_early(void)
 {
 	struct device_node *stdout_node = NULL;
-	const u32 *termno;
+	const __be32 *termno;
 	const char *name = NULL;
 	const struct hv_ops *ops;
 	u32 index;
@@ -371,7 +365,7 @@ void __init hvc_opal_init_early(void)
 	if (!stdout_node)
 		return;
 	termno = of_get_property(stdout_node, "reg", NULL);
-	index = termno ? *termno : 0;
+	index = termno ? be32_to_cpup(termno) : 0;
 	if (index >= MAX_NR_HVC_CONSOLES)
 		return;
 	hvc_opal_privs[index] = &hvc_opal_boot_priv;
@@ -401,7 +395,7 @@ out:
 }
 
 #ifdef CONFIG_PPC_EARLY_DEBUG_OPAL_RAW
-void __init udbg_init_debug_opal(void)
+void __init udbg_init_debug_opal_raw(void)
 {
 	u32 index = CONFIG_PPC_EARLY_DEBUG_OPAL_VTERMNO;
 	hvc_opal_privs[index] = &hvc_opal_boot_priv;

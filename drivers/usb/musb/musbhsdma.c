@@ -30,7 +30,6 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-#include <linux/module.h>
 #include <linux/device.h>
 #include <linux/interrupt.h>
 #include <linux/platform_device.h>
@@ -38,18 +37,10 @@
 #include "musb_core.h"
 #include "musbhsdma.h"
 
-static int dma_controller_start(struct dma_controller *c)
-{
-	/* nothing to do */
-	return 0;
-}
-
 static void dma_channel_release(struct dma_channel *channel);
 
-static int dma_controller_stop(struct dma_controller *c)
+static void dma_controller_stop(struct musb_dma_controller *controller)
 {
-	struct musb_dma_controller *controller = container_of(c,
-			struct musb_dma_controller, controller);
 	struct musb *musb = controller->private_data;
 	struct dma_channel *channel;
 	u8 bit;
@@ -68,8 +59,6 @@ static int dma_controller_stop(struct dma_controller *c)
 			}
 		}
 	}
-
-	return 0;
 }
 
 static struct dma_channel *dma_channel_allocate(struct dma_controller *c,
@@ -206,14 +195,14 @@ static int dma_channel_abort(struct dma_channel *channel)
 {
 	struct musb_dma_channel *musb_channel = channel->private_data;
 	void __iomem *mbase = musb_channel->controller->base;
-	struct musb *musb = musb_channel->controller->private_data;
+
 	u8 bchannel = musb_channel->idx;
 	int offset;
 	u16 csr;
 
 	if (channel->status == MUSB_DMA_STATUS_BUSY) {
 		if (musb_channel->transmit) {
-			offset = MUSB_EP_OFFSET(musb, musb_channel->epnum,
+			offset = MUSB_EP_OFFSET(musb_channel->epnum,
 						MUSB_TXCSR);
 
 			/*
@@ -226,7 +215,7 @@ static int dma_channel_abort(struct dma_channel *channel)
 			csr &= ~MUSB_TXCSR_DMAMODE;
 			musb_writew(mbase, offset, csr);
 		} else {
-			offset = MUSB_EP_OFFSET(musb, musb_channel->epnum,
+			offset = MUSB_EP_OFFSET(musb_channel->epnum,
 						MUSB_RXCSR);
 
 			csr = musb_readw(mbase, offset);
@@ -337,7 +326,7 @@ static irqreturn_t dma_controller_irq(int irq, void *private_data)
 					    (musb_channel->max_packet_sz - 1)))
 				    ) {
 					u8  epnum  = musb_channel->epnum;
-					int offset = MUSB_EP_OFFSET(musb, epnum,
+					int offset = MUSB_EP_OFFSET(epnum,
 								    MUSB_TXCSR);
 					u16 txcsr;
 
@@ -345,7 +334,7 @@ static irqreturn_t dma_controller_irq(int irq, void *private_data)
 					 * The programming guide says that we
 					 * must clear DMAENAB before DMAMODE.
 					 */
-					musb_ep_select(musb, mbase, epnum);
+					musb_ep_select(mbase, epnum);
 					txcsr = musb_readw(mbase, offset);
 					txcsr &= ~(MUSB_TXCSR_DMAENAB
 							| MUSB_TXCSR_AUTOSET);
@@ -367,30 +356,27 @@ done:
 	return retval;
 }
 
-void inventra_dma_controller_destroy(struct dma_controller *c)
+void dma_controller_destroy(struct dma_controller *c)
 {
 	struct musb_dma_controller *controller = container_of(c,
 			struct musb_dma_controller, controller);
 
-	if (!controller)
-		return;
+	dma_controller_stop(controller);
 
 	if (controller->irq)
 		free_irq(controller->irq, c);
 
 	kfree(controller);
 }
-EXPORT_SYMBOL(inventra_dma_controller_destroy);
 
-struct dma_controller *__devinit
-inventra_dma_controller_create(struct musb *musb, void __iomem *base)
+struct dma_controller *dma_controller_create(struct musb *musb, void __iomem *base)
 {
 	struct musb_dma_controller *controller;
 	struct device *dev = musb->controller;
 	struct platform_device *pdev = to_platform_device(dev);
 	int irq = platform_get_irq_byname(pdev, "dma");
 
-	if (irq == 0) {
+	if (irq <= 0) {
 		dev_err(dev, "No DMA interrupt line!\n");
 		return NULL;
 	}
@@ -403,8 +389,6 @@ inventra_dma_controller_create(struct musb *musb, void __iomem *base)
 	controller->private_data = musb;
 	controller->base = base;
 
-	controller->controller.start = dma_controller_start;
-	controller->controller.stop = dma_controller_stop;
 	controller->controller.channel_alloc = dma_channel_allocate;
 	controller->controller.channel_release = dma_channel_release;
 	controller->controller.channel_program = dma_channel_program;
@@ -413,7 +397,7 @@ inventra_dma_controller_create(struct musb *musb, void __iomem *base)
 	if (request_irq(irq, dma_controller_irq, 0,
 			dev_name(musb->controller), &controller->controller)) {
 		dev_err(dev, "request_irq %d failed!\n", irq);
-		inventra_dma_controller_destroy(&controller->controller);
+		dma_controller_destroy(&controller->controller);
 
 		return NULL;
 	}
@@ -422,18 +406,3 @@ inventra_dma_controller_create(struct musb *musb, void __iomem *base)
 
 	return &controller->controller;
 }
-EXPORT_SYMBOL(inventra_dma_controller_create);
-
-MODULE_DESCRIPTION("MUSB Inventra dma controller driver");
-MODULE_LICENSE("GPL v2");
-
-static int __init inventra_dma_init(void)
-{
-	return 0;
-}
-module_init(inventra_dma_init);
-
-static void __exit inventra_dma__exit(void)
-{
-}
-module_exit(inventra_dma__exit);

@@ -38,14 +38,6 @@ extern int elna_enable;
 		printk(args);	\
 	} } while (0)
 
-#ifdef TRACE
-#define ENTER()	pr_debug(">> enter %s\n", __func__)
-#define LEAVE()	pr_debug("<< leave %s\n", __func__)
-#else
-#define ENTER()
-#define LEAVE()
-#endif
-
 #define AS102_DEVICE_MAJOR	192
 
 #define AS102_USB_BUF_SIZE	512
@@ -76,7 +68,7 @@ struct as102_dev_t {
 	struct as10x_bus_adapter_t bus_adap;
 	struct list_head device_entry;
 	struct kref kref;
-	unsigned long minor;
+	uint8_t elna_cfg;
 
 	struct dvb_adapter dvb_adap;
 	struct dvb_frontend dvb_fe;

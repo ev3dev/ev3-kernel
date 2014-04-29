@@ -25,14 +25,15 @@ static int logon_vet_description(const char *desc);
  * arbitrary blob of data as the payload
  */
 struct key_type key_type_user = {
-	.name		= "user",
-	.instantiate	= user_instantiate,
-	.update		= user_update,
-	.match		= user_match,
-	.revoke		= user_revoke,
-	.destroy	= user_destroy,
-	.describe	= user_describe,
-	.read		= user_read,
+	.name			= "user",
+	.def_lookup_type	= KEYRING_SEARCH_LOOKUP_DIRECT,
+	.instantiate		= user_instantiate,
+	.update			= user_update,
+	.match			= user_match,
+	.revoke			= user_revoke,
+	.destroy		= user_destroy,
+	.describe		= user_describe,
+	.read			= user_read,
 };
 
 EXPORT_SYMBOL_GPL(key_type_user);
@@ -45,6 +46,7 @@ EXPORT_SYMBOL_GPL(key_type_user);
  */
 struct key_type key_type_logon = {
 	.name			= "logon",
+	.def_lookup_type	= KEYRING_SEARCH_LOOKUP_DIRECT,
 	.instantiate		= user_instantiate,
 	.update			= user_update,
 	.match			= user_match,
@@ -58,13 +60,14 @@ EXPORT_SYMBOL_GPL(key_type_logon);
 /*
  * instantiate a user defined key
  */
-int user_instantiate(struct key *key, const void *data, size_t datalen)
+int user_instantiate(struct key *key, struct key_preparsed_payload *prep)
 {
 	struct user_key_payload *upayload;
+	size_t datalen = prep->datalen;
 	int ret;
 
 	ret = -EINVAL;
-	if (datalen <= 0 || datalen > 32767 || !data)
+	if (datalen <= 0 || datalen > 32767 || !prep->data)
 		goto error;
 
 	ret = key_payload_reserve(key, datalen);
@@ -78,7 +81,7 @@ int user_instantiate(struct key *key, const void *data, size_t datalen)
 
 	/* attach the data */
 	upayload->datalen = datalen;
-	memcpy(upayload->data, data, datalen);
+	memcpy(upayload->data, prep->data, datalen);
 	rcu_assign_keypointer(key, upayload);
 	ret = 0;
 
@@ -92,13 +95,14 @@ EXPORT_SYMBOL_GPL(user_instantiate);
  * update a user defined key
  * - the key's semaphore is write-locked
  */
-int user_update(struct key *key, const void *data, size_t datalen)
+int user_update(struct key *key, struct key_preparsed_payload *prep)
 {
 	struct user_key_payload *upayload, *zap;
+	size_t datalen = prep->datalen;
 	int ret;
 
 	ret = -EINVAL;
-	if (datalen <= 0 || datalen > 32767 || !data)
+	if (datalen <= 0 || datalen > 32767 || !prep->data)
 		goto error;
 
 	/* construct a replacement payload */
@@ -108,7 +112,7 @@ int user_update(struct key *key, const void *data, size_t datalen)
 		goto error;
 
 	upayload->datalen = datalen;
-	memcpy(upayload->data, data, datalen);
+	memcpy(upayload->data, prep->data, datalen);
 
 	/* check the quota and attach the new data */
 	zap = upayload;

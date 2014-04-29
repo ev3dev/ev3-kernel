@@ -44,7 +44,7 @@
 static inline sector_t normalize(sector_t s, int base)
 {
 	sector_t tmp = s; /* Since do_div modifies its argument */
-	return s - do_div(tmp, base);
+	return s - sector_div(tmp, base);
 }
 
 static inline sector_t normalize_up(sector_t s, int base)
@@ -147,7 +147,7 @@ static int _preload_range(struct pnfs_inval_markings *marks,
 	count = (int)(end - start) / (int)tree->mtt_step_size;
 
 	/* Pre-malloc what memory we might need */
-	storage = kmalloc(sizeof(*storage) * count, GFP_NOFS);
+	storage = kcalloc(count, sizeof(*storage), GFP_NOFS);
 	if (!storage)
 		return -ENOMEM;
 	for (i = 0; i < count; i++) {
@@ -683,8 +683,7 @@ encode_pnfs_block_layoutupdate(struct pnfs_block_layout *bl,
 		p = xdr_encode_hyper(p, lce->bse_length << SECTOR_SHIFT);
 		p = xdr_encode_hyper(p, 0LL);
 		*p++ = cpu_to_be32(PNFS_BLOCK_READWRITE_DATA);
-		list_del(&lce->bse_node);
-		list_add_tail(&lce->bse_node, &bl->bl_committing);
+		list_move_tail(&lce->bse_node, &bl->bl_committing);
 		bl->bl_count--;
 		count++;
 	}

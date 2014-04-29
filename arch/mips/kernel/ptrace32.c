@@ -32,7 +32,6 @@
 #include <asm/mipsmtregs.h>
 #include <asm/pgtable.h>
 #include <asm/page.h>
-#include <asm/system.h>
 #include <asm/uaccess.h>
 #include <asm/bootinfo.h>
 
@@ -81,6 +80,7 @@ long compat_arch_ptrace(struct task_struct *child, compat_long_t request,
 	/* Read the word at location addr in the USER area. */
 	case PTRACE_PEEKUSR: {
 		struct pt_regs *regs;
+		fpureg_t *fregs;
 		unsigned int tmp;
 
 		regs = task_pt_regs(child);
@@ -91,21 +91,25 @@ long compat_arch_ptrace(struct task_struct *child, compat_long_t request,
 			tmp = regs->regs[addr];
 			break;
 		case FPR_BASE ... FPR_BASE + 31:
-			if (tsk_used_math(child)) {
-				fpureg_t *fregs = get_fpu_regs(child);
-
+			if (!tsk_used_math(child)) {
+				/* FP not yet used */
+				tmp = -1;
+				break;
+			}
+			fregs = get_fpu_regs(child);
+			if (test_thread_flag(TIF_32BIT_FPREGS)) {
 				/*
 				 * The odd registers are actually the high
 				 * order bits of the values stored in the even
 				 * registers - unless we're using r2k_switch.S.
 				 */
 				if (addr & 1)
-					tmp = (unsigned long) (fregs[((addr & ~1) - 32)] >> 32);
+					tmp = fregs[(addr & ~1) - 32] >> 32;
 				else
-					tmp = (unsigned long) (fregs[(addr - 32)] & 0xffffffff);
-			} else {
-				tmp = -1;	/* FP not yet used  */
+					tmp = fregs[addr - 32];
+				break;
 			}
+			tmp = fregs[addr - FPR_BASE];
 			break;
 		case PC:
 			tmp = regs->cp0_epc;
@@ -125,7 +129,7 @@ long compat_arch_ptrace(struct task_struct *child, compat_long_t request,
 		case FPC_CSR:
 			tmp = child->thread.fpu.fcr31;
 			break;
-		case FPC_EIR: {	/* implementation / version register */
+		case FPC_EIR: { /* implementation / version register */
 			unsigned int flags;
 #ifdef CONFIG_MIPS_MT_SMTC
 			unsigned int irqflags;
@@ -148,13 +152,13 @@ long compat_arch_ptrace(struct task_struct *child, compat_long_t request,
 			if (cpu_has_mipsmt) {
 				unsigned int vpflags = dvpe();
 				flags = read_c0_status();
-				__enable_fpu();
+				__enable_fpu(FPU_AS_IS);
 				__asm__ __volatile__("cfc1\t%0,$0": "=r" (tmp));
 				write_c0_status(flags);
 				evpe(vpflags);
 			} else {
 				flags = read_c0_status();
-				__enable_fpu();
+				__enable_fpu(FPU_AS_IS);
 				__asm__ __volatile__("cfc1\t%0,$0": "=r" (tmp));
 				write_c0_status(flags);
 			}
@@ -237,20 +241,24 @@ long compat_arch_ptrace(struct task_struct *child, compat_long_t request,
 				       sizeof(child->thread.fpu));
 				child->thread.fpu.fcr31 = 0;
 			}
-			/*
-			 * The odd registers are actually the high order bits
-			 * of the values stored in the even registers - unless
-			 * we're using r2k_switch.S.
-			 */
-			if (addr & 1) {
-				fregs[(addr & ~1) - FPR_BASE] &= 0xffffffff;
-				fregs[(addr & ~1) - FPR_BASE] |= ((unsigned long long) data) << 32;
-			} else {
-				fregs[addr - FPR_BASE] &= ~0xffffffffLL;
-				/* Must cast, lest sign extension fill upper
-				   bits!  */
-				fregs[addr - FPR_BASE] |= (unsigned int)data;
+			if (test_thread_flag(TIF_32BIT_FPREGS)) {
+				/*
+				 * The odd registers are actually the high
+				 * order bits of the values stored in the even
+				 * registers - unless we're using r2k_switch.S.
+				 */
+				if (addr & 1) {
+					fregs[(addr & ~1) - FPR_BASE] &=
+						0xffffffff;
+					fregs[(addr & ~1) - FPR_BASE] |=
+						((u64)data) << 32;
+				} else {
+					fregs[addr - FPR_BASE] &= ~0xffffffffLL;
+					fregs[addr - FPR_BASE] |= data;
+				}
+				break;
 			}
+			fregs[addr - FPR_BASE] = data;
 			break;
 		}
 		case PC:

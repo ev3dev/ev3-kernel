@@ -141,15 +141,15 @@ static const struct soc_enum cs42l51_chan_mix =
 static const struct snd_kcontrol_new cs42l51_snd_controls[] = {
 	SOC_DOUBLE_R_SX_TLV("PCM Playback Volume",
 			CS42L51_PCMA_VOL, CS42L51_PCMB_VOL,
-			7, 0xffffff99, 0x18, adc_pcm_tlv),
+			6, 0x19, 0x7F, adc_pcm_tlv),
 	SOC_DOUBLE_R("PCM Playback Switch",
 			CS42L51_PCMA_VOL, CS42L51_PCMB_VOL, 7, 1, 1),
 	SOC_DOUBLE_R_SX_TLV("Analog Playback Volume",
 			CS42L51_AOUTA_VOL, CS42L51_AOUTB_VOL,
-			8, 0xffffff19, 0x18, aout_tlv),
+			0, 0x34, 0xE4, aout_tlv),
 	SOC_DOUBLE_R_SX_TLV("ADC Mixer Volume",
 			CS42L51_ADCA_VOL, CS42L51_ADCB_VOL,
-			7, 0xffffff99, 0x18, adc_pcm_tlv),
+			6, 0x19, 0x7F, adc_pcm_tlv),
 	SOC_DOUBLE_R("ADC Mixer Switch",
 			CS42L51_ADCA_VOL, CS42L51_ADCB_VOL, 7, 1, 1),
 	SOC_SINGLE("Playback Deemphasis Switch", CS42L51_DAC_CTL, 3, 1, 0),
@@ -356,8 +356,7 @@ static int cs42l51_hw_params(struct snd_pcm_substream *substream,
 		struct snd_pcm_hw_params *params,
 		struct snd_soc_dai *dai)
 {
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_codec *codec = rtd->codec;
+	struct snd_soc_codec *codec = dai->codec;
 	struct cs42l51_private *cs42l51 = snd_soc_codec_get_drvdata(codec);
 	int ret;
 	unsigned int i;
@@ -424,21 +423,17 @@ static int cs42l51_hw_params(struct snd_pcm_substream *substream,
 		intf_ctl |= CS42L51_INTF_CTL_DAC_FORMAT(CS42L51_DAC_DIF_LJ24);
 		break;
 	case SND_SOC_DAIFMT_RIGHT_J:
-		switch (params_format(params)) {
-		case SNDRV_PCM_FORMAT_S16_LE:
-		case SNDRV_PCM_FORMAT_S16_BE:
+		switch (params_width(params)) {
+		case 16:
 			fmt = CS42L51_DAC_DIF_RJ16;
 			break;
-		case SNDRV_PCM_FORMAT_S18_3LE:
-		case SNDRV_PCM_FORMAT_S18_3BE:
+		case 18:
 			fmt = CS42L51_DAC_DIF_RJ18;
 			break;
-		case SNDRV_PCM_FORMAT_S20_3LE:
-		case SNDRV_PCM_FORMAT_S20_3BE:
+		case 20:
 			fmt = CS42L51_DAC_DIF_RJ20;
 			break;
-		case SNDRV_PCM_FORMAT_S24_LE:
-		case SNDRV_PCM_FORMAT_S24_BE:
+		case 24:
 			fmt = CS42L51_DAC_DIF_RJ24;
 			break;
 		default:
@@ -615,24 +610,7 @@ static struct i2c_driver cs42l51_i2c_driver = {
 	.remove = cs42l51_i2c_remove,
 };
 
-static int __init cs42l51_init(void)
-{
-	int ret;
-
-	ret = i2c_add_driver(&cs42l51_i2c_driver);
-	if (ret != 0) {
-		printk(KERN_ERR "%s: can't add i2c driver\n", __func__);
-		return ret;
-	}
-	return 0;
-}
-module_init(cs42l51_init);
-
-static void __exit cs42l51_exit(void)
-{
-	i2c_del_driver(&cs42l51_i2c_driver);
-}
-module_exit(cs42l51_exit);
+module_i2c_driver(cs42l51_i2c_driver);
 
 MODULE_AUTHOR("Arnaud Patard <arnaud.patard@rtp-net.org>");
 MODULE_DESCRIPTION("Cirrus Logic CS42L51 ALSA SoC Codec Driver");

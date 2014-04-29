@@ -29,13 +29,11 @@
 #include <sound/soc.h>
 
 #include <asm/mach-types.h>
-#include <mach/hardware.h>
 #include <linux/gpio.h>
 #include <linux/module.h>
-#include <plat/mcbsp.h>
+#include <linux/platform_data/asoc-ti-mcbsp.h>
 
 #include "omap-mcbsp.h"
-#include "omap-pcm.h"
 
 #define N810_HEADSET_AMP_GPIO	10
 #define N810_SPEAKER_AMP_GPIO	101
@@ -55,9 +53,8 @@ static int n810_spk_func;
 static int n810_jack_func;
 static int n810_dmic_func;
 
-static void n810_ext_control(struct snd_soc_codec *codec)
+static void n810_ext_control(struct snd_soc_dapm_context *dapm)
 {
-	struct snd_soc_dapm_context *dapm = &codec->dapm;
 	int hp = 0, line1l = 0;
 
 	switch (n810_jack_func) {
@@ -102,13 +99,13 @@ static int n810_startup(struct snd_pcm_substream *substream)
 	snd_pcm_hw_constraint_minmax(runtime,
 				     SNDRV_PCM_HW_PARAM_CHANNELS, 2, 2);
 
-	n810_ext_control(codec);
-	return clk_enable(sys_clkout2);
+	n810_ext_control(&codec->dapm);
+	return clk_prepare_enable(sys_clkout2);
 }
 
 static void n810_shutdown(struct snd_pcm_substream *substream)
 {
-	clk_disable(sys_clkout2);
+	clk_disable_unprepare(sys_clkout2);
 }
 
 static int n810_hw_params(struct snd_pcm_substream *substream,
@@ -142,13 +139,13 @@ static int n810_get_spk(struct snd_kcontrol *kcontrol,
 static int n810_set_spk(struct snd_kcontrol *kcontrol,
 			struct snd_ctl_elem_value *ucontrol)
 {
-	struct snd_soc_codec *codec =  snd_kcontrol_chip(kcontrol);
+	struct snd_soc_card *card =  snd_kcontrol_chip(kcontrol);
 
 	if (n810_spk_func == ucontrol->value.integer.value[0])
 		return 0;
 
 	n810_spk_func = ucontrol->value.integer.value[0];
-	n810_ext_control(codec);
+	n810_ext_control(&card->dapm);
 
 	return 1;
 }
@@ -164,13 +161,13 @@ static int n810_get_jack(struct snd_kcontrol *kcontrol,
 static int n810_set_jack(struct snd_kcontrol *kcontrol,
 			 struct snd_ctl_elem_value *ucontrol)
 {
-	struct snd_soc_codec *codec =  snd_kcontrol_chip(kcontrol);
+	struct snd_soc_card *card =  snd_kcontrol_chip(kcontrol);
 
 	if (n810_jack_func == ucontrol->value.integer.value[0])
 		return 0;
 
 	n810_jack_func = ucontrol->value.integer.value[0];
-	n810_ext_control(codec);
+	n810_ext_control(&card->dapm);
 
 	return 1;
 }
@@ -186,13 +183,13 @@ static int n810_get_input(struct snd_kcontrol *kcontrol,
 static int n810_set_input(struct snd_kcontrol *kcontrol,
 			  struct snd_ctl_elem_value *ucontrol)
 {
-	struct snd_soc_codec *codec =  snd_kcontrol_chip(kcontrol);
+	struct snd_soc_card *card =  snd_kcontrol_chip(kcontrol);
 
 	if (n810_dmic_func == ucontrol->value.integer.value[0])
 		return 0;
 
 	n810_dmic_func = ucontrol->value.integer.value[0];
-	n810_ext_control(codec);
+	n810_ext_control(&card->dapm);
 
 	return 1;
 }
@@ -232,8 +229,8 @@ static const struct snd_soc_dapm_route audio_map[] = {
 	{"Ext Spk", NULL, "LLOUT"},
 	{"Ext Spk", NULL, "RLOUT"},
 
-	{"DMic Rate 64", NULL, "Mic Bias 2V"},
-	{"Mic Bias 2V", NULL, "DMic"},
+	{"DMic Rate 64", NULL, "Mic Bias"},
+	{"Mic Bias", NULL, "DMic"},
 };
 
 static const char *spk_function[] = {"Off", "On"};
@@ -276,7 +273,7 @@ static int n810_aic33_init(struct snd_soc_pcm_runtime *rtd)
 static struct snd_soc_dai_link n810_dai = {
 	.name = "TLV320AIC33",
 	.stream_name = "AIC33",
-	.cpu_dai_name = "omap-mcbsp-dai.1",
+	.cpu_dai_name = "omap-mcbsp.2",
 	.platform_name = "omap-pcm-audio",
 	.codec_name = "tlv320aic3x-codec.2-0018",
 	.codec_dai_name = "tlv320aic3x-hifi",
@@ -308,7 +305,9 @@ static int __init n810_soc_init(void)
 	int err;
 	struct device *dev;
 
-	if (!(machine_is_nokia_n810() || machine_is_nokia_n810_wimax()))
+	if (!of_have_populated_dt() ||
+	    (!of_machine_is_compatible("nokia,n810") &&
+	     !of_machine_is_compatible("nokia,n810-wimax")))
 		return -ENODEV;
 
 	n810_snd_device = platform_device_alloc("soc-audio", -1);
@@ -347,8 +346,11 @@ static int __init n810_soc_init(void)
 	clk_set_parent(sys_clkout2_src, func96m_clk);
 	clk_set_rate(sys_clkout2, 12000000);
 
-	BUG_ON((gpio_request(N810_HEADSET_AMP_GPIO, "hs_amp") < 0) ||
-	       (gpio_request(N810_SPEAKER_AMP_GPIO, "spk_amp") < 0));
+	if (WARN_ON((gpio_request(N810_HEADSET_AMP_GPIO, "hs_amp") < 0) ||
+		    (gpio_request(N810_SPEAKER_AMP_GPIO, "spk_amp") < 0))) {
+		err = -EINVAL;
+		goto err4;
+	}
 
 	gpio_direction_output(N810_HEADSET_AMP_GPIO, 0);
 	gpio_direction_output(N810_SPEAKER_AMP_GPIO, 0);

@@ -20,6 +20,7 @@
 #include <linux/io.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 
@@ -151,7 +152,7 @@ static void sh_msiof_spi_set_clk_regs(struct sh_msiof_spi_priv *p,
 	size_t k;
 
 	if (!WARN_ON(!spi_hz || !parent_rate))
-		div = parent_rate / spi_hz;
+		div = DIV_ROUND_UP(parent_rate, spi_hz);
 
 	/* TODO: make more fine grained */
 
@@ -168,7 +169,7 @@ static void sh_msiof_spi_set_clk_regs(struct sh_msiof_spi_priv *p,
 
 static void sh_msiof_spi_set_pin_regs(struct sh_msiof_spi_priv *p,
 				      u32 cpol, u32 cpha,
-				      u32 tx_hi_z, u32 lsb_first)
+				      u32 tx_hi_z, u32 lsb_first, u32 cs_high)
 {
 	u32 tmp;
 	int edge;
@@ -181,8 +182,12 @@ static void sh_msiof_spi_set_pin_regs(struct sh_msiof_spi_priv *p,
 	 *    1    1         11     11    1    1
 	 */
 	sh_msiof_write(p, FCTR, 0);
-	sh_msiof_write(p, TMDR1, 0xe2000005 | (lsb_first << 24));
-	sh_msiof_write(p, RMDR1, 0x22000005 | (lsb_first << 24));
+
+	tmp = 0;
+	tmp |= !cs_high << 25;
+	tmp |= lsb_first << 24;
+	sh_msiof_write(p, TMDR1, 0xe0000005 | tmp);
+	sh_msiof_write(p, RMDR1, 0x20000005 | tmp);
 
 	tmp = 0xa0000000;
 	tmp |= cpol << 30; /* TSCKIZ */
@@ -416,11 +421,12 @@ static void sh_msiof_spi_chipselect(struct spi_device *spi, int is_on)
 		sh_msiof_spi_set_pin_regs(p, !!(spi->mode & SPI_CPOL),
 					  !!(spi->mode & SPI_CPHA),
 					  !!(spi->mode & SPI_3WIRE),
-					  !!(spi->mode & SPI_LSB_FIRST));
+					  !!(spi->mode & SPI_LSB_FIRST),
+					  !!(spi->mode & SPI_CS_HIGH));
 	}
 
 	/* use spi->controller data for CS (same strategy as spi_gpio) */
-	gpio_set_value((unsigned)spi->controller_data, value);
+	gpio_set_value((uintptr_t)spi->controller_data, value);
 
 	if (is_on == BITBANG_CS_INACTIVE) {
 		if (test_and_clear_bit(0, &p->flags)) {
@@ -464,7 +470,7 @@ static int sh_msiof_spi_txrx_once(struct sh_msiof_spi_priv *p,
 	ret = ret ? ret : sh_msiof_modify_ctr_wait(p, 0, CTR_TXE);
 
 	/* start by setting frame bit */
-	INIT_COMPLETION(p->done);
+	reinit_completion(&p->done);
 	ret = ret ? ret : sh_msiof_modify_ctr_wait(p, 0, CTR_TFSE);
 	if (ret) {
 		dev_err(&p->pdev->dev, "failed to start hardware\n");
@@ -592,55 +598,99 @@ static u32 sh_msiof_spi_txrx_word(struct spi_device *spi, unsigned nsecs,
 	return 0;
 }
 
+#ifdef CONFIG_OF
+static struct sh_msiof_spi_info *sh_msiof_spi_parse_dt(struct device *dev)
+{
+	struct sh_msiof_spi_info *info;
+	struct device_node *np = dev->of_node;
+	u32 num_cs = 0;
+
+	info = devm_kzalloc(dev, sizeof(struct sh_msiof_spi_info), GFP_KERNEL);
+	if (!info) {
+		dev_err(dev, "failed to allocate setup data\n");
+		return NULL;
+	}
+
+	/* Parse the MSIOF properties */
+	of_property_read_u32(np, "num-cs", &num_cs);
+	of_property_read_u32(np, "renesas,tx-fifo-size",
+					&info->tx_fifo_override);
+	of_property_read_u32(np, "renesas,rx-fifo-size",
+					&info->rx_fifo_override);
+
+	info->num_chipselect = num_cs;
+
+	return info;
+}
+#else
+static struct sh_msiof_spi_info *sh_msiof_spi_parse_dt(struct device *dev)
+{
+	return NULL;
+}
+#endif
+
 static int sh_msiof_spi_probe(struct platform_device *pdev)
 {
 	struct resource	*r;
 	struct spi_master *master;
 	struct sh_msiof_spi_priv *p;
-	char clk_name[16];
 	int i;
 	int ret;
 
 	master = spi_alloc_master(&pdev->dev, sizeof(struct sh_msiof_spi_priv));
 	if (master == NULL) {
 		dev_err(&pdev->dev, "failed to allocate spi master\n");
-		ret = -ENOMEM;
-		goto err0;
+		return -ENOMEM;
 	}
 
 	p = spi_master_get_devdata(master);
 
 	platform_set_drvdata(pdev, p);
-	p->info = pdev->dev.platform_data;
+	if (pdev->dev.of_node)
+		p->info = sh_msiof_spi_parse_dt(&pdev->dev);
+	else
+		p->info = dev_get_platdata(&pdev->dev);
+
+	if (!p->info) {
+		dev_err(&pdev->dev, "failed to obtain device info\n");
+		ret = -ENXIO;
+		goto err1;
+	}
+
 	init_completion(&p->done);
 
-	snprintf(clk_name, sizeof(clk_name), "msiof%d", pdev->id);
-	p->clk = clk_get(&pdev->dev, clk_name);
+	p->clk = devm_clk_get(&pdev->dev, NULL);
 	if (IS_ERR(p->clk)) {
-		dev_err(&pdev->dev, "cannot get clock \"%s\"\n", clk_name);
+		dev_err(&pdev->dev, "cannot get clock\n");
 		ret = PTR_ERR(p->clk);
 		goto err1;
 	}
 
-	r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	i = platform_get_irq(pdev, 0);
-	if (!r || i < 0) {
-		dev_err(&pdev->dev, "cannot get platform resources\n");
+	if (i < 0) {
+		dev_err(&pdev->dev, "cannot get platform IRQ\n");
 		ret = -ENOENT;
-		goto err2;
-	}
-	p->mapbase = ioremap_nocache(r->start, resource_size(r));
-	if (!p->mapbase) {
-		dev_err(&pdev->dev, "unable to ioremap\n");
-		ret = -ENXIO;
-		goto err2;
+		goto err1;
 	}
 
-	ret = request_irq(i, sh_msiof_spi_irq, 0,
-			  dev_name(&pdev->dev), p);
+	r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	p->mapbase = devm_ioremap_resource(&pdev->dev, r);
+	if (IS_ERR(p->mapbase)) {
+		ret = PTR_ERR(p->mapbase);
+		goto err1;
+	}
+
+	ret = devm_request_irq(&pdev->dev, i, sh_msiof_spi_irq, 0,
+			       dev_name(&pdev->dev), p);
 	if (ret) {
 		dev_err(&pdev->dev, "unable to request irq\n");
-		goto err3;
+		goto err1;
+	}
+
+	ret = clk_prepare(p->clk);
+	if (ret < 0) {
+		dev_err(&pdev->dev, "unable to prepare clock\n");
+		goto err1;
 	}
 
 	p->pdev = pdev;
@@ -679,13 +729,9 @@ static int sh_msiof_spi_probe(struct platform_device *pdev)
 		return 0;
 
 	pm_runtime_disable(&pdev->dev);
- err3:
-	iounmap(p->mapbase);
- err2:
-	clk_put(p->clk);
+	clk_unprepare(p->clk);
  err1:
 	spi_master_put(master);
- err0:
 	return ret;
 }
 
@@ -697,30 +743,20 @@ static int sh_msiof_spi_remove(struct platform_device *pdev)
 	ret = spi_bitbang_stop(&p->bitbang);
 	if (!ret) {
 		pm_runtime_disable(&pdev->dev);
-		free_irq(platform_get_irq(pdev, 0), p);
-		iounmap(p->mapbase);
-		clk_put(p->clk);
+		clk_unprepare(p->clk);
 		spi_master_put(p->bitbang.master);
 	}
 	return ret;
 }
 
-static int sh_msiof_spi_runtime_nop(struct device *dev)
-{
-	/* Runtime PM callback shared between ->runtime_suspend()
-	 * and ->runtime_resume(). Simply returns success.
-	 *
-	 * This driver re-initializes all registers after
-	 * pm_runtime_get_sync() anyway so there is no need
-	 * to save and restore registers here.
-	 */
-	return 0;
-}
-
-static struct dev_pm_ops sh_msiof_spi_dev_pm_ops = {
-	.runtime_suspend = sh_msiof_spi_runtime_nop,
-	.runtime_resume = sh_msiof_spi_runtime_nop,
+#ifdef CONFIG_OF
+static const struct of_device_id sh_msiof_match[] = {
+	{ .compatible = "renesas,sh-msiof", },
+	{ .compatible = "renesas,sh-mobile-msiof", },
+	{},
 };
+MODULE_DEVICE_TABLE(of, sh_msiof_match);
+#endif
 
 static struct platform_driver sh_msiof_spi_drv = {
 	.probe		= sh_msiof_spi_probe,
@@ -728,7 +764,7 @@ static struct platform_driver sh_msiof_spi_drv = {
 	.driver		= {
 		.name		= "spi_sh_msiof",
 		.owner		= THIS_MODULE,
-		.pm		= &sh_msiof_spi_dev_pm_ops,
+		.of_match_table = of_match_ptr(sh_msiof_match),
 	},
 };
 module_platform_driver(sh_msiof_spi_drv);

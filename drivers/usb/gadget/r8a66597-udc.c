@@ -459,7 +459,7 @@ static int alloc_pipe_config(struct r8a66597_ep *ep,
 	unsigned char *counter;
 	int ret;
 
-	ep->desc = desc;
+	ep->ep.desc = desc;
 
 	if (ep->pipenum)	/* already allocated pipe  */
 		return 0;
@@ -648,7 +648,7 @@ static int sudmac_alloc_channel(struct r8a66597 *r8a66597,
 	/* set SUDMAC parameters */
 	dma = &r8a66597->dma;
 	dma->used = 1;
-	if (ep->desc->bEndpointAddress & USB_DIR_IN) {
+	if (ep->ep.desc->bEndpointAddress & USB_DIR_IN) {
 		dma->dir = 1;
 	} else {
 		dma->dir = 0;
@@ -663,11 +663,7 @@ static int sudmac_alloc_channel(struct r8a66597 *r8a66597,
 	ep->fifoctr = D0FIFOCTR;
 
 	/* dma mapping */
-	req->req.dma = dma_map_single(r8a66597_to_dev(ep->r8a66597),
-				req->req.buf, req->req.length,
-				dma->dir ? DMA_TO_DEVICE : DMA_FROM_DEVICE);
-
-	return 0;
+	return usb_gadget_map_request(&r8a66597->gadget, &req->req, dma->dir);
 }
 
 static void sudmac_free_channel(struct r8a66597 *r8a66597,
@@ -677,9 +673,7 @@ static void sudmac_free_channel(struct r8a66597 *r8a66597,
 	if (!r8a66597_is_sudmac(r8a66597))
 		return;
 
-	dma_unmap_single(r8a66597_to_dev(ep->r8a66597),
-			 req->req.dma, req->req.length,
-			 ep->dma->dir ? DMA_TO_DEVICE : DMA_FROM_DEVICE);
+	usb_gadget_unmap_request(&r8a66597->gadget, &req->req, ep->dma->dir);
 
 	r8a66597_bclr(r8a66597, DREQE, ep->fifosel);
 	r8a66597_change_curpipe(r8a66597, 0, 0, ep->fifosel);
@@ -776,7 +770,7 @@ static void start_packet_read(struct r8a66597_ep *ep,
 
 static void start_packet(struct r8a66597_ep *ep, struct r8a66597_request *req)
 {
-	if (ep->desc->bEndpointAddress & USB_DIR_IN)
+	if (ep->ep.desc->bEndpointAddress & USB_DIR_IN)
 		start_packet_write(ep, req);
 	else
 		start_packet_read(ep, req);
@@ -936,7 +930,7 @@ __acquires(r8a66597->lock)
 
 	if (restart) {
 		req = get_request_from_ep(ep);
-		if (ep->desc)
+		if (ep->ep.desc)
 			start_packet(ep, req);
 	}
 }
@@ -1122,7 +1116,7 @@ static void irq_pipe_ready(struct r8a66597 *r8a66597, u16 status, u16 enb)
 				r8a66597_write(r8a66597, ~check, BRDYSTS);
 				ep = r8a66597->pipenum2ep[pipenum];
 				req = get_request_from_ep(ep);
-				if (ep->desc->bEndpointAddress & USB_DIR_IN)
+				if (ep->ep.desc->bEndpointAddress & USB_DIR_IN)
 					irq_packet_write(ep, req);
 				else
 					irq_packet_read(ep, req);
@@ -1176,7 +1170,7 @@ __acquires(r8a66597->lock)
 
 	switch (ctrl->bRequestType & USB_RECIP_MASK) {
 	case USB_RECIP_DEVICE:
-		status = 1 << USB_DEVICE_SELF_POWERED;
+		status = r8a66597->device_status;
 		break;
 	case USB_RECIP_INTERFACE:
 		status = 0;
@@ -1475,10 +1469,10 @@ static irqreturn_t r8a66597_irq(int irq, void *_r8a66597)
 	u16 savepipe;
 	u16 mask0;
 
+	spin_lock(&r8a66597->lock);
+
 	if (r8a66597_is_sudmac(r8a66597))
 		r8a66597_sudmac_irq(r8a66597);
-
-	spin_lock(&r8a66597->lock);
 
 	intsts0 = r8a66597_read(r8a66597, INTSTS0);
 	intenb0 = r8a66597_read(r8a66597, INTENB0);
@@ -1633,7 +1627,7 @@ static int r8a66597_queue(struct usb_ep *_ep, struct usb_request *_req,
 	req->req.actual = 0;
 	req->req.status = -EINPROGRESS;
 
-	if (ep->desc == NULL)	/* control */
+	if (ep->ep.desc == NULL)	/* control */
 		start_ep0(ep, req);
 	else {
 		if (request && !ep->busy)
@@ -1698,7 +1692,7 @@ static int r8a66597_set_wedge(struct usb_ep *_ep)
 
 	ep = container_of(_ep, struct r8a66597_ep, ep);
 
-	if (!ep || !ep->desc)
+	if (!ep || !ep->ep.desc)
 		return -EINVAL;
 
 	spin_lock_irqsave(&ep->r8a66597->lock, flags);
@@ -1806,16 +1800,29 @@ static int r8a66597_pullup(struct usb_gadget *gadget, int is_on)
 	return 0;
 }
 
-static struct usb_gadget_ops r8a66597_gadget_ops = {
+static int r8a66597_set_selfpowered(struct usb_gadget *gadget, int is_self)
+{
+	struct r8a66597 *r8a66597 = gadget_to_r8a66597(gadget);
+
+	if (is_self)
+		r8a66597->device_status |= 1 << USB_DEVICE_SELF_POWERED;
+	else
+		r8a66597->device_status &= ~(1 << USB_DEVICE_SELF_POWERED);
+
+	return 0;
+}
+
+static const struct usb_gadget_ops r8a66597_gadget_ops = {
 	.get_frame		= r8a66597_get_frame,
 	.udc_start		= r8a66597_start,
 	.udc_stop		= r8a66597_stop,
 	.pullup			= r8a66597_pullup,
+	.set_selfpowered	= r8a66597_set_selfpowered,
 };
 
 static int __exit r8a66597_remove(struct platform_device *pdev)
 {
-	struct r8a66597		*r8a66597 = dev_get_drvdata(&pdev->dev);
+	struct r8a66597		*r8a66597 = platform_get_drvdata(pdev);
 
 	usb_del_gadget_udc(&r8a66597->gadget);
 	del_timer_sync(&r8a66597->timer);
@@ -1824,13 +1831,12 @@ static int __exit r8a66597_remove(struct platform_device *pdev)
 		iounmap(r8a66597->sudmac_reg);
 	free_irq(platform_get_irq(pdev, 0), r8a66597);
 	r8a66597_free_request(&r8a66597->ep[0].ep, r8a66597->ep0_req);
-#ifdef CONFIG_HAVE_CLK
+
 	if (r8a66597->pdata->on_chip) {
-		clk_disable(r8a66597->clk);
+		clk_disable_unprepare(r8a66597->clk);
 		clk_put(r8a66597->clk);
 	}
-#endif
-	device_unregister(&r8a66597->gadget.dev);
+
 	kfree(r8a66597);
 	return 0;
 }
@@ -1861,9 +1867,7 @@ static int __init r8a66597_sudmac_ioremap(struct r8a66597 *r8a66597,
 
 static int __init r8a66597_probe(struct platform_device *pdev)
 {
-#ifdef CONFIG_HAVE_CLK
 	char clk_name[8];
-#endif
 	struct resource *res, *ires;
 	int irq;
 	void __iomem *reg = NULL;
@@ -1905,29 +1909,19 @@ static int __init r8a66597_probe(struct platform_device *pdev)
 	}
 
 	spin_lock_init(&r8a66597->lock);
-	dev_set_drvdata(&pdev->dev, r8a66597);
-	r8a66597->pdata = pdev->dev.platform_data;
+	platform_set_drvdata(pdev, r8a66597);
+	r8a66597->pdata = dev_get_platdata(&pdev->dev);
 	r8a66597->irq_sense_low = irq_trigger == IRQF_TRIGGER_LOW;
 
 	r8a66597->gadget.ops = &r8a66597_gadget_ops;
-	dev_set_name(&r8a66597->gadget.dev, "gadget");
 	r8a66597->gadget.max_speed = USB_SPEED_HIGH;
-	r8a66597->gadget.dev.parent = &pdev->dev;
-	r8a66597->gadget.dev.dma_mask = pdev->dev.dma_mask;
-	r8a66597->gadget.dev.release = pdev->dev.release;
 	r8a66597->gadget.name = udc_name;
-	ret = device_register(&r8a66597->gadget.dev);
-	if (ret < 0) {
-		dev_err(&pdev->dev, "device_register failed\n");
-		goto clean_up;
-	}
 
 	init_timer(&r8a66597->timer);
 	r8a66597->timer.function = r8a66597_timer;
 	r8a66597->timer.data = (unsigned long)r8a66597;
 	r8a66597->reg = reg;
 
-#ifdef CONFIG_HAVE_CLK
 	if (r8a66597->pdata->on_chip) {
 		snprintf(clk_name, sizeof(clk_name), "usb%d", pdev->id);
 		r8a66597->clk = clk_get(&pdev->dev, clk_name);
@@ -1935,11 +1929,11 @@ static int __init r8a66597_probe(struct platform_device *pdev)
 			dev_err(&pdev->dev, "cannot get clock \"%s\"\n",
 				clk_name);
 			ret = PTR_ERR(r8a66597->clk);
-			goto clean_up_dev;
+			goto clean_up;
 		}
-		clk_enable(r8a66597->clk);
+		clk_prepare_enable(r8a66597->clk);
 	}
-#endif
+
 	if (r8a66597->pdata->sudmac) {
 		ret = r8a66597_sudmac_ioremap(r8a66597, pdev);
 		if (ret < 0)
@@ -1970,9 +1964,9 @@ static int __init r8a66597_probe(struct platform_device *pdev)
 		INIT_LIST_HEAD(&ep->queue);
 		ep->ep.name = r8a66597_ep_name[i];
 		ep->ep.ops = &r8a66597_ep_ops;
-		ep->ep.maxpacket = 512;
+		usb_ep_set_maxpacket_limit(&ep->ep, 512);
 	}
-	r8a66597->ep[0].ep.maxpacket = 64;
+	usb_ep_set_maxpacket_limit(&r8a66597->ep[0].ep, 64);
 	r8a66597->ep[0].pipenum = 0;
 	r8a66597->ep[0].fifoaddr = CFIFO;
 	r8a66597->ep[0].fifosel = CFIFOSEL;
@@ -1983,8 +1977,10 @@ static int __init r8a66597_probe(struct platform_device *pdev)
 
 	r8a66597->ep0_req = r8a66597_alloc_request(&r8a66597->ep[0].ep,
 							GFP_KERNEL);
-	if (r8a66597->ep0_req == NULL)
+	if (r8a66597->ep0_req == NULL) {
+		ret = -ENOMEM;
 		goto clean_up3;
+	}
 	r8a66597->ep0_req->complete = nop_completion;
 
 	ret = usb_add_gadget_udc(&pdev->dev, &r8a66597->gadget);
@@ -1999,14 +1995,10 @@ err_add_udc:
 clean_up3:
 	free_irq(irq, r8a66597);
 clean_up2:
-#ifdef CONFIG_HAVE_CLK
 	if (r8a66597->pdata->on_chip) {
-		clk_disable(r8a66597->clk);
+		clk_disable_unprepare(r8a66597->clk);
 		clk_put(r8a66597->clk);
 	}
-clean_up_dev:
-#endif
-	device_unregister(&r8a66597->gadget.dev);
 clean_up:
 	if (r8a66597) {
 		if (r8a66597->sudmac_reg)
@@ -2029,21 +2021,10 @@ static struct platform_driver r8a66597_driver = {
 		.name =	(char *) udc_name,
 	},
 };
-MODULE_ALIAS("platform:r8a66597_udc");
 
-static int __init r8a66597_udc_init(void)
-{
-	return platform_driver_probe(&r8a66597_driver, r8a66597_probe);
-}
-module_init(r8a66597_udc_init);
-
-static void __exit r8a66597_udc_cleanup(void)
-{
-	platform_driver_unregister(&r8a66597_driver);
-}
-module_exit(r8a66597_udc_cleanup);
+module_platform_driver_probe(r8a66597_driver, r8a66597_probe);
 
 MODULE_DESCRIPTION("R8A66597 USB gadget driver");
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Yoshihiro Shimoda");
-
+MODULE_ALIAS("platform:r8a66597_udc");

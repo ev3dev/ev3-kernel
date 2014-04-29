@@ -1,7 +1,6 @@
 #define PRISM2_PCCARD
 
 #include <linux/module.h>
-#include <linux/init.h>
 #include <linux/if.h>
 #include <linux/slab.h>
 #include <linux/wait.h>
@@ -709,17 +708,4 @@ static struct pcmcia_driver hostap_driver = {
 	.suspend	= hostap_cs_suspend,
 	.resume		= hostap_cs_resume,
 };
-
-static int __init init_prism2_pccard(void)
-{
-	return pcmcia_register_driver(&hostap_driver);
-}
-
-static void __exit exit_prism2_pccard(void)
-{
-	pcmcia_unregister_driver(&hostap_driver);
-}
-
-
-module_init(init_prism2_pccard);
-module_exit(exit_prism2_pccard);
+module_pcmcia_driver(hostap_driver);

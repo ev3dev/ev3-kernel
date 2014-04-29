@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- * Copyright(c) 2009-2010  Realtek Corporation.
+ * Copyright(c) 2009-2012  Realtek Corporation.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the GNU General Public License as
@@ -425,14 +425,9 @@
 #define	EXT_IMEM_CODE_DONE			BIT(2)
 #define	IMEM_CHK_RPT				BIT(1)
 #define	IMEM_CODE_DONE				BIT(0)
-#define	IMEM_CODE_DONE				BIT(0)
-#define	IMEM_CHK_RPT				BIT(1)
 #define	EMEM_CODE_DONE				BIT(2)
 #define	EMEM_CHK_RPT				BIT(3)
-#define	DMEM_CODE_DONE				BIT(4)
 #define	IMEM_RDY				BIT(5)
-#define	BASECHG					BIT(6)
-#define	FWRDY					BIT(7)
 #define	LOAD_FW_READY				(IMEM_CODE_DONE | \
 						IMEM_CHK_RPT | \
 						EMEM_CODE_DONE | \

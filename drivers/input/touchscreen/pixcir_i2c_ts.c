@@ -125,10 +125,11 @@ static int pixcir_i2c_ts_resume(struct device *dev)
 static SIMPLE_DEV_PM_OPS(pixcir_dev_pm_ops,
 			 pixcir_i2c_ts_suspend, pixcir_i2c_ts_resume);
 
-static int __devinit pixcir_i2c_ts_probe(struct i2c_client *client,
+static int pixcir_i2c_ts_probe(struct i2c_client *client,
 					 const struct i2c_device_id *id)
 {
-	const struct pixcir_ts_platform_data *pdata = client->dev.platform_data;
+	const struct pixcir_ts_platform_data *pdata =
+			dev_get_platdata(&client->dev);
 	struct pixcir_i2c_ts_data *tsdata;
 	struct input_dev *input;
 	int error;
@@ -165,7 +166,7 @@ static int __devinit pixcir_i2c_ts_probe(struct i2c_client *client,
 	input_set_drvdata(input, tsdata);
 
 	error = request_threaded_irq(client->irq, NULL, pixcir_ts_isr,
-				     IRQF_TRIGGER_FALLING,
+				     IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
 				     client->name, tsdata);
 	if (error) {
 		dev_err(&client->dev, "Unable to request touchscreen IRQ.\n");
@@ -189,7 +190,7 @@ err_free_mem:
 	return error;
 }
 
-static int __devexit pixcir_i2c_ts_remove(struct i2c_client *client)
+static int pixcir_i2c_ts_remove(struct i2c_client *client)
 {
 	struct pixcir_i2c_ts_data *tsdata = i2c_get_clientdata(client);
 
@@ -218,21 +219,11 @@ static struct i2c_driver pixcir_i2c_ts_driver = {
 		.pm	= &pixcir_dev_pm_ops,
 	},
 	.probe		= pixcir_i2c_ts_probe,
-	.remove		= __devexit_p(pixcir_i2c_ts_remove),
+	.remove		= pixcir_i2c_ts_remove,
 	.id_table	= pixcir_i2c_ts_id,
 };
 
-static int __init pixcir_i2c_ts_init(void)
-{
-	return i2c_add_driver(&pixcir_i2c_ts_driver);
-}
-module_init(pixcir_i2c_ts_init);
-
-static void __exit pixcir_i2c_ts_exit(void)
-{
-	i2c_del_driver(&pixcir_i2c_ts_driver);
-}
-module_exit(pixcir_i2c_ts_exit);
+module_i2c_driver(pixcir_i2c_ts_driver);
 
 MODULE_AUTHOR("Jianchun Bian <jcbian@pixcir.com.cn>, Dequan Meng <dqmeng@pixcir.com.cn>");
 MODULE_DESCRIPTION("Pixcir I2C Touchscreen Driver");

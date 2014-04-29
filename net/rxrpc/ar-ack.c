@@ -19,12 +19,19 @@
 #include <net/af_rxrpc.h>
 #include "ar-internal.h"
 
-static unsigned rxrpc_ack_defer = 1;
+static unsigned int rxrpc_ack_defer = 1;
 
-static const char *const rxrpc_acks[] = {
-	"---", "REQ", "DUP", "OOS", "WIN", "MEM", "PNG", "PNR", "DLY", "IDL",
-	"-?-"
-};
+static const char *rxrpc_acks(u8 reason)
+{
+	static const char *const str[] = {
+		"---", "REQ", "DUP", "OOS", "WIN", "MEM", "PNG", "PNR", "DLY",
+		"IDL", "-?-"
+	};
+
+	if (reason >= ARRAY_SIZE(str))
+		reason = ARRAY_SIZE(str) - 1;
+	return str[reason];
+}
 
 static const s8 rxrpc_ack_priority[] = {
 	[0]				= 0,
@@ -50,7 +57,7 @@ void __rxrpc_propose_ACK(struct rxrpc_call *call, u8 ack_reason,
 	ASSERTCMP(prior, >, 0);
 
 	_enter("{%d},%s,%%%x,%u",
-	       call->debug_id, rxrpc_acks[ack_reason], ntohl(serial),
+	       call->debug_id, rxrpc_acks(ack_reason), ntohl(serial),
 	       immediate);
 
 	if (prior < rxrpc_ack_priority[call->ackr_reason]) {
@@ -548,11 +555,11 @@ static void rxrpc_zap_tx_window(struct rxrpc_call *call)
  * process the extra information that may be appended to an ACK packet
  */
 static void rxrpc_extract_ackinfo(struct rxrpc_call *call, struct sk_buff *skb,
-				  unsigned latest, int nAcks)
+				  unsigned int latest, int nAcks)
 {
 	struct rxrpc_ackinfo ackinfo;
 	struct rxrpc_peer *peer;
-	unsigned mtu;
+	unsigned int mtu;
 
 	if (skb_copy_bits(skb, nAcks + 3, &ackinfo, sizeof(ackinfo)) < 0) {
 		_leave(" [no ackinfo]");
@@ -637,7 +644,7 @@ process_further:
 		       hard,
 		       ntohl(ack.previousPacket),
 		       ntohl(ack.serial),
-		       rxrpc_acks[ack.reason],
+		       rxrpc_acks(ack.reason),
 		       ack.nAcks);
 
 		rxrpc_extract_ackinfo(call, skb, latest, ack.nAcks);
@@ -1180,7 +1187,7 @@ send_ACK:
 	       ntohl(ack.firstPacket),
 	       ntohl(ack.previousPacket),
 	       ntohl(ack.serial),
-	       rxrpc_acks[ack.reason],
+	       rxrpc_acks(ack.reason),
 	       ack.nAcks);
 
 	del_timer_sync(&call->ack_timer);

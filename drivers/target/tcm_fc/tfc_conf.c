@@ -267,7 +267,7 @@ struct ft_node_acl *ft_acl_get(struct ft_tpg *tpg, struct fc_rport_priv *rdata)
 	return found;
 }
 
-struct se_node_acl *ft_tpg_alloc_fabric_acl(struct se_portal_group *se_tpg)
+static struct se_node_acl *ft_tpg_alloc_fabric_acl(struct se_portal_group *se_tpg)
 {
 	struct ft_node_acl *acl;
 
@@ -300,6 +300,7 @@ static struct se_portal_group *ft_add_tpg(
 {
 	struct ft_lport_acl *lacl;
 	struct ft_tpg *tpg;
+	struct workqueue_struct *wq;
 	unsigned long index;
 	int ret;
 
@@ -310,7 +311,11 @@ static struct se_portal_group *ft_add_tpg(
 	 */
 	if (strstr(name, "tpgt_") != name)
 		return NULL;
-	if (strict_strtoul(name + 5, 10, &index) || index > UINT_MAX)
+
+	ret = kstrtoul(name + 5, 10, &index);
+	if (ret)
+		return NULL;
+	if (index > UINT_MAX)
 		return NULL;
 
 	lacl = container_of(wwn, struct ft_lport_acl, fc_lport_wwn);
@@ -321,18 +326,20 @@ static struct se_portal_group *ft_add_tpg(
 	tpg->lport_acl = lacl;
 	INIT_LIST_HEAD(&tpg->lun_list);
 
-	ret = core_tpg_register(&ft_configfs->tf_ops, wwn, &tpg->se_tpg,
-				tpg, TRANSPORT_TPG_TYPE_NORMAL);
-	if (ret < 0) {
+	wq = alloc_workqueue("tcm_fc", 0, 1);
+	if (!wq) {
 		kfree(tpg);
 		return NULL;
 	}
 
-	tpg->workqueue = alloc_workqueue("tcm_fc", 0, 1);
-	if (!tpg->workqueue) {
+	ret = core_tpg_register(&ft_configfs->tf_ops, wwn, &tpg->se_tpg,
+				tpg, TRANSPORT_TPG_TYPE_NORMAL);
+	if (ret < 0) {
+		destroy_workqueue(wq);
 		kfree(tpg);
 		return NULL;
 	}
+	tpg->workqueue = wq;
 
 	mutex_lock(&ft_lport_lock);
 	list_add_tail(&tpg->list, &lacl->tpg_list);
@@ -492,16 +499,6 @@ static void ft_set_default_node_attr(struct se_node_acl *se_nacl)
 {
 }
 
-static u16 ft_get_fabric_sense_len(void)
-{
-	return 0;
-}
-
-static u16 ft_set_fabric_sense_len(struct se_cmd *se_cmd, u32 sense_len)
-{
-	return 0;
-}
-
 static u32 ft_tpg_get_inst_index(struct se_portal_group *se_tpg)
 {
 	struct ft_tpg *tpg = se_tpg->se_tpg_fabric_ptr;
@@ -529,9 +526,6 @@ static struct target_core_fabric_ops ft_fabric_ops = {
 	.release_cmd =			ft_release_cmd,
 	.shutdown_session =		ft_sess_shutdown,
 	.close_session =		ft_sess_close,
-	.stop_session =			ft_sess_stop,
-	.fall_back_to_erl0 =		ft_sess_set_erl0,
-	.sess_logged_in =		ft_sess_logged_in,
 	.sess_get_index =		ft_sess_get_index,
 	.sess_get_initiator_sid =	NULL,
 	.write_pending =		ft_write_pending,
@@ -542,9 +536,6 @@ static struct target_core_fabric_ops ft_fabric_ops = {
 	.queue_data_in =		ft_queue_data_in,
 	.queue_status =			ft_queue_status,
 	.queue_tm_rsp =			ft_queue_tm_resp,
-	.get_fabric_sense_len =		ft_get_fabric_sense_len,
-	.set_fabric_sense_len =		ft_set_fabric_sense_len,
-	.is_state_remove =		ft_is_state_remove,
 	/*
 	 * Setup function pointers for generic logic in
 	 * target_core_fabric_configfs.c
@@ -561,7 +552,7 @@ static struct target_core_fabric_ops ft_fabric_ops = {
 	.fabric_drop_nodeacl =		&ft_del_acl,
 };
 
-int ft_register_configfs(void)
+static int ft_register_configfs(void)
 {
 	struct target_fabric_configfs *fabric;
 	int ret;
@@ -577,22 +568,19 @@ int ft_register_configfs(void)
 	}
 	fabric->tf_ops = ft_fabric_ops;
 
-	/* Allowing support for task_sg_chaining */
-	fabric->tf_ops.task_sg_chaining = 1;
-
 	/*
 	 * Setup default attribute lists for various fabric->tf_cit_tmpl
 	 */
-	TF_CIT_TMPL(fabric)->tfc_wwn_cit.ct_attrs = ft_wwn_attrs;
-	TF_CIT_TMPL(fabric)->tfc_tpg_base_cit.ct_attrs = NULL;
-	TF_CIT_TMPL(fabric)->tfc_tpg_attrib_cit.ct_attrs = NULL;
-	TF_CIT_TMPL(fabric)->tfc_tpg_param_cit.ct_attrs = NULL;
-	TF_CIT_TMPL(fabric)->tfc_tpg_np_base_cit.ct_attrs = NULL;
-	TF_CIT_TMPL(fabric)->tfc_tpg_nacl_base_cit.ct_attrs =
+	fabric->tf_cit_tmpl.tfc_wwn_cit.ct_attrs = ft_wwn_attrs;
+	fabric->tf_cit_tmpl.tfc_tpg_base_cit.ct_attrs = NULL;
+	fabric->tf_cit_tmpl.tfc_tpg_attrib_cit.ct_attrs = NULL;
+	fabric->tf_cit_tmpl.tfc_tpg_param_cit.ct_attrs = NULL;
+	fabric->tf_cit_tmpl.tfc_tpg_np_base_cit.ct_attrs = NULL;
+	fabric->tf_cit_tmpl.tfc_tpg_nacl_base_cit.ct_attrs =
 						    ft_nacl_base_attrs;
-	TF_CIT_TMPL(fabric)->tfc_tpg_nacl_attrib_cit.ct_attrs = NULL;
-	TF_CIT_TMPL(fabric)->tfc_tpg_nacl_auth_cit.ct_attrs = NULL;
-	TF_CIT_TMPL(fabric)->tfc_tpg_nacl_param_cit.ct_attrs = NULL;
+	fabric->tf_cit_tmpl.tfc_tpg_nacl_attrib_cit.ct_attrs = NULL;
+	fabric->tf_cit_tmpl.tfc_tpg_nacl_auth_cit.ct_attrs = NULL;
+	fabric->tf_cit_tmpl.tfc_tpg_nacl_param_cit.ct_attrs = NULL;
 	/*
 	 * register the fabric for use within TCM
 	 */
@@ -611,7 +599,7 @@ int ft_register_configfs(void)
 	return 0;
 }
 
-void ft_deregister_configfs(void)
+static void ft_deregister_configfs(void)
 {
 	if (!ft_configfs)
 		return;

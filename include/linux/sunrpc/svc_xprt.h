@@ -114,15 +114,16 @@ void	svc_xprt_init(struct net *, struct svc_xprt_class *, struct svc_xprt *,
 int	svc_create_xprt(struct svc_serv *, const char *, struct net *,
 			const int, const unsigned short, int);
 void	svc_xprt_enqueue(struct svc_xprt *xprt);
-void	svc_xprt_received(struct svc_xprt *);
 void	svc_xprt_put(struct svc_xprt *xprt);
 void	svc_xprt_copy_addrs(struct svc_rqst *rqstp, struct svc_xprt *xprt);
 void	svc_close_xprt(struct svc_xprt *xprt);
 int	svc_port_is_privileged(struct sockaddr *sin);
 int	svc_print_xprts(char *buf, int maxlen);
 struct	svc_xprt *svc_find_xprt(struct svc_serv *serv, const char *xcl_name,
-			const sa_family_t af, const unsigned short port);
+			struct net *net, const sa_family_t af,
+			const unsigned short port);
 int	svc_xprt_names(struct svc_serv *serv, char *buf, const int buflen);
+void	svc_add_new_perm_xprt(struct svc_serv *serv, struct svc_xprt *xprt);
 
 static inline void svc_xprt_get(struct svc_xprt *xprt)
 {
@@ -165,8 +166,7 @@ static inline size_t svc_addr_len(const struct sockaddr *sa)
 	case AF_INET6:
 		return sizeof(struct sockaddr_in6);
 	}
-
-	return 0;
+	BUG();
 }
 
 static inline unsigned short svc_xprt_local_port(const struct svc_xprt *xprt)

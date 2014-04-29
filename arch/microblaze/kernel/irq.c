@@ -17,10 +17,8 @@
 #include <linux/seq_file.h>
 #include <linux/kernel_stat.h>
 #include <linux/irq.h>
+#include <linux/irqchip.h>
 #include <linux/of_irq.h>
-#include <linux/export.h>
-
-#include <asm/prom.h>
 
 static u32 concurrent_irq;
 
@@ -31,14 +29,13 @@ void __irq_entry do_IRQ(struct pt_regs *regs)
 	trace_hardirqs_off();
 
 	irq_enter();
-	irq = get_irq(regs);
+	irq = get_irq();
 next_irq:
 	BUG_ON(!irq);
-	/* Substract 1 because of get_irq */
-	generic_handle_irq(irq + IRQ_OFFSET - NO_IRQ_OFFSET);
+	generic_handle_irq(irq);
 
-	irq = get_irq(regs);
-	if (irq) {
+	irq = get_irq();
+	if (irq != -1U) {
 		pr_debug("next irq: %d\n", irq);
 		++concurrent_irq;
 		goto next_irq;
@@ -49,17 +46,8 @@ next_irq:
 	trace_hardirqs_on();
 }
 
-/* MS: There is no any advance mapping mechanism. We are using simple 32bit
-  intc without any cascades or any connection that's why mapping is 1:1 */
-unsigned int irq_create_mapping(struct irq_host *host, irq_hw_number_t hwirq)
+void __init init_IRQ(void)
 {
-	return hwirq + IRQ_OFFSET;
+	/* process the entire interrupt tree in one go */
+	irqchip_init();
 }
-EXPORT_SYMBOL_GPL(irq_create_mapping);
-
-unsigned int irq_create_of_mapping(struct device_node *controller,
-				   const u32 *intspec, unsigned int intsize)
-{
-	return intspec[0] + IRQ_OFFSET;
-}
-EXPORT_SYMBOL_GPL(irq_create_of_mapping);

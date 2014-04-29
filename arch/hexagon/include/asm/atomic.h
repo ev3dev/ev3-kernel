@@ -1,7 +1,7 @@
 /*
  * Atomic operations for the Hexagon architecture
  *
- * Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -23,6 +23,7 @@
 #define _ASM_ATOMIC_H
 
 #include <linux/types.h>
+#include <asm/cmpxchg.h>
 
 #define ATOMIC_INIT(i)		{ (i) }
 #define atomic_set(v, i)	((v)->counter = (i))
@@ -116,35 +117,37 @@ static inline int atomic_sub_return(int i, atomic_t *v)
 #define atomic_sub(i, v) atomic_sub_return(i, (v))
 
 /**
- * atomic_add_unless - add unless the number is a given value
+ * __atomic_add_unless - add unless the number is a given value
  * @v: pointer to value
  * @a: amount to add
  * @u: unless value is equal to u
  *
- * Returns 1 if the add happened, 0 if it didn't.
+ * Returns old value.
+ *
  */
+
 static inline int __atomic_add_unless(atomic_t *v, int a, int u)
 {
-	int output, __oldval;
+	int __oldval;
+	register int tmp;
+
 	asm volatile(
 		"1:	%0 = memw_locked(%2);"
 		"	{"
 		"		p3 = cmp.eq(%0, %4);"
 		"		if (p3.new) jump:nt 2f;"
-		"		%0 = add(%0, %3);"
-		"		%1 = #0;"
+		"		%1 = add(%0, %3);"
 		"	}"
-		"	memw_locked(%2, p3) = %0;"
+		"	memw_locked(%2, p3) = %1;"
 		"	{"
 		"		if !p3 jump 1b;"
-		"		%1 = #1;"
 		"	}"
 		"2:"
-		: "=&r" (__oldval), "=&r" (output)
+		: "=&r" (__oldval), "=&r" (tmp)
 		: "r" (v), "r" (a), "r" (u)
 		: "memory", "p3"
 	);
-	return output;
+	return __oldval;
 }
 
 #define atomic_inc_not_zero(v) atomic_add_unless((v), 1, 0)
@@ -157,8 +160,12 @@ static inline int __atomic_add_unless(atomic_t *v, int a, int u)
 #define atomic_sub_and_test(i, v) (atomic_sub_return(i, (v)) == 0)
 #define atomic_add_negative(i, v) (atomic_add_return(i, (v)) < 0)
 
-
 #define atomic_inc_return(v) (atomic_add_return(1, v))
 #define atomic_dec_return(v) (atomic_sub_return(1, v))
+
+#define smp_mb__before_atomic_dec()	barrier()
+#define smp_mb__after_atomic_dec()	barrier()
+#define smp_mb__before_atomic_inc()	barrier()
+#define smp_mb__after_atomic_inc()	barrier()
 
 #endif

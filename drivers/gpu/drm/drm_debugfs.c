@@ -34,7 +34,7 @@
 #include <linux/seq_file.h>
 #include <linux/slab.h>
 #include <linux/export.h>
-#include "drmP.h"
+#include <drm/drmP.h>
 
 #if defined(CONFIG_DEBUG_FS)
 
@@ -42,11 +42,10 @@
  * Initialization, etc.
  **************************************************/
 
-static struct drm_info_list drm_debugfs_list[] = {
+static const struct drm_info_list drm_debugfs_list[] = {
 	{"name", drm_name_info, 0},
 	{"vm", drm_vm_info, 0},
 	{"clients", drm_clients_info, 0},
-	{"queues", drm_queues_info, 0},
 	{"bufs", drm_bufs_info, 0},
 	{"gem_names", drm_gem_name_info, DRIVER_GEM},
 #if DRM_DEBUG_CODE
@@ -85,7 +84,7 @@ static const struct file_operations drm_debugfs_fops = {
  * Create a given set of debugfs files represented by an array of
  * gdm_debugfs_lists in the given root directory.
  */
-int drm_debugfs_create_files(struct drm_info_list *files, int count,
+int drm_debugfs_create_files(const struct drm_info_list *files, int count,
 			     struct dentry *root, struct drm_minor *minor)
 {
 	struct drm_device *dev = minor->dev;
@@ -189,7 +188,7 @@ int drm_debugfs_init(struct drm_minor *minor, int minor_id,
  *
  * Remove all debugfs entries created by debugfs_init().
  */
-int drm_debugfs_remove_files(struct drm_info_list *files, int count,
+int drm_debugfs_remove_files(const struct drm_info_list *files, int count,
 			     struct drm_minor *minor)
 {
 	struct list_head *pos, *q;

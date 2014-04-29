@@ -13,21 +13,17 @@
 #include <linux/smp.h>
 #include <linux/mm.h>
 #include <linux/hugetlb.h>
+#include <linux/module.h>
 
 #include <asm/cpu.h>
+#include <asm/cpu-type.h>
 #include <asm/bootinfo.h>
 #include <asm/mmu_context.h>
 #include <asm/pgtable.h>
-#include <asm/system.h>
+#include <asm/tlb.h>
 #include <asm/tlbmisc.h>
 
 extern void build_tlb_refill_handler(void);
-
-/*
- * Make sure all entries differ.  If they're not different
- * MIPS32 will take revenge ...
- */
-#define UNIQUE_ENTRYHI(idx) (CKSEG0 + ((idx) << (PAGE_SHIFT + 1)))
 
 /* Atomicity and interruptability */
 #ifdef CONFIG_MIPS_MT_SMTC
@@ -51,27 +47,32 @@ extern void build_tlb_refill_handler(void);
 
 #endif /* CONFIG_MIPS_MT_SMTC */
 
-#if defined(CONFIG_CPU_LOONGSON2)
 /*
  * LOONGSON2 has a 4 entry itlb which is a subset of dtlb,
  * unfortrunately, itlb is not totally transparent to software.
  */
-#define FLUSH_ITLB write_c0_diag(4);
+static inline void flush_itlb(void)
+{
+	switch (current_cpu_type()) {
+	case CPU_LOONGSON2:
+		write_c0_diag(4);
+		break;
+	default:
+		break;
+	}
+}
 
-#define FLUSH_ITLB_VM(vma) { if ((vma)->vm_flags & VM_EXEC)  write_c0_diag(4); }
-
-#else
-
-#define FLUSH_ITLB
-#define FLUSH_ITLB_VM(vma)
-
-#endif
+static inline void flush_itlb_vm(struct vm_area_struct *vma)
+{
+	if (vma->vm_flags & VM_EXEC)
+		flush_itlb();
+}
 
 void local_flush_tlb_all(void)
 {
 	unsigned long flags;
 	unsigned long old_ctx;
-	int entry;
+	int entry, ftlbhighset;
 
 	ENTER_CRITICAL(flags);
 	/* Save old context and create impossible VPN2 value */
@@ -82,19 +83,37 @@ void local_flush_tlb_all(void)
 	entry = read_c0_wired();
 
 	/* Blast 'em all away. */
-	while (entry < current_cpu_data.tlbsize) {
-		/* Make sure all entries differ. */
-		write_c0_entryhi(UNIQUE_ENTRYHI(entry));
-		write_c0_index(entry);
-		mtc0_tlbw_hazard();
-		tlb_write_indexed();
-		entry++;
+	if (cpu_has_tlbinv) {
+		if (current_cpu_data.tlbsizevtlb) {
+			write_c0_index(0);
+			mtc0_tlbw_hazard();
+			tlbinvf();  /* invalidate VTLB */
+		}
+		ftlbhighset = current_cpu_data.tlbsizevtlb +
+			current_cpu_data.tlbsizeftlbsets;
+		for (entry = current_cpu_data.tlbsizevtlb;
+		     entry < ftlbhighset;
+		     entry++) {
+			write_c0_index(entry);
+			mtc0_tlbw_hazard();
+			tlbinvf();  /* invalidate one FTLB set */
+		}
+	} else {
+		while (entry < current_cpu_data.tlbsize) {
+			/* Make sure all entries differ. */
+			write_c0_entryhi(UNIQUE_ENTRYHI(entry));
+			write_c0_index(entry);
+			mtc0_tlbw_hazard();
+			tlb_write_indexed();
+			entry++;
+		}
 	}
 	tlbw_use_hazard();
 	write_c0_entryhi(old_ctx);
-	FLUSH_ITLB;
+	flush_itlb();
 	EXIT_CRITICAL(flags);
 }
+EXPORT_SYMBOL(local_flush_tlb_all);
 
 /* All entries common to a mm share an asid.  To effectively flush
    these entries, we just bump the asid. */
@@ -121,19 +140,14 @@ void local_flush_tlb_range(struct vm_area_struct *vma, unsigned long start,
 
 	if (cpu_context(cpu, mm) != 0) {
 		unsigned long size, flags;
-		int huge = is_vm_hugetlb_page(vma);
 
 		ENTER_CRITICAL(flags);
-		if (huge) {
-			start = round_down(start, HPAGE_SIZE);
-			end = round_up(end, HPAGE_SIZE);
-			size = (end - start) >> HPAGE_SHIFT;
-		} else {
-			start = round_down(start, PAGE_SIZE << 1);
-			end = round_up(end, PAGE_SIZE << 1);
-			size = (end - start) >> (PAGE_SHIFT + 1);
-		}
-		if (size <= current_cpu_data.tlbsize/2) {
+		start = round_down(start, PAGE_SIZE << 1);
+		end = round_up(end, PAGE_SIZE << 1);
+		size = (end - start) >> (PAGE_SHIFT + 1);
+		if (size <= (current_cpu_data.tlbsizeftlbsets ?
+			     current_cpu_data.tlbsize / 8 :
+			     current_cpu_data.tlbsize / 2)) {
 			int oldpid = read_c0_entryhi();
 			int newpid = cpu_asid(cpu, mm);
 
@@ -141,10 +155,7 @@ void local_flush_tlb_range(struct vm_area_struct *vma, unsigned long start,
 				int idx;
 
 				write_c0_entryhi(start | newpid);
-				if (huge)
-					start += HPAGE_SIZE;
-				else
-					start += (PAGE_SIZE << 1);
+				start += (PAGE_SIZE << 1);
 				mtc0_tlbw_hazard();
 				tlb_probe();
 				tlb_probe_hazard();
@@ -163,7 +174,7 @@ void local_flush_tlb_range(struct vm_area_struct *vma, unsigned long start,
 		} else {
 			drop_mmu_context(mm, cpu);
 		}
-		FLUSH_ITLB;
+		flush_itlb();
 		EXIT_CRITICAL(flags);
 	}
 }
@@ -175,7 +186,9 @@ void local_flush_tlb_kernel_range(unsigned long start, unsigned long end)
 	ENTER_CRITICAL(flags);
 	size = (end - start + (PAGE_SIZE - 1)) >> PAGE_SHIFT;
 	size = (size + 1) >> 1;
-	if (size <= current_cpu_data.tlbsize / 2) {
+	if (size <= (current_cpu_data.tlbsizeftlbsets ?
+		     current_cpu_data.tlbsize / 8 :
+		     current_cpu_data.tlbsize / 2)) {
 		int pid = read_c0_entryhi();
 
 		start &= (PAGE_MASK << 1);
@@ -205,7 +218,7 @@ void local_flush_tlb_kernel_range(unsigned long start, unsigned long end)
 	} else {
 		local_flush_tlb_all();
 	}
-	FLUSH_ITLB;
+	flush_itlb();
 	EXIT_CRITICAL(flags);
 }
 
@@ -238,7 +251,7 @@ void local_flush_tlb_page(struct vm_area_struct *vma, unsigned long page)
 
 	finish:
 		write_c0_entryhi(oldpid);
-		FLUSH_ITLB_VM(vma);
+		flush_itlb_vm(vma);
 		EXIT_CRITICAL(flags);
 	}
 }
@@ -270,7 +283,7 @@ void local_flush_tlb_one(unsigned long page)
 		tlbw_use_hazard();
 	}
 	write_c0_entryhi(oldpid);
-	FLUSH_ITLB;
+	flush_itlb();
 	EXIT_CRITICAL(flags);
 }
 
@@ -306,7 +319,7 @@ void __update_tlb(struct vm_area_struct * vma, unsigned long address, pte_t pte)
 	pudp = pud_offset(pgdp, address);
 	pmdp = pmd_offset(pudp, address);
 	idx = read_c0_index();
-#ifdef CONFIG_HUGETLB_PAGE
+#ifdef CONFIG_MIPS_HUGE_TLB_SUPPORT
 	/* this could be a huge page  */
 	if (pmd_huge(*pmdp)) {
 		unsigned long lo;
@@ -321,6 +334,7 @@ void __update_tlb(struct vm_area_struct * vma, unsigned long address, pte_t pte)
 			tlb_write_random();
 		else
 			tlb_write_indexed();
+		tlbw_use_hazard();
 		write_c0_pagemask(PM_DEFAULT_MASK);
 	} else
 #endif
@@ -342,7 +356,7 @@ void __update_tlb(struct vm_area_struct * vma, unsigned long address, pte_t pte)
 			tlb_write_indexed();
 	}
 	tlbw_use_hazard();
-	FLUSH_ITLB_VM(vma);
+	flush_itlb_vm(vma);
 	EXIT_CRITICAL(flags);
 }
 
@@ -377,7 +391,27 @@ void add_wired_entry(unsigned long entrylo0, unsigned long entrylo1,
 	EXIT_CRITICAL(flags);
 }
 
-static int __cpuinitdata ntlb;
+#ifdef CONFIG_TRANSPARENT_HUGEPAGE
+
+int __init has_transparent_hugepage(void)
+{
+	unsigned int mask;
+	unsigned long flags;
+
+	ENTER_CRITICAL(flags);
+	write_c0_pagemask(PM_HUGE_MASK);
+	back_to_back_c0_hazard();
+	mask = read_c0_pagemask();
+	write_c0_pagemask(PM_DEFAULT_MASK);
+
+	EXIT_CRITICAL(flags);
+
+	return mask == PM_HUGE_MASK;
+}
+
+#endif /* CONFIG_TRANSPARENT_HUGEPAGE  */
+
+static int ntlb;
 static int __init set_ntlb(char *str)
 {
 	get_option(&str, &ntlb);
@@ -386,7 +420,7 @@ static int __init set_ntlb(char *str)
 
 __setup("ntlb=", set_ntlb);
 
-void __cpuinit tlb_init(void)
+void tlb_init(void)
 {
 	/*
 	 * You should never change this register:
@@ -402,7 +436,7 @@ void __cpuinit tlb_init(void)
 	    current_cpu_type() == CPU_R14000)
 		write_c0_framemask(0);
 
-	if (kernel_uses_smartmips_rixi) {
+	if (cpu_has_rixi) {
 		/*
 		 * Enable the no read, no exec bits, and enable large virtual
 		 * address.
@@ -414,7 +448,7 @@ void __cpuinit tlb_init(void)
 		write_c0_pagegrain(pg);
 	}
 
-        /* From this point on the ARC firmware is dead.  */
+	/* From this point on the ARC firmware is dead.	 */
 	local_flush_tlb_all();
 
 	/* Did I tell you that ARC SUCKS?  */

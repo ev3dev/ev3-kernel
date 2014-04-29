@@ -98,7 +98,7 @@ static enum power_supply_property legoev3_battery_props[] = {
 	POWER_SUPPLY_PROP_SCOPE,
 };
 
-static int __devinit legoev3_battery_probe(struct platform_device *pdev)
+static int legoev3_battery_probe(struct platform_device *pdev)
 {
 	struct legoev3_battery *bat;
 	struct legoev3_battery_platform_data *pdata;
@@ -174,7 +174,7 @@ no_platform_data:
 	return ret;
 }
 
-static int __devexit legoev3_battery_remove(struct platform_device *pdev)
+static int legoev3_battery_remove(struct platform_device *pdev)
 {
 	struct legoev3_battery *bat= platform_get_drvdata(pdev);
 
@@ -191,7 +191,7 @@ static struct platform_driver legoev3_battery_driver = {
 	.driver.name	= "legoev3-battery",
 	.driver.owner	= THIS_MODULE,
 	.probe		= legoev3_battery_probe,
-	.remove		= __devexit_p(legoev3_battery_remove),
+	.remove		= legoev3_battery_remove,
 };
 module_platform_driver(legoev3_battery_driver);
 

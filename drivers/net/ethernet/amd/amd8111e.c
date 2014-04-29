@@ -24,9 +24,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307
- * USA
+ * along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 Module Name:
 
@@ -74,7 +72,6 @@ Revision History:
 #include <linux/types.h>
 #include <linux/compiler.h>
 #include <linux/delay.h>
-#include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/ioport.h>
 #include <linux/pci.h>
@@ -88,7 +85,6 @@ Revision History:
 #include <linux/crc32.h>
 #include <linux/dma-mapping.h>
 
-#include <asm/system.h>
 #include <asm/io.h>
 #include <asm/byteorder.h>
 #include <asm/uaccess.h>
@@ -336,7 +332,8 @@ static int amd8111e_init_ring(struct net_device *dev)
 	/* Allocating receive  skbs */
 	for (i = 0; i < NUM_RX_BUFFERS; i++) {
 
-		if (!(lp->rx_skbuff[i] = dev_alloc_skb(lp->rx_buff_len))) {
+		lp->rx_skbuff[i] = netdev_alloc_skb(dev, lp->rx_buff_len);
+		if (!lp->rx_skbuff[i]) {
 				/* Release previos allocated skbs */
 				for(--i; i >= 0 ;i--)
 					dev_kfree_skb(lp->rx_skbuff[i]);
@@ -768,7 +765,8 @@ static int amd8111e_rx_poll(struct napi_struct *napi, int budget)
 			}
 			if(--rx_pkt_limit < 0)
 				goto rx_not_empty;
-			if(!(new_skb = dev_alloc_skb(lp->rx_buff_len))){
+			new_skb = netdev_alloc_skb(dev, lp->rx_buff_len);
+			if (!new_skb) {
 				/* if allocation fail,
 				   ignore that pkt and go to next one */
 				lp->rx_ring[rx_index].rx_flags &= RESET_RX_FLAGS;
@@ -792,7 +790,7 @@ static int amd8111e_rx_poll(struct napi_struct *napi, int budget)
 #if AMD8111E_VLAN_TAG_USED
 			if (vtag == TT_VLAN_TAGGED){
 				u16 vlan_tag = le16_to_cpu(lp->rx_ring[rx_index].tag_ctrl_info);
-				__vlan_hwaccel_put_tag(skb, vlan_tag);
+				__vlan_hwaccel_put_tag(skb, htons(ETH_P_8021Q), vlan_tag);
 			}
 #endif
 			netif_receive_skb(skb);
@@ -1701,7 +1699,7 @@ static int amd8111e_resume(struct pci_dev *pci_dev)
 }
 
 
-static void __devexit amd8111e_remove_one(struct pci_dev *pdev)
+static void amd8111e_remove_one(struct pci_dev *pdev)
 {
 	struct net_device *dev = pci_get_drvdata(pdev);
 	if (dev) {
@@ -1710,7 +1708,6 @@ static void __devexit amd8111e_remove_one(struct pci_dev *pdev)
 		free_netdev(dev);
 		pci_release_regions(pdev);
 		pci_disable_device(pdev);
-		pci_set_drvdata(pdev, NULL);
 	}
 }
 static void amd8111e_config_ipg(struct net_device* dev)
@@ -1773,7 +1770,7 @@ static void amd8111e_config_ipg(struct net_device* dev)
 
 }
 
-static void __devinit amd8111e_probe_ext_phy(struct net_device* dev)
+static void amd8111e_probe_ext_phy(struct net_device *dev)
 {
 	struct amd8111e_priv *lp = netdev_priv(dev);
 	int i;
@@ -1809,10 +1806,10 @@ static const struct net_device_ops amd8111e_netdev_ops = {
 #endif
 };
 
-static int __devinit amd8111e_probe_one(struct pci_dev *pdev,
+static int amd8111e_probe_one(struct pci_dev *pdev,
 				  const struct pci_device_id *ent)
 {
-	int err,i,pm_cap;
+	int err, i;
 	unsigned long reg_addr,reg_len;
 	struct amd8111e_priv* lp;
 	struct net_device* dev;
@@ -1841,9 +1838,10 @@ static int __devinit amd8111e_probe_one(struct pci_dev *pdev,
 	pci_set_master(pdev);
 
 	/* Find power-management capability. */
-	if((pm_cap = pci_find_capability(pdev, PCI_CAP_ID_PM))==0){
+	if (!pdev->pm_cap) {
 		printk(KERN_ERR "amd8111e: No Power Management capability, "
 		       "exiting.\n");
+		err = -ENODEV;
 		goto err_free_reg;
 	}
 
@@ -1851,6 +1849,7 @@ static int __devinit amd8111e_probe_one(struct pci_dev *pdev,
 	if (pci_set_dma_mask(pdev, DMA_BIT_MASK(32)) < 0) {
 		printk(KERN_ERR "amd8111e: DMA not supported,"
 			"exiting.\n");
+		err = -ENODEV;
 		goto err_free_reg;
 	}
 
@@ -1859,7 +1858,6 @@ static int __devinit amd8111e_probe_one(struct pci_dev *pdev,
 
 	dev = alloc_etherdev(sizeof(struct amd8111e_priv));
 	if (!dev) {
-		printk(KERN_ERR "amd8111e: Etherdev alloc failed, exiting.\n");
 		err = -ENOMEM;
 		goto err_free_reg;
 	}
@@ -1867,13 +1865,13 @@ static int __devinit amd8111e_probe_one(struct pci_dev *pdev,
 	SET_NETDEV_DEV(dev, &pdev->dev);
 
 #if AMD8111E_VLAN_TAG_USED
-	dev->features |= NETIF_F_HW_VLAN_TX | NETIF_F_HW_VLAN_RX ;
+	dev->features |= NETIF_F_HW_VLAN_CTAG_TX | NETIF_F_HW_VLAN_CTAG_RX ;
 #endif
 
 	lp = netdev_priv(dev);
 	lp->pci_dev = pdev;
 	lp->amd8111e_net_dev = dev;
-	lp->pm_cap = pm_cap;
+	lp->pm_cap = pdev->pm_cap;
 
 	spin_lock_init(&lp->lock);
 
@@ -1905,7 +1903,7 @@ static int __devinit amd8111e_probe_one(struct pci_dev *pdev,
 	netif_napi_add(dev, &lp->napi, amd8111e_rx_poll, 32);
 
 #if AMD8111E_VLAN_TAG_USED
-	dev->features |= NETIF_F_HW_VLAN_TX | NETIF_F_HW_VLAN_RX;
+	dev->features |= NETIF_F_HW_VLAN_CTAG_TX | NETIF_F_HW_VLAN_CTAG_RX;
 #endif
 	/* Probe the external PHY */
 	amd8111e_probe_ext_phy(dev);
@@ -1965,7 +1963,6 @@ err_free_reg:
 
 err_disable_pdev:
 	pci_disable_device(pdev);
-	pci_set_drvdata(pdev, NULL);
 	return err;
 
 }
@@ -1974,20 +1971,9 @@ static struct pci_driver amd8111e_driver = {
 	.name   	= MODULE_NAME,
 	.id_table	= amd8111e_pci_tbl,
 	.probe		= amd8111e_probe_one,
-	.remove		= __devexit_p(amd8111e_remove_one),
+	.remove		= amd8111e_remove_one,
 	.suspend	= amd8111e_suspend,
 	.resume		= amd8111e_resume
 };
 
-static int __init amd8111e_init(void)
-{
-	return pci_register_driver(&amd8111e_driver);
-}
-
-static void __exit amd8111e_cleanup(void)
-{
-	pci_unregister_driver(&amd8111e_driver);
-}
-
-module_init(amd8111e_init);
-module_exit(amd8111e_cleanup);
+module_pci_driver(amd8111e_driver);

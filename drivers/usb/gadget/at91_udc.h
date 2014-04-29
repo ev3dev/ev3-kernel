@@ -105,9 +105,6 @@ struct at91_ep {
 	unsigned			is_in:1;
 	unsigned			is_iso:1;
 	unsigned			fifo_bank:1;
-
-	const struct usb_endpoint_descriptor
-					*desc;
 };
 
 /*
@@ -129,7 +126,7 @@ struct at91_udc {
 	unsigned			active_suspend:1;
 	u8				addr;
 	struct at91_udc_data		board;
-	struct clk			*iclk, *fclk;
+	struct clk			*iclk, *fclk, *uclk;
 	struct platform_device		*pdev;
 	struct proc_dir_entry		*pde;
 	void __iomem			*udp_baseaddr;

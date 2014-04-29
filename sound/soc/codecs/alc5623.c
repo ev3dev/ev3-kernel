@@ -705,8 +705,7 @@ static int alc5623_set_dai_fmt(struct snd_soc_dai *codec_dai,
 static int alc5623_pcm_hw_params(struct snd_pcm_substream *substream,
 		struct snd_pcm_hw_params *params, struct snd_soc_dai *dai)
 {
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_codec *codec = rtd->codec;
+	struct snd_soc_codec *codec = dai->codec;
 	struct alc5623_priv *alc5623 = snd_soc_codec_get_drvdata(codec);
 	int coeff, rate;
 	u16 iface;
@@ -715,17 +714,17 @@ static int alc5623_pcm_hw_params(struct snd_pcm_substream *substream,
 	iface &= ~ALC5623_DAI_I2S_DL_MASK;
 
 	/* bit size */
-	switch (params_format(params)) {
-	case SNDRV_PCM_FORMAT_S16_LE:
+	switch (params_width(params)) {
+	case 16:
 		iface |= ALC5623_DAI_I2S_DL_16;
 		break;
-	case SNDRV_PCM_FORMAT_S20_3LE:
+	case 20:
 		iface |= ALC5623_DAI_I2S_DL_20;
 		break;
-	case SNDRV_PCM_FORMAT_S24_LE:
+	case 24:
 		iface |= ALC5623_DAI_I2S_DL_24;
 		break;
-	case SNDRV_PCM_FORMAT_S32_LE:
+	case 32:
 		iface |= ALC5623_DAI_I2S_DL_32;
 		break;
 	default:
@@ -925,22 +924,22 @@ static int alc5623_probe(struct snd_soc_codec *codec)
 
 	switch (alc5623->id) {
 	case 0x21:
-		snd_soc_add_controls(codec, alc5621_vol_snd_controls,
+		snd_soc_add_codec_controls(codec, alc5621_vol_snd_controls,
 			ARRAY_SIZE(alc5621_vol_snd_controls));
 		break;
 	case 0x22:
-		snd_soc_add_controls(codec, alc5622_vol_snd_controls,
+		snd_soc_add_codec_controls(codec, alc5622_vol_snd_controls,
 			ARRAY_SIZE(alc5622_vol_snd_controls));
 		break;
 	case 0x23:
-		snd_soc_add_controls(codec, alc5623_vol_snd_controls,
+		snd_soc_add_codec_controls(codec, alc5623_vol_snd_controls,
 			ARRAY_SIZE(alc5623_vol_snd_controls));
 		break;
 	default:
 		return -EINVAL;
 	}
 
-	snd_soc_add_controls(codec, alc5623_snd_controls,
+	snd_soc_add_codec_controls(codec, alc5623_snd_controls,
 			ARRAY_SIZE(alc5623_snd_controls));
 
 	snd_soc_dapm_new_controls(dapm, alc5623_dapm_widgets,
@@ -993,7 +992,7 @@ static struct snd_soc_codec_driver soc_codec_device_alc5623 = {
  *    high = 0x1b
  */
 static int alc5623_i2c_probe(struct i2c_client *client,
-				const struct i2c_device_id *id)
+			     const struct i2c_device_id *id)
 {
 	struct alc5623_platform_data *pdata;
 	struct alc5623_priv *alc5623;
@@ -1080,29 +1079,11 @@ static struct i2c_driver alc5623_i2c_driver = {
 		.owner = THIS_MODULE,
 	},
 	.probe = alc5623_i2c_probe,
-	.remove =  __devexit_p(alc5623_i2c_remove),
+	.remove =  alc5623_i2c_remove,
 	.id_table = alc5623_i2c_table,
 };
 
-static int __init alc5623_modinit(void)
-{
-	int ret;
-
-	ret = i2c_add_driver(&alc5623_i2c_driver);
-	if (ret != 0) {
-		printk(KERN_ERR "%s: can't add i2c driver", __func__);
-		return ret;
-	}
-
-	return ret;
-}
-module_init(alc5623_modinit);
-
-static void __exit alc5623_modexit(void)
-{
-	i2c_del_driver(&alc5623_i2c_driver);
-}
-module_exit(alc5623_modexit);
+module_i2c_driver(alc5623_i2c_driver);
 
 MODULE_DESCRIPTION("ASoC alc5621/2/3 driver");
 MODULE_AUTHOR("Arnaud Patard <arnaud.patard@rtp-net.org>");

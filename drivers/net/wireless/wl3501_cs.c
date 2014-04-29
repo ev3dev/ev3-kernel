@@ -29,7 +29,6 @@
 
 #include <linux/delay.h>
 #include <linux/types.h>
-#include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/in.h>
 #include <linux/kernel.h>
@@ -44,6 +43,7 @@
 #include <linux/string.h>
 #include <linux/wireless.h>
 #include <linux/ieee80211.h>
+#include <linux/etherdevice.h>
 
 #include <net/iw_handler.h>
 
@@ -53,7 +53,6 @@
 
 #include <asm/io.h>
 #include <asm/uaccess.h>
-#include <asm/system.h>
 
 #include "wl3501.h"
 
@@ -674,8 +673,7 @@ static void wl3501_mgmt_scan_confirm(struct wl3501_card *this, u16 addr)
 				matchflag = 1;
 			if (matchflag) {
 				for (i = 0; i < this->bss_cnt; i++) {
-					if (!memcmp(this->bss_set[i].bssid,
-						    sig.bssid, ETH_ALEN)) {
+					if (ether_addr_equal_unaligned(this->bss_set[i].bssid, sig.bssid)) {
 						matchflag = 0;
 						break;
 					}
@@ -1521,13 +1519,12 @@ static int wl3501_set_wap(struct net_device *dev, struct iw_request_info *info,
 			  union iwreq_data *wrqu, char *extra)
 {
 	struct wl3501_card *this = netdev_priv(dev);
-	static const u8 bcast[ETH_ALEN] = { 255, 255, 255, 255, 255, 255 };
 	int rc = -EINVAL;
 
 	/* FIXME: we support other ARPHRDs...*/
 	if (wrqu->ap_addr.sa_family != ARPHRD_ETHER)
 		goto out;
-	if (!memcmp(bcast, wrqu->ap_addr.sa_data, ETH_ALEN)) {
+	if (is_broadcast_ether_addr(wrqu->ap_addr.sa_data)) {
 		/* FIXME: rescan? */
 	} else
 		memcpy(this->bssid, wrqu->ap_addr.sa_data, ETH_ALEN);
@@ -2015,19 +2012,7 @@ static struct pcmcia_driver wl3501_driver = {
 	.suspend	= wl3501_suspend,
 	.resume		= wl3501_resume,
 };
-
-static int __init wl3501_init_module(void)
-{
-	return pcmcia_register_driver(&wl3501_driver);
-}
-
-static void __exit wl3501_exit_module(void)
-{
-	pcmcia_unregister_driver(&wl3501_driver);
-}
-
-module_init(wl3501_init_module);
-module_exit(wl3501_exit_module);
+module_pcmcia_driver(wl3501_driver);
 
 MODULE_AUTHOR("Fox Chen <mhchen@golf.ccl.itri.org.tw>, "
 	      "Arnaldo Carvalho de Melo <acme@conectiva.com.br>,"

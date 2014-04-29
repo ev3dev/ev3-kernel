@@ -30,11 +30,15 @@
 #define STORE_QUEUE_MINOR	155
 #define I2O_MINOR		166
 #define MICROCODE_MINOR		184
+#define VFIO_MINOR		196
 #define TUN_MINOR		200
+#define CUSE_MINOR		203
 #define MWAVE_MINOR		219	/* ACP/Mwave Modem */
 #define MPT_MINOR		220
 #define MPT2SAS_MINOR		221
+#define MPT3SAS_MINOR		222
 #define UINPUT_MINOR		223
+#define MISC_MCELOG_MINOR	227
 #define HPET_MINOR		228
 #define FUSE_MINOR		229
 #define KVM_MINOR		232
@@ -43,6 +47,7 @@
 #define MAPPER_CTRL_MINOR	236
 #define LOOP_CTRL_MINOR		237
 #define VHOST_NET_MINOR		238
+#define UHID_MINOR		239
 #define MISC_DYNAMIC_MINOR	255
 
 struct device;

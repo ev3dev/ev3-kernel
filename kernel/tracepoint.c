@@ -25,7 +25,7 @@
 #include <linux/err.h>
 #include <linux/slab.h>
 #include <linux/sched.h>
-#include <linux/jump_label.h>
+#include <linux/static_key.h>
 
 extern struct tracepoint * const __start___tracepoints_ptrs[];
 extern struct tracepoint * const __stop___tracepoints_ptrs[];
@@ -112,7 +112,8 @@ tracepoint_entry_add_probe(struct tracepoint_entry *entry,
 	int nr_probes = 0;
 	struct tracepoint_func *old, *new;
 
-	WARN_ON(!probe);
+	if (WARN_ON(!probe))
+		return ERR_PTR(-EINVAL);
 
 	debug_print_probes(entry);
 	old = entry->funcs;
@@ -152,13 +153,18 @@ tracepoint_entry_remove_probe(struct tracepoint_entry *entry,
 
 	debug_print_probes(entry);
 	/* (N -> M), (N > 1, M >= 0) probes */
-	for (nr_probes = 0; old[nr_probes].func; nr_probes++) {
-		if (!probe ||
-		    (old[nr_probes].func == probe &&
-		     old[nr_probes].data == data))
-			nr_del++;
+	if (probe) {
+		for (nr_probes = 0; old[nr_probes].func; nr_probes++) {
+			if (old[nr_probes].func == probe &&
+			     old[nr_probes].data == data)
+				nr_del++;
+		}
 	}
 
+	/*
+	 * If probe is NULL, then nr_probes = nr_del = 0, and then the
+	 * entire entry will be removed.
+	 */
 	if (nr_probes - nr_del == 0) {
 		/* N -> 0, (N > 1) */
 		entry->funcs = NULL;
@@ -173,8 +179,7 @@ tracepoint_entry_remove_probe(struct tracepoint_entry *entry,
 		if (new == NULL)
 			return ERR_PTR(-ENOMEM);
 		for (i = 0; old[i].func; i++)
-			if (probe &&
-			    (old[i].func != probe || old[i].data != data))
+			if (old[i].func != probe || old[i].data != data)
 				new[j++] = old[i];
 		new[nr_probes - nr_del].func = NULL;
 		entry->refcount = nr_probes - nr_del;
@@ -192,12 +197,11 @@ tracepoint_entry_remove_probe(struct tracepoint_entry *entry,
 static struct tracepoint_entry *get_tracepoint(const char *name)
 {
 	struct hlist_head *head;
-	struct hlist_node *node;
 	struct tracepoint_entry *e;
 	u32 hash = jhash(name, strlen(name), 0);
 
 	head = &tracepoint_table[hash & (TRACEPOINT_TABLE_SIZE - 1)];
-	hlist_for_each_entry(e, node, head, hlist) {
+	hlist_for_each_entry(e, head, hlist) {
 		if (!strcmp(name, e->name))
 			return e;
 	}
@@ -211,13 +215,12 @@ static struct tracepoint_entry *get_tracepoint(const char *name)
 static struct tracepoint_entry *add_tracepoint(const char *name)
 {
 	struct hlist_head *head;
-	struct hlist_node *node;
 	struct tracepoint_entry *e;
 	size_t name_len = strlen(name) + 1;
 	u32 hash = jhash(name, name_len-1, 0);
 
 	head = &tracepoint_table[hash & (TRACEPOINT_TABLE_SIZE - 1)];
-	hlist_for_each_entry(e, node, head, hlist) {
+	hlist_for_each_entry(e, head, hlist) {
 		if (!strcmp(name, e->name)) {
 			printk(KERN_NOTICE
 				"tracepoint %s busy\n", name);
@@ -256,9 +259,9 @@ static void set_tracepoint(struct tracepoint_entry **entry,
 {
 	WARN_ON(strcmp((*entry)->name, elem->name) != 0);
 
-	if (elem->regfunc && !jump_label_enabled(&elem->key) && active)
+	if (elem->regfunc && !static_key_enabled(&elem->key) && active)
 		elem->regfunc();
-	else if (elem->unregfunc && jump_label_enabled(&elem->key) && !active)
+	else if (elem->unregfunc && static_key_enabled(&elem->key) && !active)
 		elem->unregfunc();
 
 	/*
@@ -269,10 +272,10 @@ static void set_tracepoint(struct tracepoint_entry **entry,
 	 * is used.
 	 */
 	rcu_assign_pointer(elem->funcs, (*entry)->funcs);
-	if (active && !jump_label_enabled(&elem->key))
-		jump_label_inc(&elem->key);
-	else if (!active && jump_label_enabled(&elem->key))
-		jump_label_dec(&elem->key);
+	if (active && !static_key_enabled(&elem->key))
+		static_key_slow_inc(&elem->key);
+	else if (!active && static_key_enabled(&elem->key))
+		static_key_slow_dec(&elem->key);
 }
 
 /*
@@ -283,11 +286,11 @@ static void set_tracepoint(struct tracepoint_entry **entry,
  */
 static void disable_tracepoint(struct tracepoint *elem)
 {
-	if (elem->unregfunc && jump_label_enabled(&elem->key))
+	if (elem->unregfunc && static_key_enabled(&elem->key))
 		elem->unregfunc();
 
-	if (jump_label_enabled(&elem->key))
-		jump_label_dec(&elem->key);
+	if (static_key_enabled(&elem->key))
+		static_key_slow_dec(&elem->key);
 	rcu_assign_pointer(elem->funcs, NULL);
 }
 
@@ -628,6 +631,11 @@ void tracepoint_iter_reset(struct tracepoint_iter *iter)
 EXPORT_SYMBOL_GPL(tracepoint_iter_reset);
 
 #ifdef CONFIG_MODULES
+bool trace_module_has_bad_taint(struct module *mod)
+{
+	return mod->taints & ~((1 << TAINT_OOT_MODULE) | (1 << TAINT_CRAP));
+}
+
 static int tracepoint_module_coming(struct module *mod)
 {
 	struct tp_module *tp_mod, *iter;
@@ -638,7 +646,7 @@ static int tracepoint_module_coming(struct module *mod)
 	 * module headers (for forced load), to make sure we don't cause a crash.
 	 * Staging and out-of-tree GPL modules are fine.
 	 */
-	if (mod->taints & ~((1 << TAINT_OOT_MODULE) | (1 << TAINT_CRAP)))
+	if (trace_module_has_bad_taint(mod))
 		return 0;
 	mutex_lock(&tracepoints_mutex);
 	tp_mod = kmalloc(sizeof(struct tp_module), GFP_KERNEL);

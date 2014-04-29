@@ -17,7 +17,8 @@
 #include <linux/spinlock.h>
 #include <linux/string.h>
 #include <linux/kobject.h>
-#include <linux/module.h>
+#include <linux/export.h>
+#include <linux/kmod.h>
 #include <linux/slab.h>
 #include <linux/user_namespace.h>
 #include <linux/socket.h>
@@ -29,15 +30,16 @@
 
 u64 uevent_seqnum;
 char uevent_helper[UEVENT_HELPER_PATH_LEN] = CONFIG_UEVENT_HELPER_PATH;
-static DEFINE_SPINLOCK(sequence_lock);
 #ifdef CONFIG_NET
 struct uevent_sock {
 	struct list_head list;
 	struct sock *sk;
 };
 static LIST_HEAD(uevent_sock_list);
-static DEFINE_MUTEX(uevent_sock_mutex);
 #endif
+
+/* This lock protects uevent_seqnum and uevent_sock_list */
+static DEFINE_MUTEX(uevent_sock_mutex);
 
 /* the strings here must match the enum in include/linux/kobject.h */
 static const char *kobject_actions[] = {
@@ -86,11 +88,17 @@ out:
 #ifdef CONFIG_NET
 static int kobj_bcast_filter(struct sock *dsk, struct sk_buff *skb, void *data)
 {
-	struct kobject *kobj = data;
+	struct kobject *kobj = data, *ksobj;
 	const struct kobj_ns_type_operations *ops;
 
 	ops = kobj_ns_ops(kobj);
-	if (ops) {
+	if (!ops && kobj->kset) {
+		ksobj = &kobj->kset->kobj;
+		if (ksobj->parent != NULL)
+			ops = kobj_ns_ops(ksobj->parent);
+	}
+
+	if (ops && ops->netlink_ns && kobj->ktype->namespace) {
 		const void *sock_ns, *ns;
 		ns = kobj->ktype->namespace(kobj);
 		sock_ns = ops->netlink_ns(dsk);
@@ -136,7 +144,6 @@ int kobject_uevent_env(struct kobject *kobj, enum kobject_action action,
 	struct kobject *top_kobj;
 	struct kset *kset;
 	const struct kset_uevent_ops *uevent_ops;
-	u64 seq;
 	int i = 0;
 	int retval = 0;
 #ifdef CONFIG_NET
@@ -243,17 +250,16 @@ int kobject_uevent_env(struct kobject *kobj, enum kobject_action action,
 	else if (action == KOBJ_REMOVE)
 		kobj->state_remove_uevent_sent = 1;
 
+	mutex_lock(&uevent_sock_mutex);
 	/* we will send an event, so request a new sequence number */
-	spin_lock(&sequence_lock);
-	seq = ++uevent_seqnum;
-	spin_unlock(&sequence_lock);
-	retval = add_uevent_var(env, "SEQNUM=%llu", (unsigned long long)seq);
-	if (retval)
+	retval = add_uevent_var(env, "SEQNUM=%llu", (unsigned long long)++uevent_seqnum);
+	if (retval) {
+		mutex_unlock(&uevent_sock_mutex);
 		goto exit;
+	}
 
 #if defined(CONFIG_NET)
 	/* send netlink message */
-	mutex_lock(&uevent_sock_mutex);
 	list_for_each_entry(ue_sk, &uevent_sock_list, list) {
 		struct sock *uevent_sock = ue_sk->sk;
 		struct sk_buff *skb;
@@ -290,8 +296,8 @@ int kobject_uevent_env(struct kobject *kobj, enum kobject_action action,
 		} else
 			retval = -ENOMEM;
 	}
-	mutex_unlock(&uevent_sock_mutex);
 #endif
+	mutex_unlock(&uevent_sock_mutex);
 
 	/* call uevent_helper, usually only enabled during early boot */
 	if (uevent_helper[0] && !kobj_usermode_filter(kobj)) {
@@ -373,13 +379,16 @@ EXPORT_SYMBOL_GPL(add_uevent_var);
 static int uevent_net_init(struct net *net)
 {
 	struct uevent_sock *ue_sk;
+	struct netlink_kernel_cfg cfg = {
+		.groups	= 1,
+		.flags	= NL_CFG_F_NONROOT_RECV,
+	};
 
 	ue_sk = kzalloc(sizeof(*ue_sk), GFP_KERNEL);
 	if (!ue_sk)
 		return -ENOMEM;
 
-	ue_sk->sk = netlink_kernel_create(net, NETLINK_KOBJECT_UEVENT,
-					  1, NULL, NULL, THIS_MODULE);
+	ue_sk->sk = netlink_kernel_create(net, NETLINK_KOBJECT_UEVENT, &cfg);
 	if (!ue_sk->sk) {
 		printk(KERN_ERR
 		       "kobject_uevent: unable to create netlink socket!\n");
@@ -419,7 +428,6 @@ static struct pernet_operations uevent_net_ops = {
 
 static int __init kobject_uevent_init(void)
 {
-	netlink_set_nonroot(NETLINK_KOBJECT_UEVENT, NL_NONROOT_RECV);
 	return register_pernet_subsys(&uevent_net_ops);
 }
 

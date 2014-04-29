@@ -31,15 +31,17 @@
 #include <linux/compat.h>
 #include <linux/mount.h>
 #include <linux/blkpg.h>
+#include <linux/magic.h>
+#include <linux/major.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/partitions.h>
 #include <linux/mtd/map.h>
 
 #include <asm/uaccess.h>
 
-#define MTD_INODE_FS_MAGIC 0x11307854
+#include "mtdcore.h"
+
 static DEFINE_MUTEX(mtd_mutex);
-static struct vfsmount *mtd_inode_mnt __read_mostly;
 
 /*
  * Data structure to hold the pointer to the mtd device as well
@@ -54,28 +56,12 @@ struct mtd_file_info {
 static loff_t mtdchar_lseek(struct file *file, loff_t offset, int orig)
 {
 	struct mtd_file_info *mfi = file->private_data;
-	struct mtd_info *mtd = mfi->mtd;
-
-	switch (orig) {
-	case SEEK_SET:
-		break;
-	case SEEK_CUR:
-		offset += file->f_pos;
-		break;
-	case SEEK_END:
-		offset += mtd->size;
-		break;
-	default:
-		return -EINVAL;
-	}
-
-	if (offset >= 0 && offset <= mtd->size)
-		return file->f_pos = offset;
-
-	return -EINVAL;
+	return fixed_size_llseek(file, offset, orig, mfi->mtd->size);
 }
 
-
+static int count;
+static struct vfsmount *mnt;
+static struct file_system_type mtd_inodefs_type;
 
 static int mtdchar_open(struct inode *inode, struct file *file)
 {
@@ -92,6 +78,10 @@ static int mtdchar_open(struct inode *inode, struct file *file)
 	if ((file->f_mode & FMODE_WRITE) && (minor & 1))
 		return -EACCES;
 
+	ret = simple_pin_fs(&mtd_inodefs_type, &mnt, &count);
+	if (ret)
+		return ret;
+
 	mutex_lock(&mtd_mutex);
 	mtd = get_mtd_device(NULL, devnum);
 
@@ -101,16 +91,14 @@ static int mtdchar_open(struct inode *inode, struct file *file)
 	}
 
 	if (mtd->type == MTD_ABSENT) {
-		put_mtd_device(mtd);
 		ret = -ENODEV;
-		goto out;
+		goto out1;
 	}
 
-	mtd_ino = iget_locked(mtd_inode_mnt->mnt_sb, devnum);
+	mtd_ino = iget_locked(mnt->mnt_sb, devnum);
 	if (!mtd_ino) {
-		put_mtd_device(mtd);
 		ret = -ENOMEM;
-		goto out;
+		goto out1;
 	}
 	if (mtd_ino->i_state & I_NEW) {
 		mtd_ino->i_private = mtd;
@@ -122,25 +110,28 @@ static int mtdchar_open(struct inode *inode, struct file *file)
 
 	/* You can't open it RW if it's not a writeable device */
 	if ((file->f_mode & FMODE_WRITE) && !(mtd->flags & MTD_WRITEABLE)) {
-		iput(mtd_ino);
-		put_mtd_device(mtd);
 		ret = -EACCES;
-		goto out;
+		goto out2;
 	}
 
 	mfi = kzalloc(sizeof(*mfi), GFP_KERNEL);
 	if (!mfi) {
-		iput(mtd_ino);
-		put_mtd_device(mtd);
 		ret = -ENOMEM;
-		goto out;
+		goto out2;
 	}
 	mfi->ino = mtd_ino;
 	mfi->mtd = mtd;
 	file->private_data = mfi;
+	mutex_unlock(&mtd_mutex);
+	return 0;
 
+out2:
+	iput(mtd_ino);
+out1:
+	put_mtd_device(mtd);
 out:
 	mutex_unlock(&mtd_mutex);
+	simple_release_fs(&mnt, &count);
 	return ret;
 } /* mtdchar_open */
 
@@ -162,6 +153,7 @@ static int mtdchar_close(struct inode *inode, struct file *file)
 	put_mtd_device(mtd);
 	file->private_data = NULL;
 	kfree(mfi);
+	simple_release_fs(&mnt, &count);
 
 	return 0;
 } /* mtdchar_close */
@@ -358,37 +350,35 @@ static void mtdchar_erase_callback (struct erase_info *instr)
 	wake_up((wait_queue_head_t *)instr->priv);
 }
 
-#ifdef CONFIG_HAVE_MTD_OTP
 static int otp_select_filemode(struct mtd_file_info *mfi, int mode)
 {
 	struct mtd_info *mtd = mfi->mtd;
 	size_t retlen;
-	int ret = 0;
-
-	/*
-	 * Make a fake call to mtd_read_fact_prot_reg() to check if OTP
-	 * operations are supported.
-	 */
-	if (mtd_read_fact_prot_reg(mtd, -1, -1, &retlen, NULL) == -EOPNOTSUPP)
-		return -EOPNOTSUPP;
 
 	switch (mode) {
 	case MTD_OTP_FACTORY:
+		if (mtd_read_fact_prot_reg(mtd, -1, 0, &retlen, NULL) ==
+				-EOPNOTSUPP)
+			return -EOPNOTSUPP;
+
 		mfi->mode = MTD_FILE_MODE_OTP_FACTORY;
 		break;
 	case MTD_OTP_USER:
+		if (mtd_read_user_prot_reg(mtd, -1, 0, &retlen, NULL) ==
+				-EOPNOTSUPP)
+			return -EOPNOTSUPP;
+
 		mfi->mode = MTD_FILE_MODE_OTP_USER;
 		break;
-	default:
-		ret = -EINVAL;
 	case MTD_OTP_OFF:
+		mfi->mode = MTD_FILE_MODE_NORMAL;
 		break;
+	default:
+		return -EINVAL;
 	}
-	return ret;
+
+	return 0;
 }
-#else
-# define otp_select_filemode(f,m)	-EOPNOTSUPP
-#endif
 
 static int mtdchar_writeoob(struct file *file, struct mtd_info *mtd,
 	uint64_t start, uint32_t length, void __user *ptr,
@@ -405,7 +395,7 @@ static int mtdchar_writeoob(struct file *file, struct mtd_info *mtd,
 	if (length > 4096)
 		return -EINVAL;
 
-	if (!mtd->write_oob)
+	if (!mtd->_write_oob)
 		ret = -EOPNOTSUPP;
 	else
 		ret = access_ok(VERIFY_READ, ptr, length) ? 0 : -EFAULT;
@@ -576,7 +566,7 @@ static int mtdchar_write_ioctl(struct mtd_info *mtd,
 			!access_ok(VERIFY_READ, req.usr_data, req.len) ||
 			!access_ok(VERIFY_READ, req.usr_oob, req.ooblen))
 		return -EFAULT;
-	if (!mtd->write_oob)
+	if (!mtd->_write_oob)
 		return -EOPNOTSUPP;
 
 	ops.mode = req.mode;
@@ -881,7 +871,6 @@ static int mtdchar_ioctl(struct file *file, u_int cmd, u_long arg)
 		break;
 	}
 
-#ifdef CONFIG_HAVE_MTD_OTP
 	case OTPSELECT:
 	{
 		int mode;
@@ -937,7 +926,6 @@ static int mtdchar_ioctl(struct file *file, u_int cmd, u_long arg)
 		ret = mtd_lock_user_prot_reg(mtd, oinfo.start, oinfo.length);
 		break;
 	}
-#endif
 
 	/* This ioctl is being deprecated - it truncates the ECC layout */
 	case ECCGETLAYOUT:
@@ -1112,7 +1100,7 @@ static unsigned long mtdchar_get_unmapped_area(struct file *file,
 		return (unsigned long) -EINVAL;
 
 	ret = mtd_get_unmapped_area(mtd, len, offset, flags);
-	return ret == -EOPNOTSUPP ? -ENOSYS : ret;
+	return ret == -EOPNOTSUPP ? -ENODEV : ret;
 }
 #endif
 
@@ -1125,36 +1113,21 @@ static int mtdchar_mmap(struct file *file, struct vm_area_struct *vma)
 	struct mtd_file_info *mfi = file->private_data;
 	struct mtd_info *mtd = mfi->mtd;
 	struct map_info *map = mtd->priv;
-	unsigned long start;
-	unsigned long off;
-	u32 len;
 
-	if (mtd->type == MTD_RAM || mtd->type == MTD_ROM) {
-		off = vma->vm_pgoff << PAGE_SHIFT;
-		start = map->phys;
-		len = PAGE_ALIGN((start & ~PAGE_MASK) + map->size);
-		start &= PAGE_MASK;
-		if ((vma->vm_end - vma->vm_start + off) > len)
-			return -EINVAL;
-
-		off += start;
-		vma->vm_pgoff = off >> PAGE_SHIFT;
-		vma->vm_flags |= VM_IO | VM_RESERVED;
-
+        /* This is broken because it assumes the MTD device is map-based
+	   and that mtd->priv is a valid struct map_info.  It should be
+	   replaced with something that uses the mtd_get_unmapped_area()
+	   operation properly. */
+	if (0 /*mtd->type == MTD_RAM || mtd->type == MTD_ROM*/) {
 #ifdef pgprot_noncached
-		if (file->f_flags & O_DSYNC || off >= __pa(high_memory))
+		if (file->f_flags & O_DSYNC || map->phys >= __pa(high_memory))
 			vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 #endif
-		if (io_remap_pfn_range(vma, vma->vm_start, off >> PAGE_SHIFT,
-				       vma->vm_end - vma->vm_start,
-				       vma->vm_page_prot))
-			return -EAGAIN;
-
-		return 0;
+		return vm_iomap_memory(vma, map->phys, map->size);
 	}
-	return -ENOSYS;
+	return -ENODEV;
 #else
-	return vma->vm_flags & VM_SHARED ? 0 : -ENOSYS;
+	return vma->vm_flags & VM_SHARED ? 0 : -EACCES;
 #endif
 }
 
@@ -1175,10 +1148,15 @@ static const struct file_operations mtd_fops = {
 #endif
 };
 
+static const struct super_operations mtd_ops = {
+	.drop_inode = generic_delete_inode,
+	.statfs = simple_statfs,
+};
+
 static struct dentry *mtd_inodefs_mount(struct file_system_type *fs_type,
 				int flags, const char *dev_name, void *data)
 {
-	return mount_pseudo(fs_type, "mtd_inode:", NULL, NULL, MTD_INODE_FS_MAGIC);
+	return mount_pseudo(fs_type, "mtd_inode:", &mtd_ops, NULL, MTD_INODE_FS_MAGIC);
 }
 
 static struct file_system_type mtd_inodefs_type = {
@@ -1186,76 +1164,38 @@ static struct file_system_type mtd_inodefs_type = {
        .mount = mtd_inodefs_mount,
        .kill_sb = kill_anon_super,
 };
+MODULE_ALIAS_FS("mtd_inodefs");
 
-static void mtdchar_notify_add(struct mtd_info *mtd)
-{
-}
-
-static void mtdchar_notify_remove(struct mtd_info *mtd)
-{
-	struct inode *mtd_ino = ilookup(mtd_inode_mnt->mnt_sb, mtd->index);
-
-	if (mtd_ino) {
-		/* Destroy the inode if it exists */
-		clear_nlink(mtd_ino);
-		iput(mtd_ino);
-	}
-}
-
-static struct mtd_notifier mtdchar_notifier = {
-	.add = mtdchar_notify_add,
-	.remove = mtdchar_notify_remove,
-};
-
-static int __init init_mtdchar(void)
+int __init init_mtdchar(void)
 {
 	int ret;
 
 	ret = __register_chrdev(MTD_CHAR_MAJOR, 0, 1 << MINORBITS,
 				   "mtd", &mtd_fops);
 	if (ret < 0) {
-		pr_notice("Can't allocate major number %d for "
-				"Memory Technology Devices.\n", MTD_CHAR_MAJOR);
+		pr_err("Can't allocate major number %d for MTD\n",
+		       MTD_CHAR_MAJOR);
 		return ret;
 	}
 
 	ret = register_filesystem(&mtd_inodefs_type);
 	if (ret) {
-		pr_notice("Can't register mtd_inodefs filesystem: %d\n", ret);
+		pr_err("Can't register mtd_inodefs filesystem, error %d\n",
+		       ret);
 		goto err_unregister_chdev;
 	}
 
-	mtd_inode_mnt = kern_mount(&mtd_inodefs_type);
-	if (IS_ERR(mtd_inode_mnt)) {
-		ret = PTR_ERR(mtd_inode_mnt);
-		pr_notice("Error mounting mtd_inodefs filesystem: %d\n", ret);
-		goto err_unregister_filesystem;
-	}
-	register_mtd_user(&mtdchar_notifier);
-
 	return ret;
 
-err_unregister_filesystem:
-	unregister_filesystem(&mtd_inodefs_type);
 err_unregister_chdev:
 	__unregister_chrdev(MTD_CHAR_MAJOR, 0, 1 << MINORBITS, "mtd");
 	return ret;
 }
 
-static void __exit cleanup_mtdchar(void)
+void __exit cleanup_mtdchar(void)
 {
-	unregister_mtd_user(&mtdchar_notifier);
-	kern_unmount(mtd_inode_mnt);
 	unregister_filesystem(&mtd_inodefs_type);
 	__unregister_chrdev(MTD_CHAR_MAJOR, 0, 1 << MINORBITS, "mtd");
 }
 
-module_init(init_mtdchar);
-module_exit(cleanup_mtdchar);
-
-MODULE_ALIAS_CHARDEV_MAJOR(MTD_CHAR_MAJOR);
-
-MODULE_LICENSE("GPL");
-MODULE_AUTHOR("David Woodhouse <dwmw2@infradead.org>");
-MODULE_DESCRIPTION("Direct character-device access to MTD devices");
 MODULE_ALIAS_CHARDEV_MAJOR(MTD_CHAR_MAJOR);

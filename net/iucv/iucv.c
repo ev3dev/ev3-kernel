@@ -621,7 +621,7 @@ static void iucv_disable(void)
 	put_online_cpus();
 }
 
-static int __cpuinit iucv_cpu_notify(struct notifier_block *self,
+static int iucv_cpu_notify(struct notifier_block *self,
 				     unsigned long action, void *hcpu)
 {
 	cpumask_t cpumask;
@@ -831,8 +831,11 @@ static int iucv_reboot_event(struct notifier_block *this,
 {
 	int i;
 
+	if (cpumask_empty(&iucv_irq_cpumask))
+		return NOTIFY_DONE;
+
 	get_online_cpus();
-	on_each_cpu(iucv_block_cpu, NULL, 1);
+	on_each_cpu_mask(&iucv_irq_cpumask, iucv_block_cpu, NULL, 1);
 	preempt_disable();
 	for (i = 0; i < iucv_max_pathid; i++) {
 		if (iucv_path_table[i])
@@ -1800,13 +1803,13 @@ static void iucv_work_fn(struct work_struct *work)
  * Handles external interrupts coming in from CP.
  * Places the interrupt buffer on a queue and schedules iucv_tasklet_fn().
  */
-static void iucv_external_interrupt(unsigned int ext_int_code,
+static void iucv_external_interrupt(struct ext_code ext_code,
 				    unsigned int param32, unsigned long param64)
 {
 	struct iucv_irq_data *p;
 	struct iucv_irq_list *work;
 
-	kstat_cpu(smp_processor_id()).irqs[EXTINT_IUC]++;
+	inc_irq_stat(IRQEXT_IUC);
 	p = iucv_irq_data[smp_processor_id()];
 	if (p->ippathid >= iucv_max_pathid) {
 		WARN_ON(p->ippathid >= iucv_max_pathid);

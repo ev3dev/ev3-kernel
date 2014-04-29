@@ -29,7 +29,6 @@
 #include <asm/cacheflush.h>
 #include <asm/cpu.h>
 #include <asm/processor.h>
-#include <asm/system.h>
 #include <asm/hardirq.h>
 #include <asm/mmu_context.h>
 #include <asm/smp.h>
@@ -98,12 +97,14 @@ static void cmp_init_secondary(void)
 
 	/* Enable per-cpu interrupts: platform specific */
 
-	c->core = (read_c0_ebase() >> 1) & 0xff;
+	c->core = (read_c0_ebase() >> 1) & 0x1ff;
 #if defined(CONFIG_MIPS_MT_SMP) || defined(CONFIG_MIPS_MT_SMTC)
-	c->vpe_id = (read_c0_tcbind() >> TCBIND_CURVPE_SHIFT) & TCBIND_CURVPE;
+	if (cpu_has_mipsmt)
+		c->vpe_id = (read_c0_tcbind() >> TCBIND_CURVPE_SHIFT) &
+			TCBIND_CURVPE;
 #endif
 #ifdef CONFIG_MIPS_MT_SMTC
-	c->tc_id  = (read_c0_tcbind() >> TCBIND_CURTC_SHIFT) & TCBIND_CURTC;
+	c->tc_id  = (read_c0_tcbind() & TCBIND_CURTC) >> TCBIND_CURTC_SHIFT;
 #endif
 }
 
@@ -173,14 +174,21 @@ void __init cmp_smp_setup(void)
 		if (amon_cpu_avail(i)) {
 			set_cpu_possible(i, true);
 			__cpu_number_map[i]	= ++ncpu;
-			__cpu_logical_map[ncpu]	= i;
+			__cpu_logical_map[ncpu] = i;
 		}
 	}
 
 	if (cpu_has_mipsmt) {
-		unsigned int nvpe, mvpconf0 = read_c0_mvpconf0();
+		unsigned int nvpe = 1;
+#ifdef CONFIG_MIPS_MT_SMP
+		unsigned int mvpconf0 = read_c0_mvpconf0();
+
+		nvpe = ((mvpconf0 & MVPCONF0_PVPE) >> MVPCONF0_PVPE_SHIFT) + 1;
+#elif defined(CONFIG_MIPS_MT_SMTC)
+		unsigned int mvpconf0 = read_c0_mvpconf0();
 
 		nvpe = ((mvpconf0 & MVPCONF0_PTC) >> MVPCONF0_PTC_SHIFT) + 1;
+#endif
 		smp_num_siblings = nvpe;
 	}
 	pr_info("Detected %i available secondary CPU(s)\n", ncpu);
@@ -191,11 +199,14 @@ void __init cmp_prepare_cpus(unsigned int max_cpus)
 	pr_debug("SMPCMP: CPU%d: %s max_cpus=%d\n",
 		 smp_processor_id(), __func__, max_cpus);
 
+#ifdef CONFIG_MIPS_MT
 	/*
 	 * FIXME: some of these options are per-system, some per-core and
 	 * some per-cpu
 	 */
 	mips_mt_set_cpuoptions();
+#endif
+
 }
 
 struct plat_smp_ops cmp_smp_ops = {

@@ -64,7 +64,6 @@
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 
-#include <asm/system.h>
 #include <asm/uaccess.h>
 #include <linux/bitops.h>
 #include <linux/sched.h>
@@ -391,10 +390,10 @@ static void sl_encaps(struct slip *sl, unsigned char *icp, int len)
 #endif
 #ifdef CONFIG_SLIP_MODE_SLIP6
 	if (sl->mode & SL_MODE_SLIP6)
-		count = slip_esc6(p, (unsigned char *) sl->xbuff, len);
+		count = slip_esc6(p, sl->xbuff, len);
 	else
 #endif
-		count = slip_esc(p, (unsigned char *) sl->xbuff, len);
+		count = slip_esc(p, sl->xbuff, len);
 
 	/* Order of next two lines is *very* important.
 	 * When we are sending a little amount of data,
@@ -430,11 +429,13 @@ static void slip_write_wakeup(struct tty_struct *tty)
 	if (!sl || sl->magic != SLIP_MAGIC || !netif_running(sl->dev))
 		return;
 
+	spin_lock(&sl->lock);
 	if (sl->xleft <= 0)  {
 		/* Now serial buffer is almost free & we can start
 		 * transmission of another packet */
 		sl->dev->stats.tx_packets++;
 		clear_bit(TTY_DO_WRITE_WAKEUP, &tty->flags);
+		spin_unlock(&sl->lock);
 		sl_unlock(sl);
 		return;
 	}
@@ -442,6 +443,7 @@ static void slip_write_wakeup(struct tty_struct *tty)
 	actual = tty->ops->write(tty, sl->xhead, sl->xleft);
 	sl->xleft -= actual;
 	sl->xhead += actual;
+	spin_unlock(&sl->lock);
 }
 
 static void sl_tx_timeout(struct net_device *dev)
@@ -1296,10 +1298,8 @@ static int __init slip_init(void)
 
 	slip_devs = kzalloc(sizeof(struct net_device *)*slip_maxdev,
 								GFP_KERNEL);
-	if (!slip_devs) {
-		printk(KERN_ERR "SLIP: Can't allocate slip devices array.\n");
+	if (!slip_devs)
 		return -ENOMEM;
-	}
 
 	/* Fill in our line protocol discipline, and register it */
 	status = tty_register_ldisc(N_SLIP, &sl_ldisc);

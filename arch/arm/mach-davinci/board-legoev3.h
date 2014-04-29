@@ -13,6 +13,7 @@
 #define __ARCH_ARM_MACH_DAVINCI_BOARD_LEGOEV3_H
 
 #include <mach/mux.h>
+#include <linux/platform_data/gpio-davinci.h>
 
 #define PIN(ev3_name, da850_name) \
 EV3_##ev3_name		= DA850_##da850_name,
@@ -75,7 +76,7 @@ enum legoev3_pin_map {
 	PIN(ADC_CLK, SPI0_CLK)
 
 	/* USB1 VBUS pins */
-	GPIO_PIN(USB1_OVC, 6, 3)
+	GPIO_PIN(USB11_OVC, 6, 3)
 
 	/* SD card reader pins */
 	PIN(SD_DAT_0, MMCSD0_DAT_0)

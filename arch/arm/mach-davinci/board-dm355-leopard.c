@@ -19,16 +19,16 @@
 #include <linux/clk.h>
 #include <linux/spi/spi.h>
 #include <linux/spi/eeprom.h>
-#include <linux/mfd/davinci_aemif.h>
+#include <linux/platform_data/i2c-davinci.h>
+#include <linux/platform_data/mmc-davinci.h>
+#include <linux/platform_data/mtd-davinci.h>
+#include <linux/platform_data/usb-davinci.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 
-#include <mach/i2c.h>
+#include <mach/common.h>
 #include <mach/serial.h>
-#include <mach/nand.h>
-#include <mach/mmc.h>
-#include <mach/usb.h>
 
 #include "davinci.h"
 
@@ -76,6 +76,7 @@ static struct davinci_nand_pdata davinci_nand_data = {
 	.parts			= davinci_nand_partitions,
 	.nr_parts		= ARRAY_SIZE(davinci_nand_partitions),
 	.ecc_mode		= NAND_ECC_HW_SYNDROME,
+	.ecc_bits		= 4,
 	.bbt_options		= NAND_BBT_USE_FLASH,
 };
 
@@ -91,16 +92,15 @@ static struct resource davinci_nand_resources[] = {
 	},
 };
 
-static struct platform_device dm355_evm_devices[] __initdata = {
-	{
-		.name		= "davinci_nand",
-		.id		= 0,
+static struct platform_device davinci_nand_device = {
+	.name			= "davinci_nand",
+	.id			= 0,
 
-		.resource		= davinci_nand_resources,
-		.num_resources		= ARRAY_SIZE(davinci_nand_resources),
-		.dev		= {
-			.platform_data	= &davinci_nand_data,
-		},
+	.num_resources		= ARRAY_SIZE(davinci_nand_resources),
+	.resource		= davinci_nand_resources,
+
+	.dev			= {
+		.platform_data	= &davinci_nand_data,
 	},
 };
 
@@ -169,26 +169,9 @@ static struct platform_device dm355leopard_dm9000 = {
 	.num_resources	= ARRAY_SIZE(dm355leopard_dm9000_rsrc),
 };
 
-static struct davinci_aemif_devices davinci_emif_devices = {
-	.devices	= dm355_evm_devices,
-	.num_devices	= ARRAY_SIZE(dm355_evm_devices),
-};
-
-static struct platform_device davinci_emif_device = {
-	.name	= "davinci_aemif",
-	.id	= -1,
-	.dev	= {
-		.platform_data	= &davinci_emif_devices,
-	},
-};
-
 static struct platform_device *davinci_leopard_devices[] __initdata = {
 	&dm355leopard_dm9000,
-	&davinci_emif_device,
-};
-
-static struct davinci_uart_config uart_config __initdata = {
-	.enabled_uarts = (1 << 0),
+	&davinci_nand_device,
 };
 
 static void __init dm355_leopard_map_io(void)
@@ -252,6 +235,11 @@ static struct spi_board_info dm355_leopard_spi_info[] __initconst = {
 static __init void dm355_leopard_init(void)
 {
 	struct clk *aemif;
+	int ret;
+
+	ret = dm355_gpio_register();
+	if (ret)
+		pr_warn("%s: GPIO init failed: %d\n", __func__, ret);
 
 	gpio_request(9, "dm9000");
 	gpio_direction_input(9);
@@ -261,12 +249,12 @@ static __init void dm355_leopard_init(void)
 	if (IS_ERR(aemif))
 		WARN("%s: unable to get AEMIF clock\n", __func__);
 	else
-		clk_enable(aemif);
+		clk_prepare_enable(aemif);
 
 	platform_add_devices(davinci_leopard_devices,
 			     ARRAY_SIZE(davinci_leopard_devices));
 	leopard_init_i2c();
-	davinci_serial_init(&uart_config);
+	davinci_serial_init(dm355_serial_device);
 
 	/* NOTE:  NAND flash timings set by the UBL are slower than
 	 * needed by MT29F16G08FAA chips ... EMIF.A1CR is 0x40400204
@@ -289,8 +277,9 @@ MACHINE_START(DM355_LEOPARD, "DaVinci DM355 leopard")
 	.atag_offset  = 0x100,
 	.map_io	      = dm355_leopard_map_io,
 	.init_irq     = davinci_irq_init,
-	.timer	      = &davinci_timer,
+	.init_time	= davinci_timer_init,
 	.init_machine = dm355_leopard_init,
+	.init_late	= davinci_init_late,
 	.dma_zone_size	= SZ_128M,
 	.restart	= davinci_restart,
 MACHINE_END

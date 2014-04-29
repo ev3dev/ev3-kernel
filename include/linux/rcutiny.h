@@ -27,14 +27,6 @@
 
 #include <linux/cache.h>
 
-#ifdef CONFIG_RCU_BOOST
-static inline void rcu_init(void)
-{
-}
-#else /* #ifdef CONFIG_RCU_BOOST */
-void rcu_init(void);
-#endif /* #else #ifdef CONFIG_RCU_BOOST */
-
 static inline void rcu_barrier_bh(void)
 {
 	wait_rcu_gp(call_rcu_bh);
@@ -45,8 +37,6 @@ static inline void rcu_barrier_sched(void)
 	wait_rcu_gp(call_rcu_sched);
 }
 
-#ifdef CONFIG_TINY_RCU
-
 static inline void synchronize_rcu_expedited(void)
 {
 	synchronize_sched();	/* Only one CPU, so pretty fast anyway!!! */
@@ -56,17 +46,6 @@ static inline void rcu_barrier(void)
 {
 	rcu_barrier_sched();  /* Only one CPU, so only one list of callbacks! */
 }
-
-#else /* #ifdef CONFIG_TINY_RCU */
-
-void synchronize_rcu_expedited(void);
-
-static inline void rcu_barrier(void)
-{
-	wait_rcu_gp(call_rcu);
-}
-
-#endif /* #else #ifdef CONFIG_TINY_RCU */
 
 static inline void synchronize_rcu_bh(void)
 {
@@ -83,38 +62,21 @@ static inline void synchronize_sched_expedited(void)
 	synchronize_sched();
 }
 
-#ifdef CONFIG_TINY_RCU
-
-static inline void rcu_preempt_note_context_switch(void)
+static inline void kfree_call_rcu(struct rcu_head *head,
+				  void (*func)(struct rcu_head *rcu))
 {
+	call_rcu(head, func);
 }
 
-static inline void exit_rcu(void)
+static inline int rcu_needs_cpu(int cpu, unsigned long *delta_jiffies)
 {
-}
-
-static inline int rcu_needs_cpu(int cpu)
-{
+	*delta_jiffies = ULONG_MAX;
 	return 0;
 }
-
-#else /* #ifdef CONFIG_TINY_RCU */
-
-void rcu_preempt_note_context_switch(void);
-extern void exit_rcu(void);
-int rcu_preempt_needs_cpu(void);
-
-static inline int rcu_needs_cpu(int cpu)
-{
-	return rcu_preempt_needs_cpu();
-}
-
-#endif /* #else #ifdef CONFIG_TINY_RCU */
 
 static inline void rcu_note_context_switch(int cpu)
 {
 	rcu_sched_qs(cpu);
-	rcu_preempt_note_context_switch();
 }
 
 /*
@@ -157,13 +119,34 @@ static inline void rcu_cpu_stall_reset(void)
 {
 }
 
+static inline void exit_rcu(void)
+{
+}
+
 #ifdef CONFIG_DEBUG_LOCK_ALLOC
 extern int rcu_scheduler_active __read_mostly;
-extern void rcu_scheduler_starting(void);
+void rcu_scheduler_starting(void);
 #else /* #ifdef CONFIG_DEBUG_LOCK_ALLOC */
 static inline void rcu_scheduler_starting(void)
 {
 }
 #endif /* #else #ifdef CONFIG_DEBUG_LOCK_ALLOC */
+
+#if defined(CONFIG_DEBUG_LOCK_ALLOC) || defined(CONFIG_RCU_TRACE)
+
+static inline bool rcu_is_watching(void)
+{
+	return __rcu_is_watching();
+}
+
+#else /* defined(CONFIG_DEBUG_LOCK_ALLOC) || defined(CONFIG_RCU_TRACE) */
+
+static inline bool rcu_is_watching(void)
+{
+	return true;
+}
+
+
+#endif /* #else defined(CONFIG_DEBUG_LOCK_ALLOC) || defined(CONFIG_RCU_TRACE) */
 
 #endif /* __LINUX_RCUTINY_H */

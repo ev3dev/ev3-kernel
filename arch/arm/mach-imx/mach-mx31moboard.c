@@ -42,13 +42,14 @@
 #include <asm/mach/time.h>
 #include <asm/mach/map.h>
 #include <asm/memblock.h>
-#include <mach/board-mx31moboard.h>
-#include <mach/common.h>
-#include <mach/hardware.h>
-#include <mach/iomux-mx3.h>
-#include <mach/ulpi.h>
+#include <linux/platform_data/asoc-imx-ssi.h>
 
+#include "board-mx31moboard.h"
+#include "common.h"
 #include "devices-imx31.h"
+#include "hardware.h"
+#include "iomux-mx3.h"
+#include "ulpi.h"
 
 static unsigned int moboard_pins[] = {
 	/* UART0 */
@@ -102,6 +103,9 @@ static unsigned int moboard_pins[] = {
 	MX31_PIN_CSPI3_MOSI__MOSI, MX31_PIN_CSPI3_MISO__MISO,
 	MX31_PIN_CSPI3_SCLK__SCLK, MX31_PIN_CSPI3_SPI_RDY__SPI_RDY,
 	MX31_PIN_CSPI2_SS1__CSPI3_SS1,
+	/* SSI */
+	MX31_PIN_STXD4__STXD4, MX31_PIN_SRXD4__SRXD4,
+	MX31_PIN_SCK4__SCK4, MX31_PIN_SFS4__SFS4,
 };
 
 static struct physmap_flash_data mx31moboard_flash_data = {
@@ -171,11 +175,11 @@ static const struct spi_imx_master moboard_spi1_pdata __initconst = {
 
 static struct regulator_consumer_supply sdhc_consumers[] = {
 	{
-		.dev_name = "mxc-mmc.0",
+		.dev_name = "imx31-mmc.0",
 		.supply	= "sdhc0_vcc",
 	},
 	{
-		.dev_name = "mxc-mmc.1",
+		.dev_name = "imx31-mmc.1",
 		.supply	= "sdhc1_vcc",
 	},
 };
@@ -232,48 +236,54 @@ static struct mc13xxx_led_platform_data moboard_led[] = {
 	{
 		.id = MC13783_LED_R1,
 		.name = "coreboard-led-4:red",
-		.max_current = 2,
 	},
 	{
 		.id = MC13783_LED_G1,
 		.name = "coreboard-led-4:green",
-		.max_current = 2,
 	},
 	{
 		.id = MC13783_LED_B1,
 		.name = "coreboard-led-4:blue",
-		.max_current = 2,
 	},
 	{
 		.id = MC13783_LED_R2,
 		.name = "coreboard-led-5:red",
-		.max_current = 3,
 	},
 	{
 		.id = MC13783_LED_G2,
 		.name = "coreboard-led-5:green",
-		.max_current = 3,
 	},
 	{
 		.id = MC13783_LED_B2,
 		.name = "coreboard-led-5:blue",
-		.max_current = 3,
 	},
 };
 
 static struct mc13xxx_leds_platform_data moboard_leds = {
 	.num_leds = ARRAY_SIZE(moboard_led),
 	.led = moboard_led,
-	.flags = MC13783_LED_SLEWLIMTC,
-	.abmode = MC13783_LED_AB_DISABLED,
-	.tc1_period = MC13783_LED_PERIOD_10MS,
-	.tc2_period = MC13783_LED_PERIOD_10MS,
+	.led_control[0]	= MC13783_LED_C0_ENABLE | MC13783_LED_C0_ABMODE(0),
+	.led_control[1]	= MC13783_LED_C1_SLEWLIM,
+	.led_control[2]	= MC13783_LED_C2_SLEWLIM,
+	.led_control[3]	= MC13783_LED_C3_PERIOD(0) |
+			  MC13783_LED_C3_CURRENT_R1(2) |
+			  MC13783_LED_C3_CURRENT_G1(2) |
+			  MC13783_LED_C3_CURRENT_B1(2),
+	.led_control[4]	= MC13783_LED_C4_PERIOD(0) |
+			  MC13783_LED_C4_CURRENT_R2(3) |
+			  MC13783_LED_C4_CURRENT_G2(3) |
+			  MC13783_LED_C4_CURRENT_B2(3),
 };
 
 static struct mc13xxx_buttons_platform_data moboard_buttons = {
 	.b1on_flags = MC13783_BUTTON_DBNC_750MS | MC13783_BUTTON_ENABLE |
 			MC13783_BUTTON_POL_INVERT,
 	.b1on_key = KEY_POWER,
+};
+
+static struct mc13xxx_codec_platform_data moboard_codec = {
+	.dac_ssi_port = MC13783_SSI1_PORT,
+	.adc_ssi_port = MC13783_SSI1_PORT,
 };
 
 static struct mc13xxx_platform_data moboard_pmic = {
@@ -283,13 +293,18 @@ static struct mc13xxx_platform_data moboard_pmic = {
 	},
 	.leds = &moboard_leds,
 	.buttons = &moboard_buttons,
-	.flags = MC13XXX_USE_RTC | MC13XXX_USE_ADC,
+	.codec = &moboard_codec,
+	.flags = MC13XXX_USE_RTC | MC13XXX_USE_ADC | MC13XXX_USE_CODEC,
+};
+
+static struct imx_ssi_platform_data moboard_ssi_pdata = {
+	.flags = IMX_SSI_DMA | IMX_SSI_NET,
 };
 
 static struct spi_board_info moboard_spi_board_info[] __initdata = {
 	{
 		.modalias = "mc13783",
-		.irq = IOMUX_TO_IRQ(MX31_PIN_GPIO1_3),
+		/* irq number is run-time assigned */
 		.max_speed_hz = 300000,
 		.bus_num = 1,
 		.chip_select = 0,
@@ -459,10 +474,6 @@ static const struct gpio_led_platform_data mx31moboard_led_pdata __initconst = {
 	.leds		= mx31moboard_leds,
 };
 
-static const struct ipu_platform_data mx3_ipu_data __initconst = {
-	.irq_base = MXC_IPU_IRQ_START,
-};
-
 static struct platform_device *devices[] __initdata = {
 	&mx31moboard_flash,
 };
@@ -480,7 +491,7 @@ static int __init mx31moboard_init_cam(void)
 	int dma, ret = -ENOMEM;
 	struct platform_device *pdev;
 
-	imx31_add_ipu_core(&mx3_ipu_data);
+	imx31_add_ipu_core();
 
 	pdev = imx31_alloc_mx3_camera(&camera_pdata);
 	if (IS_ERR(pdev))
@@ -507,7 +518,7 @@ static void mx31moboard_poweroff(void)
 	struct clk *clk = clk_get_sys("imx2-wdt.0", NULL);
 
 	if (!IS_ERR(clk))
-		clk_enable(clk);
+		clk_prepare_enable(clk);
 
 	mxc_iomux_mode(MX31_PIN_WATCHDOG_RST__WATCHDOG_RST);
 
@@ -530,6 +541,8 @@ static void __init mx31moboard_init(void)
 	platform_add_devices(devices, ARRAY_SIZE(devices));
 	gpio_led_register_device(-1, &mx31moboard_led_pdata);
 
+	imx31_add_imx2_wdt();
+
 	imx31_add_imx_uart0(&uart0_pdata);
 	imx31_add_imx_uart4(&uart4_pdata);
 
@@ -541,6 +554,8 @@ static void __init mx31moboard_init(void)
 
 	gpio_request(IOMUX_TO_GPIO(MX31_PIN_GPIO1_3), "pmic-irq");
 	gpio_direction_input(IOMUX_TO_GPIO(MX31_PIN_GPIO1_3));
+	moboard_spi_board_info[0].irq =
+			gpio_to_irq(IOMUX_TO_GPIO(MX31_PIN_GPIO1_3));
 	spi_register_board_info(moboard_spi_board_info,
 		ARRAY_SIZE(moboard_spi_board_info));
 
@@ -551,6 +566,10 @@ static void __init mx31moboard_init(void)
 	usb_xcvr_reset();
 
 	moboard_usbh2_init();
+
+	imx31_add_imx_ssi(0, &moboard_ssi_pdata);
+
+	imx_add_platform_device("imx_mc13783", 0, NULL, 0, NULL, 0);
 
 	pm_power_off = mx31moboard_poweroff;
 
@@ -578,10 +597,6 @@ static void __init mx31moboard_timer_init(void)
 	mx31_clocks_init(26000000);
 }
 
-struct sys_timer mx31moboard_timer = {
-	.init	= mx31moboard_timer_init,
-};
-
 static void __init mx31moboard_reserve(void)
 {
 	/* reserve 4 MiB for mx3-camera */
@@ -590,14 +605,14 @@ static void __init mx31moboard_reserve(void)
 }
 
 MACHINE_START(MX31MOBOARD, "EPFL Mobots mx31moboard")
-	/* Maintainer: Valentin Longchamp, EPFL Mobots group */
+	/* Maintainer: Philippe Retornaz, EPFL Mobots group */
 	.atag_offset = 0x100,
 	.reserve = mx31moboard_reserve,
 	.map_io = mx31_map_io,
 	.init_early = imx31_init_early,
 	.init_irq = mx31_init_irq,
 	.handle_irq = imx31_handle_irq,
-	.timer = &mx31moboard_timer,
+	.init_time	= mx31moboard_timer_init,
 	.init_machine = mx31moboard_init,
 	.restart	= mxc_restart,
 MACHINE_END

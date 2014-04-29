@@ -20,6 +20,7 @@
 
 #include <linux/types.h>
 #include <linux/usb/otg.h>
+#include <linux/clk.h>
 
 /**
  * Supported USB modes
@@ -135,6 +136,8 @@ struct msm_otg_platform_data {
 	enum msm_usb_phy_type phy_type;
 	void (*setup_gpio)(enum usb_otg_state state);
 	char *pclk_src_name;
+	int (*link_clk_reset)(struct clk *link_clk, bool assert);
+	int (*phy_clk_reset)(struct clk *phy_clk);
 };
 
 /**
@@ -160,7 +163,7 @@ struct msm_otg_platform_data {
  *               detection process.
  */
 struct msm_otg {
-	struct otg_transceiver otg;
+	struct usb_phy phy;
 	struct msm_otg_platform_data *pdata;
 	int irq;
 	struct clk *clk;

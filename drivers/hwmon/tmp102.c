@@ -26,6 +26,9 @@
 #include <linux/err.h>
 #include <linux/mutex.h>
 #include <linux/device.h>
+#include <linux/jiffies.h>
+#include <linux/thermal.h>
+#include <linux/of.h>
 
 #define	DRIVER_NAME "tmp102"
 
@@ -49,6 +52,7 @@
 
 struct tmp102 {
 	struct device *hwmon_dev;
+	struct thermal_zone_device *tz;
 	struct mutex lock;
 	u16 config_orig;
 	unsigned long last_update;
@@ -92,6 +96,15 @@ static struct tmp102 *tmp102_update_device(struct i2c_client *client)
 	return tmp102;
 }
 
+static int tmp102_read_temp(void *dev, long *temp)
+{
+	struct tmp102 *tmp102 = tmp102_update_device(to_i2c_client(dev));
+
+	*temp = tmp102->temp[0];
+
+	return 0;
+}
+
 static ssize_t tmp102_show_temp(struct device *dev,
 				struct device_attribute *attr,
 				char *buf)
@@ -114,7 +127,7 @@ static ssize_t tmp102_set_temp(struct device *dev,
 
 	if (kstrtol(buf, 10, &val) < 0)
 		return -EINVAL;
-	val = SENSORS_LIMIT(val, -256000, 255000);
+	val = clamp_val(val, -256000, 255000);
 
 	mutex_lock(&tmp102->lock);
 	tmp102->temp[sda->index] = val;
@@ -146,7 +159,7 @@ static const struct attribute_group tmp102_attr_group = {
 #define TMP102_CONFIG  (TMP102_CONF_TM | TMP102_CONF_EM | TMP102_CONF_CR1)
 #define TMP102_CONFIG_RD_ONLY (TMP102_CONF_R0 | TMP102_CONF_R1 | TMP102_CONF_AL)
 
-static int __devinit tmp102_probe(struct i2c_client *client,
+static int tmp102_probe(struct i2c_client *client,
 				  const struct i2c_device_id *id)
 {
 	struct tmp102 *tmp102;
@@ -154,22 +167,21 @@ static int __devinit tmp102_probe(struct i2c_client *client,
 
 	if (!i2c_check_functionality(client->adapter,
 				     I2C_FUNC_SMBUS_WORD_DATA)) {
-		dev_err(&client->dev, "adapter doesn't support SMBus word "
-			"transactions\n");
+		dev_err(&client->dev,
+			"adapter doesn't support SMBus word transactions\n");
 		return -ENODEV;
 	}
 
-	tmp102 = kzalloc(sizeof(*tmp102), GFP_KERNEL);
-	if (!tmp102) {
-		dev_dbg(&client->dev, "kzalloc failed\n");
+	tmp102 = devm_kzalloc(&client->dev, sizeof(*tmp102), GFP_KERNEL);
+	if (!tmp102)
 		return -ENOMEM;
-	}
+
 	i2c_set_clientdata(client, tmp102);
 
 	status = i2c_smbus_read_word_swapped(client, TMP102_CONF_REG);
 	if (status < 0) {
 		dev_err(&client->dev, "error reading config register\n");
-		goto fail_free;
+		return status;
 	}
 	tmp102->config_orig = status;
 	status = i2c_smbus_write_word_swapped(client, TMP102_CONF_REG,
@@ -204,6 +216,12 @@ static int __devinit tmp102_probe(struct i2c_client *client,
 		goto fail_remove_sysfs;
 	}
 
+	tmp102->tz = thermal_zone_of_sensor_register(&client->dev, 0,
+						     &client->dev,
+						     tmp102_read_temp, NULL);
+	if (IS_ERR(tmp102->tz))
+		tmp102->tz = NULL;
+
 	dev_info(&client->dev, "initialized\n");
 
 	return 0;
@@ -213,16 +231,14 @@ fail_remove_sysfs:
 fail_restore_config:
 	i2c_smbus_write_word_swapped(client, TMP102_CONF_REG,
 				     tmp102->config_orig);
-fail_free:
-	kfree(tmp102);
-
 	return status;
 }
 
-static int __devexit tmp102_remove(struct i2c_client *client)
+static int tmp102_remove(struct i2c_client *client)
 {
 	struct tmp102 *tmp102 = i2c_get_clientdata(client);
 
+	thermal_zone_of_sensor_unregister(&client->dev, tmp102->tz);
 	hwmon_device_unregister(tmp102->hwmon_dev);
 	sysfs_remove_group(&client->dev.kobj, &tmp102_attr_group);
 
@@ -235,8 +251,6 @@ static int __devexit tmp102_remove(struct i2c_client *client)
 			i2c_smbus_write_word_swapped(client, TMP102_CONF_REG,
 						     config | TMP102_CONF_SD);
 	}
-
-	kfree(tmp102);
 
 	return 0;
 }
@@ -288,21 +302,11 @@ static struct i2c_driver tmp102_driver = {
 	.driver.name	= DRIVER_NAME,
 	.driver.pm	= TMP102_DEV_PM_OPS,
 	.probe		= tmp102_probe,
-	.remove		= __devexit_p(tmp102_remove),
+	.remove		= tmp102_remove,
 	.id_table	= tmp102_id,
 };
 
-static int __init tmp102_init(void)
-{
-	return i2c_add_driver(&tmp102_driver);
-}
-module_init(tmp102_init);
-
-static void __exit tmp102_exit(void)
-{
-	i2c_del_driver(&tmp102_driver);
-}
-module_exit(tmp102_exit);
+module_i2c_driver(tmp102_driver);
 
 MODULE_AUTHOR("Steven King <sfking@fdwdc.com>");
 MODULE_DESCRIPTION("Texas Instruments TMP102 temperature sensor driver");

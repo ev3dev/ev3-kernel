@@ -21,13 +21,11 @@
 #include <linux/exportfs.h>
 
 #ifdef CONFIG_XFS_QUOTA
-extern void xfs_qm_init(void);
+extern int xfs_qm_init(void);
 extern void xfs_qm_exit(void);
-# define vfs_initquota()	xfs_qm_init()
-# define vfs_exitquota()	xfs_qm_exit()
 #else
-# define vfs_initquota()	do { } while (0)
-# define vfs_exitquota()	do { } while (0)
+# define xfs_qm_init()	(0)
+# define xfs_qm_exit()	do { } while (0)
 #endif
 
 #ifdef CONFIG_XFS_POSIX_ACL
@@ -76,7 +74,10 @@ struct block_device;
 
 extern __uint64_t xfs_max_file_offset(unsigned int);
 
+extern void xfs_flush_inodes(struct xfs_mount *mp);
 extern void xfs_blkdev_issue_flush(struct xfs_buftarg *);
+extern xfs_agnumber_t xfs_set_inode32(struct xfs_mount *);
+extern xfs_agnumber_t xfs_set_inode64(struct xfs_mount *);
 
 extern const struct export_operations xfs_export_operations;
 extern const struct xattr_handler *xfs_xattr_handlers[];

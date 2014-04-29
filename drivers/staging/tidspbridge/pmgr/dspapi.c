@@ -24,9 +24,6 @@
 /*  ----------------------------------- DSP/BIOS Bridge */
 #include <dspbridge/dbdefs.h>
 
-/*  ----------------------------------- Trace & Debug */
-#include <dspbridge/dbc.h>
-
 /*  ----------------------------------- OS Adaptation Layer */
 #include <dspbridge/ntfy.h>
 
@@ -165,7 +162,7 @@ static u8 size_cmd[] = {
 	ARRAY_SIZE(cmm_cmd),
 };
 
-static inline void _cp_fm_usr(void *to, const void __user * from,
+static inline void _cp_fm_usr(void *to, const void __user *from,
 			      int *err, unsigned long bytes)
 {
 	if (*err)
@@ -266,25 +263,10 @@ err:
  */
 void api_exit(void)
 {
-	DBC_REQUIRE(api_c_refs > 0);
 	api_c_refs--;
 
-	if (api_c_refs == 0) {
-		/* Release all modules initialized in api_init(). */
-		cod_exit();
-		dev_exit();
-		chnl_exit();
-		msg_exit();
-		io_exit();
-		strm_exit();
-		disp_exit();
-		node_exit();
-		proc_exit();
+	if (api_c_refs == 0)
 		mgr_exit();
-		rmm_exit();
-		drv_exit();
-	}
-	DBC_ENSURE(api_c_refs >= 0);
 }
 
 /*
@@ -295,64 +277,10 @@ void api_exit(void)
 bool api_init(void)
 {
 	bool ret = true;
-	bool fdrv, fdev, fcod, fchnl, fmsg, fio;
-	bool fmgr, fproc, fnode, fdisp, fstrm, frmm;
 
-	if (api_c_refs == 0) {
-		/* initialize driver and other modules */
-		fdrv = drv_init();
-		fmgr = mgr_init();
-		fproc = proc_init();
-		fnode = node_init();
-		fdisp = disp_init();
-		fstrm = strm_init();
-		frmm = rmm_init();
-		fchnl = chnl_init();
-		fmsg = msg_mod_init();
-		fio = io_init();
-		fdev = dev_init();
-		fcod = cod_init();
-		ret = fdrv && fdev && fchnl && fcod && fmsg && fio;
-		ret = ret && fmgr && fproc && frmm;
-		if (!ret) {
-			if (fdrv)
-				drv_exit();
+	if (api_c_refs == 0)
+		ret = mgr_init();
 
-			if (fmgr)
-				mgr_exit();
-
-			if (fstrm)
-				strm_exit();
-
-			if (fproc)
-				proc_exit();
-
-			if (fnode)
-				node_exit();
-
-			if (fdisp)
-				disp_exit();
-
-			if (fchnl)
-				chnl_exit();
-
-			if (fmsg)
-				msg_exit();
-
-			if (fio)
-				io_exit();
-
-			if (fdev)
-				dev_exit();
-
-			if (fcod)
-				cod_exit();
-
-			if (frmm)
-				rmm_exit();
-
-		}
-	}
 	if (ret)
 		api_c_refs++;
 
@@ -381,8 +309,6 @@ int api_init_complete2(void)
 	struct dev_object *hdev_obj;
 	struct drv_data *drv_datap;
 	u8 dev_type;
-
-	DBC_REQUIRE(api_c_refs > 0);
 
 	/*  Walk the list of DevObjects, get each devnode, and attempting to
 	 *  autostart the board. Note that this requires COF loading, which
@@ -488,10 +414,13 @@ u32 mgrwrap_register_object(union trapped_args *args, void *pr_ctxt)
 	CP_FM_USR(&uuid_obj, args->args_mgr_registerobject.uuid_obj, status, 1);
 	if (status)
 		goto func_end;
-	/* path_size is increased by 1 to accommodate NULL */
 	path_size = strlen_user((char *)
-				args->args_mgr_registerobject.sz_path_name) +
-	    1;
+				args->args_mgr_registerobject.sz_path_name);
+	if (!path_size) {
+		status = -EINVAL;
+		goto func_end;
+	}
+
 	psz_path_name = kmalloc(path_size, GFP_KERNEL);
 	if (!psz_path_name) {
 		status = -ENOMEM;
@@ -578,7 +507,7 @@ u32 mgrwrap_wait_for_bridge_events(union trapped_args *args, void *pr_ctxt)
 /*
  * ======== MGRWRAP_GetProcessResourceInfo ========
  */
-u32 __deprecated mgrwrap_get_process_resources_info(union trapped_args * args,
+u32 __deprecated mgrwrap_get_process_resources_info(union trapped_args *args,
 						    void *pr_ctxt)
 {
 	pr_err("%s: deprecated dspbridge ioctl\n", __func__);
@@ -652,7 +581,7 @@ func_end:
 /*
  * ======== procwrap_detach ========
  */
-u32 __deprecated procwrap_detach(union trapped_args * args, void *pr_ctxt)
+u32 __deprecated procwrap_detach(union trapped_args *args, void *pr_ctxt)
 {
 	/* proc_detach called at bridge_release only */
 	pr_err("%s: deprecated dspbridge ioctl\n", __func__);
@@ -1614,7 +1543,7 @@ u32 strmwrap_free_buffer(union trapped_args *args, void *pr_ctxt)
 	if (num_bufs > MAX_BUFS)
 		return -EINVAL;
 
-	ap_buffer = kmalloc((num_bufs * sizeof(u8 *)), GFP_KERNEL);
+	ap_buffer = kmalloc_array(num_bufs, sizeof(u8 *), GFP_KERNEL);
 	if (ap_buffer == NULL)
 		return -ENOMEM;
 
@@ -1635,7 +1564,7 @@ u32 strmwrap_free_buffer(union trapped_args *args, void *pr_ctxt)
 /*
  * ======== strmwrap_get_event_handle ========
  */
-u32 __deprecated strmwrap_get_event_handle(union trapped_args * args,
+u32 __deprecated strmwrap_get_event_handle(union trapped_args *args,
 					   void *pr_ctxt)
 {
 	pr_err("%s: deprecated dspbridge ioctl\n", __func__);
@@ -1864,7 +1793,7 @@ u32 strmwrap_select(union trapped_args *args, void *pr_ctxt)
 /*
  * ======== cmmwrap_calloc_buf ========
  */
-u32 __deprecated cmmwrap_calloc_buf(union trapped_args * args, void *pr_ctxt)
+u32 __deprecated cmmwrap_calloc_buf(union trapped_args *args, void *pr_ctxt)
 {
 	/* This operation is done in kernel */
 	pr_err("%s: deprecated dspbridge ioctl\n", __func__);
@@ -1874,7 +1803,7 @@ u32 __deprecated cmmwrap_calloc_buf(union trapped_args * args, void *pr_ctxt)
 /*
  * ======== cmmwrap_free_buf ========
  */
-u32 __deprecated cmmwrap_free_buf(union trapped_args * args, void *pr_ctxt)
+u32 __deprecated cmmwrap_free_buf(union trapped_args *args, void *pr_ctxt)
 {
 	/* This operation is done in kernel */
 	pr_err("%s: deprecated dspbridge ioctl\n", __func__);

@@ -35,6 +35,7 @@
 #include <xen/interface/io/fbif.h>
 #include <xen/interface/io/protocols.h>
 #include <xen/xenbus.h>
+#include <xen/platform_pci.h>
 
 struct xenfb_info {
 	unsigned char		*fb;
@@ -358,14 +359,14 @@ static irqreturn_t xenfb_event_handler(int rq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-static int __devinit xenfb_probe(struct xenbus_device *dev,
-				 const struct xenbus_device_id *id)
+static int xenfb_probe(struct xenbus_device *dev,
+		       const struct xenbus_device_id *id)
 {
 	struct xenfb_info *info;
 	struct fb_info *fb_info;
 	int fb_size;
 	int val;
-	int ret;
+	int ret = 0;
 
 	info = kzalloc(sizeof(*info), GFP_KERNEL);
 	if (info == NULL) {
@@ -458,32 +459,36 @@ static int __devinit xenfb_probe(struct xenbus_device *dev,
 	xenfb_init_shared_page(info, fb_info);
 
 	ret = xenfb_connect_backend(dev, info);
-	if (ret < 0)
-		goto error;
+	if (ret < 0) {
+		xenbus_dev_fatal(dev, ret, "xenfb_connect_backend");
+		goto error_fb;
+	}
 
 	ret = register_framebuffer(fb_info);
 	if (ret) {
-		fb_deferred_io_cleanup(fb_info);
-		fb_dealloc_cmap(&fb_info->cmap);
-		framebuffer_release(fb_info);
 		xenbus_dev_fatal(dev, ret, "register_framebuffer");
-		goto error;
+		goto error_fb;
 	}
 	info->fb_info = fb_info;
 
 	xenfb_make_preferred_console();
 	return 0;
 
- error_nomem:
-	ret = -ENOMEM;
-	xenbus_dev_fatal(dev, ret, "allocating device memory");
- error:
+error_fb:
+	fb_deferred_io_cleanup(fb_info);
+	fb_dealloc_cmap(&fb_info->cmap);
+	framebuffer_release(fb_info);
+error_nomem:
+	if (!ret) {
+		ret = -ENOMEM;
+		xenbus_dev_fatal(dev, ret, "allocating device memory");
+	}
+error:
 	xenfb_remove(dev);
 	return ret;
 }
 
-static __devinit void
-xenfb_make_preferred_console(void)
+static void xenfb_make_preferred_console(void)
 {
 	struct console *c;
 
@@ -636,7 +641,6 @@ static void xenfb_backend_changed(struct xenbus_device *dev,
 	case XenbusStateReconfiguring:
 	case XenbusStateReconfigured:
 	case XenbusStateUnknown:
-	case XenbusStateClosed:
 		break;
 
 	case XenbusStateInitWait:
@@ -665,6 +669,10 @@ InitWait:
 		info->feature_resize = val;
 		break;
 
+	case XenbusStateClosed:
+		if (dev->state == XenbusStateClosed)
+			break;
+		/* Missed the backend's CLOSING state -- fallthrough */
 	case XenbusStateClosing:
 		xenbus_frontend_closed(dev);
 		break;
@@ -685,11 +693,14 @@ static DEFINE_XENBUS_DRIVER(xenfb, ,
 
 static int __init xenfb_init(void)
 {
-	if (!xen_pv_domain())
+	if (!xen_domain())
 		return -ENODEV;
 
 	/* Nothing to do if running in dom0. */
 	if (xen_initial_domain())
+		return -ENODEV;
+
+	if (!xen_has_pv_devices())
 		return -ENODEV;
 
 	return xenbus_register_frontend(&xenfb_driver);

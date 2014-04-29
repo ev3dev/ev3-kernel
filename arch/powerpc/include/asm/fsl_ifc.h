@@ -93,6 +93,7 @@
 #define CSOR_NAND_PGS_512		0x00000000
 #define CSOR_NAND_PGS_2K		0x00080000
 #define CSOR_NAND_PGS_4K		0x00100000
+#define CSOR_NAND_PGS_8K		0x00180000
 /* Spare region Size */
 #define CSOR_NAND_SPRZ_MASK		0x0000E000
 #define CSOR_NAND_SPRZ_SHIFT		13
@@ -102,6 +103,7 @@
 #define CSOR_NAND_SPRZ_210		0x00006000
 #define CSOR_NAND_SPRZ_218		0x00008000
 #define CSOR_NAND_SPRZ_224		0x0000A000
+#define CSOR_NAND_SPRZ_CSOR_EXT		0x0000C000
 /* Pages Per Block */
 #define CSOR_NAND_PB_MASK		0x00000700
 #define CSOR_NAND_PB_SHIFT		8
@@ -768,22 +770,24 @@ struct fsl_ifc_gpcm {
  */
 struct fsl_ifc_regs {
 	__be32 ifc_rev;
-	u32 res1[0x3];
+	u32 res1[0x2];
 	struct {
+		__be32 cspr_ext;
 		__be32 cspr;
-		u32 res2[0x2];
+		u32 res2;
 	} cspr_cs[FSL_IFC_BANK_COUNT];
-	u32 res3[0x18];
+	u32 res3[0x19];
 	struct {
 		__be32 amask;
 		u32 res4[0x2];
 	} amask_cs[FSL_IFC_BANK_COUNT];
-	u32 res5[0x18];
+	u32 res5[0x17];
 	struct {
+		__be32 csor_ext;
 		__be32 csor;
-		u32 res6[0x2];
+		u32 res6;
 	} csor_cs[FSL_IFC_BANK_COUNT];
-	u32 res7[0x18];
+	u32 res7[0x19];
 	struct {
 		__be32 ftim[4];
 		u32 res8[0x8];

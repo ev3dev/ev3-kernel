@@ -1,5 +1,5 @@
 /**
- * drivers/net/ks8851_mll.c
+ * drivers/net/ethernet/micrel/ks8851_mll.c
  * Copyright (c) 2009 Micrel Inc.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -16,8 +16,7 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-/**
- * Supports:
+/* Supports:
  * KS8851 16bit MLL chip from Micrel Inc.
  */
 
@@ -35,12 +34,15 @@
 #include <linux/platform_device.h>
 #include <linux/delay.h>
 #include <linux/slab.h>
-#include <asm/io.h>
+#include <linux/ks8851_mll.h>
+#include <linux/of.h>
+#include <linux/of_device.h>
+#include <linux/of_net.h>
 
 #define	DRV_NAME	"ks8851_mll"
 
 static u8 KS_DEFAULT_MAC_ADDRESS[] = { 0x00, 0x10, 0xA1, 0x86, 0x95, 0x11 };
-#define MAX_RECV_FRAMES			32
+#define MAX_RECV_FRAMES			255
 #define MAX_BUF_SIZE			2048
 #define TX_BUF_SIZE			2000
 #define RX_BUF_SIZE			2000
@@ -465,8 +467,7 @@ static int msg_enable;
 #define BE1             0x2000      /* Byte Enable 1 */
 #define BE0             0x1000      /* Byte Enable 0 */
 
-/**
- * register read/write calls.
+/* register read/write calls.
  *
  * All these calls issue transactions to access the chip's registers. They
  * all require that the necessary lock is held to prevent accesses when the
@@ -687,7 +688,7 @@ static void ks_soft_reset(struct ks_net *ks, unsigned op)
 }
 
 
-void ks_enable_qmu(struct ks_net *ks)
+static void ks_enable_qmu(struct ks_net *ks)
 {
 	u16 w;
 
@@ -794,20 +795,35 @@ static void ks_rcv(struct ks_net *ks, struct net_device *netdev)
 
 	frame_hdr = ks->frame_head_info;
 	while (ks->frame_cnt--) {
-		skb = dev_alloc_skb(frame_hdr->len + 16);
-		if (likely(skb && (frame_hdr->sts & RXFSHR_RXFV) &&
-			(frame_hdr->len < RX_BUF_SIZE) && frame_hdr->len)) {
+		if (unlikely(!(frame_hdr->sts & RXFSHR_RXFV) ||
+			     frame_hdr->len >= RX_BUF_SIZE ||
+			     frame_hdr->len <= 0)) {
+
+			/* discard an invalid packet */
+			ks_wrreg16(ks, KS_RXQCR, (ks->rc_rxqcr | RXQCR_RRXEF));
+			netdev->stats.rx_dropped++;
+			if (!(frame_hdr->sts & RXFSHR_RXFV))
+				netdev->stats.rx_frame_errors++;
+			else
+				netdev->stats.rx_length_errors++;
+			frame_hdr++;
+			continue;
+		}
+
+		skb = netdev_alloc_skb(netdev, frame_hdr->len + 16);
+		if (likely(skb)) {
 			skb_reserve(skb, 2);
 			/* read data block including CRC 4 bytes */
 			ks_read_qmu(ks, (u16 *)skb->data, frame_hdr->len);
-			skb_put(skb, frame_hdr->len);
+			skb_put(skb, frame_hdr->len - 4);
 			skb->protocol = eth_type_trans(skb, netdev);
 			netif_rx(skb);
+			/* exclude CRC size */
+			netdev->stats.rx_bytes += frame_hdr->len - 4;
+			netdev->stats.rx_packets++;
 		} else {
-			pr_err("%s: err:skb alloc\n", __func__);
 			ks_wrreg16(ks, KS_RXQCR, (ks->rc_rxqcr | RXQCR_RRXEF));
-			if (skb)
-				dev_kfree_skb_irq(skb);
+			netdev->stats.rx_dropped++;
 		}
 		frame_hdr++;
 	}
@@ -837,7 +853,7 @@ static void ks_update_link_status(struct net_device *netdev, struct ks_net *ks)
 
 /**
  * ks_irq - device interrupt handler
- * @irq: Interrupt number passed from the IRQ hnalder.
+ * @irq: Interrupt number passed from the IRQ handler.
  * @pw: The private word passed to register_irq(), our struct ks_net.
  *
  * This is the handler invoked to find out what happened
@@ -879,6 +895,8 @@ static irqreturn_t ks_irq(int irq, void *pw)
 		ks_wrreg16(ks, KS_PMECR, pmecr | PMECR_WKEVT_LINK);
 	}
 
+	if (unlikely(status & IRQ_RXOI))
+		ks->netdev->stats.rx_over_errors++;
 	/* this should be the last in IRQ handler*/
 	ks_restore_cmd_reg(ks);
 	return IRQ_HANDLED;
@@ -897,7 +915,7 @@ static int ks_net_open(struct net_device *netdev)
 	struct ks_net *ks = netdev_priv(netdev);
 	int err;
 
-#define	KS_INT_FLAGS	(IRQF_DISABLED|IRQF_TRIGGER_LOW)
+#define	KS_INT_FLAGS	IRQF_TRIGGER_LOW
 	/* lock the card, even if we may not actually do anything
 	 * else at the moment.
 	 */
@@ -1017,6 +1035,9 @@ static int ks_start_xmit(struct sk_buff *skb, struct net_device *netdev)
 
 	if (likely(ks_tx_fifo_space(ks) >= skb->len + 12)) {
 		ks_write_qmu(ks, skb->data, skb->len);
+		/* add tx statistics */
+		netdev->stats.tx_bytes += skb->len;
+		netdev->stats.tx_packets++;
 		dev_kfree_skb(skb);
 	} else
 		retv = NETDEV_TX_BUSY;
@@ -1103,7 +1124,7 @@ static void ks_set_grpaddr(struct ks_net *ks)
 	}
 }  /* ks_set_grpaddr */
 
-/*
+/**
 * ks_clear_mcast - clear multicast information
 *
 * @ks : The chip information
@@ -1227,7 +1248,7 @@ static void ks_set_mac(struct ks_net *ks, u8 *data)
 	w = ((u & 0xFF) << 8) | ((u >> 8) & 0xFF);
 	ks_wrreg16(ks, KS_MARL, w);
 
-	memcpy(ks->mac_addr, data, 6);
+	memcpy(ks->mac_addr, data, ETH_ALEN);
 
 	if (ks->enabled)
 		ks_start_rx(ks);
@@ -1499,23 +1520,29 @@ static int ks_hw_init(struct ks_net *ks)
 	ks->mcast_lst_size = 0;
 
 	ks->frame_head_info = kmalloc(MHEADER_SIZE, GFP_KERNEL);
-	if (!ks->frame_head_info) {
-		pr_err("Error: Fail to allocate frame memory\n");
+	if (!ks->frame_head_info)
 		return false;
-	}
 
 	ks_set_mac(ks, KS_DEFAULT_MAC_ADDRESS);
 	return true;
 }
 
+#if defined(CONFIG_OF)
+static const struct of_device_id ks8851_ml_dt_ids[] = {
+	{ .compatible = "micrel,ks8851-mll" },
+	{ /* sentinel */ }
+};
+MODULE_DEVICE_TABLE(of, ks8851_ml_dt_ids);
+#endif
 
-static int __devinit ks8851_probe(struct platform_device *pdev)
+static int ks8851_probe(struct platform_device *pdev)
 {
 	int err = -ENOMEM;
 	struct resource *io_d, *io_c;
 	struct net_device *netdev;
 	struct ks_net *ks;
 	u16 id, data;
+	const char *mac;
 
 	io_d = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	io_c = platform_get_resource(pdev, IORESOURCE_MEM, 1);
@@ -1597,17 +1624,35 @@ static int __devinit ks8851_probe(struct platform_device *pdev)
 	ks_disable_qmu(ks);
 	ks_setup(ks);
 	ks_setup_int(ks);
-	memcpy(netdev->dev_addr, ks->mac_addr, 6);
 
 	data = ks_rdreg16(ks, KS_OBCR);
 	ks_wrreg16(ks, KS_OBCR, data | OBCR_ODS_16MA);
 
-	/**
-	 * If you want to use the default MAC addr,
-	 * comment out the 2 functions below.
-	 */
+	/* overwriting the default MAC address */
+	if (pdev->dev.of_node) {
+		mac = of_get_mac_address(pdev->dev.of_node);
+		if (mac)
+			memcpy(ks->mac_addr, mac, ETH_ALEN);
+	} else {
+		struct ks8851_mll_platform_data *pdata;
 
-	random_ether_addr(netdev->dev_addr);
+		pdata = dev_get_platdata(&pdev->dev);
+		if (!pdata) {
+			netdev_err(netdev, "No platform data\n");
+			err = -ENODEV;
+			goto err_pdata;
+		}
+		memcpy(ks->mac_addr, pdata->mac_addr, ETH_ALEN);
+	}
+	if (!is_valid_ether_addr(ks->mac_addr)) {
+		/* Use random MAC address if none passed */
+		eth_random_addr(ks->mac_addr);
+		netdev_info(netdev, "Using random mac address\n");
+	}
+	netdev_info(netdev, "Mac address is: %pM\n", ks->mac_addr);
+
+	memcpy(netdev->dev_addr, ks->mac_addr, ETH_ALEN);
+
 	ks_set_mac(ks, netdev->dev_addr);
 
 	id = ks_rdreg16(ks, KS_CIDER);
@@ -1616,6 +1661,8 @@ static int __devinit ks8851_probe(struct platform_device *pdev)
 		    (id >> 8) & 0xff, (id >> 4) & 0xf, (id >> 1) & 0x7);
 	return 0;
 
+err_pdata:
+	unregister_netdev(netdev);
 err_register:
 err_get_irq:
 	iounmap(ks->hw_addr_cmd);
@@ -1631,7 +1678,7 @@ err_mem_region:
 	return err;
 }
 
-static int __devexit ks8851_remove(struct platform_device *pdev)
+static int ks8851_remove(struct platform_device *pdev)
 {
 	struct net_device *netdev = platform_get_drvdata(pdev);
 	struct ks_net *ks = netdev_priv(netdev);
@@ -1642,7 +1689,6 @@ static int __devexit ks8851_remove(struct platform_device *pdev)
 	iounmap(ks->hw_addr);
 	free_netdev(netdev);
 	release_mem_region(iomem->start, resource_size(iomem));
-	platform_set_drvdata(pdev, NULL);
 	return 0;
 
 }
@@ -1651,9 +1697,10 @@ static struct platform_driver ks8851_platform_driver = {
 	.driver = {
 		.name = DRV_NAME,
 		.owner = THIS_MODULE,
+		.of_match_table	= of_match_ptr(ks8851_ml_dt_ids),
 	},
 	.probe = ks8851_probe,
-	.remove = __devexit_p(ks8851_remove),
+	.remove = ks8851_remove,
 };
 
 module_platform_driver(ks8851_platform_driver);

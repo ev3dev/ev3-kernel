@@ -868,7 +868,7 @@ short pru_softuart_open(suart_handle hSuart)
 	}
 	return (status);
 }
-EXPORT_SYMBOL(pru_softuart_open);
+//EXPORT_SYMBOL(pru_softuart_open);
 
 /*
  * suart instance close routine 
@@ -887,7 +887,7 @@ short pru_softuart_close(suart_handle hUart)
 	}
 	return (status);
 }
-EXPORT_SYMBOL(pru_softuart_close);
+//EXPORT_SYMBOL(pru_softuart_close);
 
 /*
  * suart routine for setting relative baud rate 

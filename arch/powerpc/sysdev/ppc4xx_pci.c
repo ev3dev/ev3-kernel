@@ -257,6 +257,7 @@ static void __init ppc4xx_configure_pci_PMMs(struct pci_controller *hose,
 	/* Setup outbound memory windows */
 	for (i = j = 0; i < 3; i++) {
 		struct resource *res = &hose->mem_resources[i];
+		resource_size_t offset = hose->mem_offset[i];
 
 		/* we only care about memory windows */
 		if (!(res->flags & IORESOURCE_MEM))
@@ -270,7 +271,7 @@ static void __init ppc4xx_configure_pci_PMMs(struct pci_controller *hose,
 		/* Configure the resource */
 		if (ppc4xx_setup_one_pci_PMM(hose, reg,
 					     res->start,
-					     res->start - hose->pci_mem_offset,
+					     res->start - offset,
 					     resource_size(res),
 					     res->flags,
 					     j) == 0) {
@@ -279,7 +280,7 @@ static void __init ppc4xx_configure_pci_PMMs(struct pci_controller *hose,
 			/* If the resource PCI address is 0 then we have our
 			 * ISA memory hole
 			 */
-			if (res->start == hose->pci_mem_offset)
+			if (res->start == offset)
 				found_isa_hole = 1;
 		}
 	}
@@ -457,6 +458,7 @@ static void __init ppc4xx_configure_pcix_POMs(struct pci_controller *hose,
 	/* Setup outbound memory windows */
 	for (i = j = 0; i < 3; i++) {
 		struct resource *res = &hose->mem_resources[i];
+		resource_size_t offset = hose->mem_offset[i];
 
 		/* we only care about memory windows */
 		if (!(res->flags & IORESOURCE_MEM))
@@ -470,7 +472,7 @@ static void __init ppc4xx_configure_pcix_POMs(struct pci_controller *hose,
 		/* Configure the resource */
 		if (ppc4xx_setup_one_pcix_POM(hose, reg,
 					      res->start,
-					      res->start - hose->pci_mem_offset,
+					      res->start - offset,
 					      resource_size(res),
 					      res->flags,
 					      j) == 0) {
@@ -479,7 +481,7 @@ static void __init ppc4xx_configure_pcix_POMs(struct pci_controller *hose,
 			/* If the resource PCI address is 0 then we have our
 			 * ISA memory hole
 			 */
-			if (res->start == hose->pci_mem_offset)
+			if (res->start == offset)
 				found_isa_hole = 1;
 		}
 	}
@@ -1050,6 +1052,74 @@ static struct ppc4xx_pciex_hwops ppc460ex_pcie_hwops __initdata =
 	.check_link	= ppc4xx_pciex_check_link_sdr,
 };
 
+static int __init apm821xx_pciex_core_init(struct device_node *np)
+{
+	/* Return the number of pcie port */
+	return 1;
+}
+
+static int apm821xx_pciex_init_port_hw(struct ppc4xx_pciex_port *port)
+{
+	u32 val;
+
+	/*
+	 * Do a software reset on PCIe ports.
+	 * This code is to fix the issue that pci drivers doesn't re-assign
+	 * bus number for PCIE devices after Uboot
+	 * scanned and configured all the buses (eg. PCIE NIC IntelPro/1000
+	 * PT quad port, SAS LSI 1064E)
+	 */
+
+	mtdcri(SDR0, PESDR0_460EX_PHY_CTL_RST, 0x0);
+	mdelay(10);
+
+	if (port->endpoint)
+		val = PTYPE_LEGACY_ENDPOINT << 20;
+	else
+		val = PTYPE_ROOT_PORT << 20;
+
+	val |= LNKW_X1 << 12;
+
+	mtdcri(SDR0, port->sdr_base + PESDRn_DLPSET, val);
+	mtdcri(SDR0, port->sdr_base + PESDRn_UTLSET1, 0x00000000);
+	mtdcri(SDR0, port->sdr_base + PESDRn_UTLSET2, 0x01010000);
+
+	mtdcri(SDR0, PESDR0_460EX_L0CDRCTL, 0x00003230);
+	mtdcri(SDR0, PESDR0_460EX_L0DRV, 0x00000130);
+	mtdcri(SDR0, PESDR0_460EX_L0CLK, 0x00000006);
+
+	mtdcri(SDR0, PESDR0_460EX_PHY_CTL_RST, 0x10000000);
+	mdelay(50);
+	mtdcri(SDR0, PESDR0_460EX_PHY_CTL_RST, 0x30000000);
+
+	mtdcri(SDR0, port->sdr_base + PESDRn_RCSSET,
+		mfdcri(SDR0, port->sdr_base + PESDRn_RCSSET) |
+		(PESDRx_RCSSET_RSTGU | PESDRx_RCSSET_RSTPYN));
+
+	/* Poll for PHY reset */
+	val = PESDR0_460EX_RSTSTA - port->sdr_base;
+	if (ppc4xx_pciex_wait_on_sdr(port, val, 0x1, 1,	100)) {
+		printk(KERN_WARNING "%s: PCIE: Can't reset PHY\n", __func__);
+		return -EBUSY;
+	} else {
+		mtdcri(SDR0, port->sdr_base + PESDRn_RCSSET,
+			(mfdcri(SDR0, port->sdr_base + PESDRn_RCSSET) &
+			~(PESDRx_RCSSET_RSTGU | PESDRx_RCSSET_RSTDL)) |
+			PESDRx_RCSSET_RSTPYN);
+
+		port->has_ibpre = 1;
+		return 0;
+	}
+}
+
+static struct ppc4xx_pciex_hwops apm821xx_pcie_hwops __initdata = {
+	.want_sdr   = true,
+	.core_init	= apm821xx_pciex_core_init,
+	.port_init_hw	= apm821xx_pciex_init_port_hw,
+	.setup_utl	= ppc460ex_pciex_init_utl,
+	.check_link = ppc4xx_pciex_check_link_sdr,
+};
+
 static int __init ppc460sx_pciex_core_init(struct device_node *np)
 {
 	/* HSS drive amplitude */
@@ -1362,6 +1432,8 @@ static int __init ppc4xx_pciex_check_core_init(struct device_node *np)
 		ppc4xx_pciex_hwops = &ppc460ex_pcie_hwops;
 	if (of_device_is_compatible(np, "ibm,plb-pciex-460sx"))
 		ppc4xx_pciex_hwops = &ppc460sx_pcie_hwops;
+	if (of_device_is_compatible(np, "ibm,plb-pciex-apm821xx"))
+		ppc4xx_pciex_hwops = &apm821xx_pcie_hwops;
 #endif /* CONFIG_44x    */
 #ifdef CONFIG_40x
 	if (of_device_is_compatible(np, "ibm,plb-pciex-405ex"))
@@ -1722,6 +1794,7 @@ static void __init ppc4xx_configure_pciex_POMs(struct ppc4xx_pciex_port *port,
 	/* Setup outbound memory windows */
 	for (i = j = 0; i < 3; i++) {
 		struct resource *res = &hose->mem_resources[i];
+		resource_size_t offset = hose->mem_offset[i];
 
 		/* we only care about memory windows */
 		if (!(res->flags & IORESOURCE_MEM))
@@ -1735,7 +1808,7 @@ static void __init ppc4xx_configure_pciex_POMs(struct ppc4xx_pciex_port *port,
 		/* Configure the resource */
 		if (ppc4xx_setup_one_pciex_POM(port, hose, mbase,
 					       res->start,
-					       res->start - hose->pci_mem_offset,
+					       res->start - offset,
 					       resource_size(res),
 					       res->flags,
 					       j) == 0) {
@@ -1744,7 +1817,7 @@ static void __init ppc4xx_configure_pciex_POMs(struct ppc4xx_pciex_port *port,
 			/* If the resource PCI address is 0 then we have our
 			 * ISA memory hole
 			 */
-			if (res->start == hose->pci_mem_offset)
+			if (res->start == offset)
 				found_isa_hole = 1;
 		}
 	}

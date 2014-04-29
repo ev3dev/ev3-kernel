@@ -42,8 +42,12 @@
 #include "net.h"
 #include "bearer.h"
 
-/* Flags used to block (re)establishment of contact with a neighboring node */
+/*
+ * Out-of-range value for node signature
+ */
+#define INVALID_NODE_SIG 0x10000
 
+/* Flags used to block (re)establishment of contact with a neighboring node */
 #define WAIT_PEER_DOWN	0x0001	/* wait to see that peer's links are down */
 #define WAIT_NAMES_GONE	0x0002	/* wait for peer's publications to be purged */
 #define WAIT_NODE_DOWN	0x0004	/* wait until peer node is declared down */
@@ -60,19 +64,19 @@
  * @working_links: number of working links to node (both active and standby)
  * @block_setup: bit mask of conditions preventing link establishment to node
  * @link_cnt: number of links to node
- * @permit_changeover: non-zero if node has redundant links to this system
+ * @signature: node instance identifier
  * @bclink: broadcast-related info
- *    @supported: non-zero if node supports TIPC b'cast capability
  *    @acked: sequence # of last outbound b'cast message acknowledged by node
  *    @last_in: sequence # of last in-sequence b'cast message received from node
- *    @gap_after: sequence # of last message not requiring a NAK request
- *    @gap_to: sequence # of last message requiring a NAK request
- *    @nack_sync: counter that determines when NAK requests should be sent
+ *    @last_sent: sequence # of last b'cast message sent by node
+ *    @oos_state: state tracker for handling OOS b'cast messages
+ *    @deferred_size: number of OOS b'cast messages in deferred queue
  *    @deferred_head: oldest OOS b'cast message received from node
  *    @deferred_tail: newest OOS b'cast message received from node
- *    @defragm: list of partially reassembled b'cast message fragments from node
+ *    @reasm_head: broadcast reassembly queue head from node
+ *    @reasm_tail: last broadcast fragment received from node
+ *    @recv_permitted: true if node is allowed to receive b'cast messages
  */
-
 struct tipc_node {
 	u32 addr;
 	spinlock_t lock;
@@ -84,35 +88,22 @@ struct tipc_node {
 	int link_cnt;
 	int working_links;
 	int block_setup;
-	int permit_changeover;
+	u32 signature;
 	struct {
-		int supported;
 		u32 acked;
 		u32 last_in;
-		u32 gap_after;
-		u32 gap_to;
-		u32 nack_sync;
+		u32 last_sent;
+		u32 oos_state;
+		u32 deferred_size;
 		struct sk_buff *deferred_head;
 		struct sk_buff *deferred_tail;
-		struct sk_buff *defragm;
+		struct sk_buff *reasm_head;
+		struct sk_buff *reasm_tail;
+		bool recv_permitted;
 	} bclink;
 };
 
-#define NODE_HTABLE_SIZE 512
 extern struct list_head tipc_node_list;
-
-/*
- * A trivial power-of-two bitmask technique is used for speed, since this
- * operation is done for every incoming TIPC packet. The number of hash table
- * entries has been chosen so that no hash chain exceeds 8 nodes and will
- * usually be much smaller (typically only a single node).
- */
-static inline unsigned int tipc_hashfn(u32 addr)
-{
-	return addr & (NODE_HTABLE_SIZE - 1);
-}
-
-extern u32 tipc_own_tag;
 
 struct tipc_node *tipc_node_find(u32 addr);
 struct tipc_node *tipc_node_create(u32 addr);
@@ -122,7 +113,6 @@ void tipc_node_detach_link(struct tipc_node *n_ptr, struct tipc_link *l_ptr);
 void tipc_node_link_down(struct tipc_node *n_ptr, struct tipc_link *l_ptr);
 void tipc_node_link_up(struct tipc_node *n_ptr, struct tipc_link *l_ptr);
 int tipc_node_active_links(struct tipc_node *n_ptr);
-int tipc_node_redundant_links(struct tipc_node *n_ptr);
 int tipc_node_is_up(struct tipc_node *n_ptr);
 struct sk_buff *tipc_node_get_links(const void *req_tlv_area, int req_tlv_space);
 struct sk_buff *tipc_node_get_nodes(const void *req_tlv_area, int req_tlv_space);

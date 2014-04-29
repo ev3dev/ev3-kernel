@@ -17,6 +17,7 @@
 #include <linux/magic.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
+#include <linux/writeback.h>
 #include "affs.h"
 
 extern struct timezone sys_tz;
@@ -25,15 +26,17 @@ static int affs_statfs(struct dentry *dentry, struct kstatfs *buf);
 static int affs_remount (struct super_block *sb, int *flags, char *data);
 
 static void
-affs_commit_super(struct super_block *sb, int wait, int clean)
+affs_commit_super(struct super_block *sb, int wait)
 {
 	struct affs_sb_info *sbi = AFFS_SB(sb);
 	struct buffer_head *bh = sbi->s_root_bh;
 	struct affs_root_tail *tail = AFFS_ROOT_TAIL(sb, bh);
 
-	tail->bm_flag = cpu_to_be32(clean);
+	lock_buffer(bh);
 	secs_to_datestamp(get_seconds(), &tail->disk_change);
 	affs_fix_checksum(sb, bh);
+	unlock_buffer(bh);
+
 	mark_buffer_dirty(bh);
 	if (wait)
 		sync_dirty_buffer(bh);
@@ -45,36 +48,46 @@ affs_put_super(struct super_block *sb)
 	struct affs_sb_info *sbi = AFFS_SB(sb);
 	pr_debug("AFFS: put_super()\n");
 
-	if (!(sb->s_flags & MS_RDONLY) && sb->s_dirt)
-		affs_commit_super(sb, 1, 1);
-
-	kfree(sbi->s_prefix);
-	affs_free_bitmap(sb);
-	affs_brelse(sbi->s_root_bh);
-	kfree(sbi);
-	sb->s_fs_info = NULL;
-}
-
-static void
-affs_write_super(struct super_block *sb)
-{
-	lock_super(sb);
-	if (!(sb->s_flags & MS_RDONLY))
-		affs_commit_super(sb, 1, 2);
-	sb->s_dirt = 0;
-	unlock_super(sb);
-
-	pr_debug("AFFS: write_super() at %lu, clean=2\n", get_seconds());
+	cancel_delayed_work_sync(&sbi->sb_work);
 }
 
 static int
 affs_sync_fs(struct super_block *sb, int wait)
 {
-	lock_super(sb);
-	affs_commit_super(sb, wait, 2);
-	sb->s_dirt = 0;
-	unlock_super(sb);
+	affs_commit_super(sb, wait);
 	return 0;
+}
+
+static void flush_superblock(struct work_struct *work)
+{
+	struct affs_sb_info *sbi;
+	struct super_block *sb;
+
+	sbi = container_of(work, struct affs_sb_info, sb_work.work);
+	sb = sbi->sb;
+
+	spin_lock(&sbi->work_lock);
+	sbi->work_queued = 0;
+	spin_unlock(&sbi->work_lock);
+
+	affs_commit_super(sb, 1);
+}
+
+void affs_mark_sb_dirty(struct super_block *sb)
+{
+	struct affs_sb_info *sbi = AFFS_SB(sb);
+	unsigned long delay;
+
+	if (sb->s_flags & MS_RDONLY)
+	       return;
+
+	spin_lock(&sbi->work_lock);
+	if (!sbi->work_queued) {
+	       delay = msecs_to_jiffies(dirty_writeback_interval * 10);
+	       queue_delayed_work(system_long_wq, &sbi->sb_work, delay);
+	       sbi->work_queued = 1;
+	}
+	spin_unlock(&sbi->work_lock);
 }
 
 static struct kmem_cache * affs_inode_cachep;
@@ -129,6 +142,11 @@ static int init_inodecache(void)
 
 static void destroy_inodecache(void)
 {
+	/*
+	 * Make sure all delayed rcu free inodes are flushed before we
+	 * destroy cache.
+	 */
+	rcu_barrier();
 	kmem_cache_destroy(affs_inode_cachep);
 }
 
@@ -138,7 +156,6 @@ static const struct super_operations affs_sops = {
 	.write_inode	= affs_write_inode,
 	.evict_inode	= affs_evict_inode,
 	.put_super	= affs_put_super,
-	.write_super	= affs_write_super,
 	.sync_fs	= affs_sync_fs,
 	.statfs		= affs_statfs,
 	.remount_fs	= affs_remount,
@@ -171,7 +188,7 @@ static const match_table_t tokens = {
 };
 
 static int
-parse_options(char *options, uid_t *uid, gid_t *gid, int *mode, int *reserved, s32 *root,
+parse_options(char *options, kuid_t *uid, kgid_t *gid, int *mode, int *reserved, s32 *root,
 		int *blocksize, char **prefix, char *volume, unsigned long *mount_opts)
 {
 	char *p;
@@ -236,13 +253,17 @@ parse_options(char *options, uid_t *uid, gid_t *gid, int *mode, int *reserved, s
 		case Opt_setgid:
 			if (match_int(&args[0], &option))
 				return 0;
-			*gid = option;
+			*gid = make_kgid(current_user_ns(), option);
+			if (!gid_valid(*gid))
+				return 0;
 			*mount_opts |= SF_SETGID;
 			break;
 		case Opt_setuid:
 			if (match_int(&args[0], &option))
 				return 0;
-			*uid = option;
+			*uid = make_kuid(current_user_ns(), option);
+			if (!uid_valid(*uid))
+				return 0;
 			*mount_opts |= SF_SETUID;
 			break;
 		case Opt_verbose:
@@ -284,13 +305,13 @@ static int affs_fill_super(struct super_block *sb, void *data, int silent)
 	int			 num_bm;
 	int			 i, j;
 	s32			 key;
-	uid_t			 uid;
-	gid_t			 gid;
+	kuid_t			 uid;
+	kgid_t			 gid;
 	int			 reserved;
 	unsigned long		 mount_flags;
 	int			 tmp_flags;	/* fix remount prototype... */
 	u8			 sig[4];
-	int			 ret = -EINVAL;
+	int			 ret;
 
 	save_mount_options(sb, data);
 
@@ -305,8 +326,11 @@ static int affs_fill_super(struct super_block *sb, void *data, int silent)
 		return -ENOMEM;
 
 	sb->s_fs_info = sbi;
+	sbi->sb = sb;
 	mutex_init(&sbi->s_bmlock);
 	spin_lock_init(&sbi->symlink_lock);
+	spin_lock_init(&sbi->work_lock);
+	INIT_DELAYED_WORK(&sbi->sb_work, flush_superblock);
 
 	if (!parse_options(data,&uid,&gid,&i,&reserved,&root_block,
 				&blocksize,&sbi->s_prefix,
@@ -383,17 +407,19 @@ static int affs_fill_super(struct super_block *sb, void *data, int silent)
 	if (!silent)
 		printk(KERN_ERR "AFFS: No valid root block on device %s\n",
 			sb->s_id);
-	goto out_error;
+	return -EINVAL;
 
 	/* N.B. after this point bh must be released */
 got_root:
+	/* Keep super block in cache */
+	sbi->s_root_bh = root_bh;
 	root_block = sbi->s_root_block;
 
 	/* Find out which kind of FS we have */
 	boot_bh = sb_bread(sb, 0);
 	if (!boot_bh) {
 		printk(KERN_ERR "AFFS: Cannot read boot block\n");
-		goto out_error;
+		return -EINVAL;
 	}
 	memcpy(sig, boot_bh->b_data, 4);
 	brelse(boot_bh);
@@ -442,7 +468,7 @@ got_root:
 		default:
 			printk(KERN_ERR "AFFS: Unknown filesystem on device %s: %08X\n",
 				sb->s_id, chksum);
-			goto out_error;
+			return -EINVAL;
 	}
 
 	if (mount_flags & SF_VERBOSE) {
@@ -459,50 +485,31 @@ got_root:
 	if (sbi->s_flags & SF_OFS)
 		sbi->s_data_blksize -= 24;
 
-	/* Keep super block in cache */
-	sbi->s_root_bh = root_bh;
-	/* N.B. after this point s_root_bh must be released */
-
 	tmp_flags = sb->s_flags;
-	if (affs_init_bitmap(sb, &tmp_flags))
-		goto out_error;
+	ret = affs_init_bitmap(sb, &tmp_flags);
+	if (ret)
+		return ret;
 	sb->s_flags = tmp_flags;
 
 	/* set up enough so that it can read an inode */
 
 	root_inode = affs_iget(sb, root_block);
-	if (IS_ERR(root_inode)) {
-		ret = PTR_ERR(root_inode);
-		goto out_error_noinode;
-	}
+	if (IS_ERR(root_inode))
+		return PTR_ERR(root_inode);
 
 	if (AFFS_SB(sb)->s_flags & SF_INTL)
 		sb->s_d_op = &affs_intl_dentry_operations;
 	else
 		sb->s_d_op = &affs_dentry_operations;
 
-	sb->s_root = d_alloc_root(root_inode);
+	sb->s_root = d_make_root(root_inode);
 	if (!sb->s_root) {
 		printk(KERN_ERR "AFFS: Get root inode failed\n");
-		goto out_error;
+		return -ENOMEM;
 	}
 
 	pr_debug("AFFS: s_flags=%lX\n",sb->s_flags);
 	return 0;
-
-	/*
-	 * Begin the cascaded cleanup ...
-	 */
-out_error:
-	if (root_inode)
-		iput(root_inode);
-out_error_noinode:
-	kfree(sbi->s_bitmap);
-	affs_brelse(root_bh);
-	kfree(sbi->s_prefix);
-	kfree(sbi);
-	sb->s_fs_info = NULL;
-	return ret;
 }
 
 static int
@@ -510,8 +517,8 @@ affs_remount(struct super_block *sb, int *flags, char *data)
 {
 	struct affs_sb_info	*sbi = AFFS_SB(sb);
 	int			 blocksize;
-	uid_t			 uid;
-	gid_t			 gid;
+	kuid_t			 uid;
+	kgid_t			 gid;
 	int			 mode;
 	int			 reserved;
 	int			 root_block;
@@ -534,6 +541,7 @@ affs_remount(struct super_block *sb, int *flags, char *data)
 		return -EINVAL;
 	}
 
+	flush_delayed_work(&sbi->sb_work);
 	replace_mount_options(sb, new_opts);
 
 	sbi->s_flags = mount_flags;
@@ -552,10 +560,9 @@ affs_remount(struct super_block *sb, int *flags, char *data)
 	if ((*flags & MS_RDONLY) == (sb->s_flags & MS_RDONLY))
 		return 0;
 
-	if (*flags & MS_RDONLY) {
-		affs_write_super(sb);
+	if (*flags & MS_RDONLY)
 		affs_free_bitmap(sb);
-	} else
+	else
 		res = affs_init_bitmap(sb, flags);
 
 	return res;
@@ -589,13 +596,26 @@ static struct dentry *affs_mount(struct file_system_type *fs_type,
 	return mount_bdev(fs_type, flags, dev_name, data, affs_fill_super);
 }
 
+static void affs_kill_sb(struct super_block *sb)
+{
+	struct affs_sb_info *sbi = AFFS_SB(sb);
+	kill_block_super(sb);
+	if (sbi) {
+		affs_free_bitmap(sb);
+		affs_brelse(sbi->s_root_bh);
+		kfree(sbi->s_prefix);
+		kfree(sbi);
+	}
+}
+
 static struct file_system_type affs_fs_type = {
 	.owner		= THIS_MODULE,
 	.name		= "affs",
 	.mount		= affs_mount,
-	.kill_sb	= kill_block_super,
+	.kill_sb	= affs_kill_sb,
 	.fs_flags	= FS_REQUIRES_DEV,
 };
+MODULE_ALIAS_FS("affs");
 
 static int __init init_affs_fs(void)
 {

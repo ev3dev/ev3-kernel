@@ -11,6 +11,7 @@
 #include <linux/ceph/types.h>
 #include <linux/ceph/messenger.h>
 #include <linux/ceph/mdsmap.h>
+#include <linux/ceph/auth.h>
 
 /*
  * Some lock dependencies:
@@ -73,6 +74,12 @@ struct ceph_mds_reply_info_parsed {
 			struct ceph_mds_reply_info_in *dir_in;
 			u8                            dir_complete, dir_end;
 		};
+
+		/* for create results */
+		struct {
+			bool has_create_ino;
+			u64 ino;
+		};
 	};
 
 	/* encoded blob describing snapshot contexts for certain
@@ -113,9 +120,7 @@ struct ceph_mds_session {
 
 	struct ceph_connection s_con;
 
-	struct ceph_authorizer *s_authorizer;
-	void             *s_authorizer_buf, *s_authorizer_reply_buf;
-	size_t            s_authorizer_buf_len, s_authorizer_reply_buf_len;
+	struct ceph_auth_handshake s_auth;
 
 	/* protected by s_gen_ttl_lock */
 	spinlock_t        s_gen_ttl_lock;
@@ -127,6 +132,7 @@ struct ceph_mds_session {
 	struct list_head  s_caps;     /* all caps issued by this session */
 	int               s_nr_caps, s_trim_caps;
 	int               s_num_cap_releases;
+	int		  s_cap_reconnect;
 	struct list_head  s_cap_releases; /* waiting cap_release messages */
 	struct list_head  s_cap_releases_done; /* ready to send */
 	struct ceph_cap  *s_cap_iterator;
@@ -185,8 +191,8 @@ struct ceph_mds_request {
 
 	union ceph_mds_request_args r_args;
 	int r_fmode;        /* file mode, if expecting cap */
-	uid_t r_uid;
-	gid_t r_gid;
+	kuid_t r_uid;
+	kgid_t r_gid;
 
 	/* for choosing which mds to send this request to */
 	int r_direct_mode;
@@ -377,6 +383,8 @@ extern void ceph_mdsc_lease_send_msg(struct ceph_mds_session *session,
 extern void ceph_mdsc_handle_map(struct ceph_mds_client *mdsc,
 				 struct ceph_msg *msg);
 
+extern struct ceph_mds_session *
+ceph_mdsc_open_export_target_session(struct ceph_mds_client *mdsc, int target);
 extern void ceph_mdsc_open_export_target_sessions(struct ceph_mds_client *mdsc,
 					  struct ceph_mds_session *session);
 

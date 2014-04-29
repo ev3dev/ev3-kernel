@@ -11,8 +11,7 @@
  * more details.
  *
  * You should have received a copy of the GNU General Public License along with
- * this program; if not, write to the Free Software Foundation, Inc., 59 Temple
- * Place - Suite 330, Boston, MA 02111-1307 USA.
+ * this program; if not, see <http://www.gnu.org/licenses/>.
  *
  * Author: Lucy Liu <lucy.liu@intel.com>
  */
@@ -48,6 +47,8 @@ struct dcbnl_rtnl_ops {
 	/* IEEE 802.1Qaz std */
 	int (*ieee_getets) (struct net_device *, struct ieee_ets *);
 	int (*ieee_setets) (struct net_device *, struct ieee_ets *);
+	int (*ieee_getmaxrate) (struct net_device *, struct ieee_maxrate *);
+	int (*ieee_setmaxrate) (struct net_device *, struct ieee_maxrate *);
 	int (*ieee_getpfc) (struct net_device *, struct ieee_pfc *);
 	int (*ieee_setpfc) (struct net_device *, struct ieee_pfc *);
 	int (*ieee_getapp) (struct net_device *, struct dcb_app *);
@@ -72,8 +73,8 @@ struct dcbnl_rtnl_ops {
 	void (*getpfccfg)(struct net_device *, int, u8 *);
 	u8   (*setall)(struct net_device *);
 	u8   (*getcap)(struct net_device *, int, u8 *);
-	u8   (*getnumtcs)(struct net_device *, int, u8 *);
-	u8   (*setnumtcs)(struct net_device *, int, u8);
+	int  (*getnumtcs)(struct net_device *, int, u8 *);
+	int  (*setnumtcs)(struct net_device *, int, u8);
 	u8   (*getpfcstate)(struct net_device *);
 	void (*setpfcstate)(struct net_device *, u8);
 	void (*getbcncfg)(struct net_device *, int, u32 *);

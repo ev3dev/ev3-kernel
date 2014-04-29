@@ -253,6 +253,7 @@ struct ad_system {
 struct ad_bond_info {
 	struct ad_system system;	    /* 802.3ad system structure */
 	u32 agg_select_timer;	    // Timer to select aggregator after all adapter's hand shakes
+	u16 aggregator_identifier;
 };
 
 struct ad_slave_info {
@@ -265,7 +266,7 @@ struct ad_slave_info {
 
 // ================= AD Exported functions to the main bonding code ==================
 void bond_3ad_initialize(struct bonding *bond, u16 tick_resolution);
-int  bond_3ad_bind_slave(struct slave *slave);
+void  bond_3ad_bind_slave(struct slave *slave);
 void bond_3ad_unbind_slave(struct slave *slave);
 void bond_3ad_state_machine_handler(struct work_struct *);
 void bond_3ad_initiate_agg_selection(struct bonding *bond, int timeout);
@@ -273,9 +274,11 @@ void bond_3ad_adapter_speed_changed(struct slave *slave);
 void bond_3ad_adapter_duplex_changed(struct slave *slave);
 void bond_3ad_handle_link_change(struct slave *slave, char link);
 int  bond_3ad_get_active_agg_info(struct bonding *bond, struct ad_info *ad_info);
+int  __bond_3ad_get_active_agg_info(struct bonding *bond,
+				    struct ad_info *ad_info);
 int bond_3ad_xmit_xor(struct sk_buff *skb, struct net_device *dev);
-void bond_3ad_lacpdu_recv(struct sk_buff *skb, struct bonding *bond,
-			  struct slave *slave);
+int bond_3ad_lacpdu_recv(const struct sk_buff *skb, struct bonding *bond,
+			 struct slave *slave);
 int bond_3ad_set_carrier(struct bonding *bond);
 void bond_3ad_update_lacp_rate(struct bonding *bond);
 #endif //__BOND_3AD_H__

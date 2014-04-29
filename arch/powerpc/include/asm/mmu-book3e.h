@@ -41,9 +41,10 @@
 /* MAS registers bit definitions */
 
 #define MAS0_TLBSEL(x)		(((x) << 28) & 0x30000000)
-#define MAS0_ESEL(x)		(((x) << 16) & 0x0FFF0000)
-#define MAS0_NV(x)		((x) & 0x00000FFF)
 #define MAS0_ESEL_MASK		0x0FFF0000
+#define MAS0_ESEL_SHIFT		16
+#define MAS0_ESEL(x)		(((x) << MAS0_ESEL_SHIFT) & MAS0_ESEL_MASK)
+#define MAS0_NV(x)		((x) & 0x00000FFF)
 #define MAS0_HES		0x00004000
 #define MAS0_WQ_ALLWAYS		0x00000000
 #define MAS0_WQ_COND		0x00001000
@@ -58,7 +59,7 @@
 #define MAS1_TSIZE_SHIFT	7
 #define MAS1_TSIZE(x)		(((x) << MAS1_TSIZE_SHIFT) & MAS1_TSIZE_MASK)
 
-#define MAS2_EPN		0xFFFFF000
+#define MAS2_EPN		(~0xFFFUL)
 #define MAS2_X0			0x00000040
 #define MAS2_X1			0x00000020
 #define MAS2_W			0x00000010
@@ -103,6 +104,8 @@
 #define MAS4_TSIZED_MASK	0x00000f80	/* Default TSIZE */
 #define MAS4_TSIZED_SHIFT	7
 
+#define MAS5_SGS		0x80000000
+
 #define MAS6_SPID0		0x3FFF0000
 #define MAS6_SPID1		0x00007FFE
 #define MAS6_ISIZE(x)		MAS1_TSIZE(x)
@@ -116,6 +119,10 @@
 #define MAS6_ISIZE_SHIFT	7
 
 #define MAS7_RPN		0xFFFFFFFF
+
+#define MAS8_TGS		0x80000000 /* Guest space */
+#define MAS8_VF			0x40000000 /* Virtualization Fault */
+#define MAS8_TLPID		0x000000ff
 
 /* Bit definitions for MMUCFG */
 #define MMUCFG_MAVN	0x00000003	/* MMU Architecture Version Number */
@@ -167,6 +174,7 @@
 #define TLBnCFG_MAXSIZE		0x000f0000	/* Maximum Page Size (v1.0) */
 #define TLBnCFG_MAXSIZE_SHIFT	16
 #define TLBnCFG_ASSOC		0xff000000	/* Associativity */
+#define TLBnCFG_ASSOC_SHIFT	24
 
 /* TLBnPS encoding */
 #define TLBnPS_4K		0x00000004
@@ -207,6 +215,7 @@
 #define TLBILX_T_CLASS3			7
 
 #ifndef __ASSEMBLY__
+#include <asm/bug.h>
 
 extern unsigned int tlbcam_index;
 
@@ -222,6 +231,10 @@ typedef struct {
 	u64 low_slices_psize;   /* SLB page size encodings */
 	u64 high_slices_psize;  /* 4 bits per slice for now */
 	u16 user_psize;         /* page size index */
+#endif
+#ifdef CONFIG_PPC_64K_PAGES
+	/* for 4K PTE fragment support */
+	void *pte_frag;
 #endif
 } mm_context_t;
 
@@ -242,6 +255,23 @@ struct mmu_psize_def
 };
 extern struct mmu_psize_def mmu_psize_defs[MMU_PAGE_COUNT];
 
+static inline int shift_to_mmu_psize(unsigned int shift)
+{
+	int psize;
+
+	for (psize = 0; psize < MMU_PAGE_COUNT; ++psize)
+		if (mmu_psize_defs[psize].shift == shift)
+			return psize;
+	return -1;
+}
+
+static inline unsigned int mmu_psize_to_shift(unsigned int mmu_psize)
+{
+	if (mmu_psize_defs[mmu_psize].shift)
+		return mmu_psize_defs[mmu_psize].shift;
+	BUG();
+}
+
 /* The page sizes use the same names as 64-bit hash but are
  * constants
  */
@@ -256,8 +286,21 @@ extern struct mmu_psize_def mmu_psize_defs[MMU_PAGE_COUNT];
 extern int mmu_linear_psize;
 extern int mmu_vmemmap_psize;
 
+struct tlb_core_data {
+	/* For software way selection, as on Freescale TLB1 */
+	u8 esel_next, esel_max, esel_first;
+
+	/* Per-core spinlock for e6500 TLB handlers (no tlbsrx.) */
+	u8 lock;
+};
+
 #ifdef CONFIG_PPC64
 extern unsigned long linear_map_top;
+extern int book3e_htw_mode;
+
+#define PPC_HTW_NONE	0
+#define PPC_HTW_IBM	1
+#define PPC_HTW_E6500	2
 
 /*
  * 64-bit booke platforms don't load the tlb in the tlb miss handler code.

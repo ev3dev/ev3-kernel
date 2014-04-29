@@ -33,8 +33,11 @@
 #include <linux/delay.h>
 #include <linux/dma-mapping.h>
 #include <linux/dmapool.h>
+#include <linux/of_address.h>
+#include <linux/of_irq.h>
 #include <linux/of_platform.h>
 
+#include "dmaengine.h"
 #include "fsldma.h"
 
 #define chan_dbg(chan, fmt, arg...)					\
@@ -83,11 +86,6 @@ static void set_desc_cnt(struct fsldma_chan *chan,
 	hw->count = CPU_TO_DMA(chan, count, 32);
 }
 
-static u32 get_desc_cnt(struct fsldma_chan *chan, struct fsl_desc_sw *desc)
-{
-	return DMA_TO_CPU(chan, desc->hw.count, 32);
-}
-
 static void set_desc_src(struct fsldma_chan *chan,
 			 struct fsl_dma_ld_hw *hw, dma_addr_t src)
 {
@@ -98,16 +96,6 @@ static void set_desc_src(struct fsldma_chan *chan,
 	hw->src_addr = CPU_TO_DMA(chan, snoop_bits | src, 64);
 }
 
-static dma_addr_t get_desc_src(struct fsldma_chan *chan,
-			       struct fsl_desc_sw *desc)
-{
-	u64 snoop_bits;
-
-	snoop_bits = ((chan->feature & FSL_DMA_IP_MASK) == FSL_DMA_IP_85XX)
-		? ((u64)FSL_DMA_SATR_SREADTYPE_SNOOP_READ << 32) : 0;
-	return DMA_TO_CPU(chan, desc->hw.src_addr, 64) & ~snoop_bits;
-}
-
 static void set_desc_dst(struct fsldma_chan *chan,
 			 struct fsl_dma_ld_hw *hw, dma_addr_t dst)
 {
@@ -116,16 +104,6 @@ static void set_desc_dst(struct fsldma_chan *chan,
 	snoop_bits = ((chan->feature & FSL_DMA_IP_MASK) == FSL_DMA_IP_85XX)
 		? ((u64)FSL_DMA_DATR_DWRITETYPE_SNOOP_WRITE << 32) : 0;
 	hw->dst_addr = CPU_TO_DMA(chan, snoop_bits | dst, 64);
-}
-
-static dma_addr_t get_desc_dst(struct fsldma_chan *chan,
-			       struct fsl_desc_sw *desc)
-{
-	u64 snoop_bits;
-
-	snoop_bits = ((chan->feature & FSL_DMA_IP_MASK) == FSL_DMA_IP_85XX)
-		? ((u64)FSL_DMA_DATR_DWRITETYPE_SNOOP_WRITE << 32) : 0;
-	return DMA_TO_CPU(chan, desc->hw.dst_addr, 64) & ~snoop_bits;
 }
 
 static void set_desc_next(struct fsldma_chan *chan,
@@ -405,7 +383,7 @@ static dma_cookie_t fsl_dma_tx_submit(struct dma_async_tx_descriptor *tx)
 	struct fsl_desc_sw *desc = tx_to_fsl_desc(tx);
 	struct fsl_desc_sw *child;
 	unsigned long flags;
-	dma_cookie_t cookie;
+	dma_cookie_t cookie = -EINVAL;
 
 	spin_lock_irqsave(&chan->desc_lock, flags);
 
@@ -413,16 +391,9 @@ static dma_cookie_t fsl_dma_tx_submit(struct dma_async_tx_descriptor *tx)
 	 * assign cookies to all of the software descriptors
 	 * that make up this transaction
 	 */
-	cookie = chan->common.cookie;
 	list_for_each_entry(child, &desc->tx_list, node) {
-		cookie++;
-		if (cookie < DMA_MIN_COOKIE)
-			cookie = DMA_MIN_COOKIE;
-
-		child->async_tx.cookie = cookie;
+		cookie = dma_cookie_assign(&child->async_tx);
 	}
-
-	chan->common.cookie = cookie;
 
 	/* put this transaction onto the tail of the pending queue */
 	append_ld_queue(chan, desc);
@@ -765,6 +736,7 @@ fail:
  * @sg_len: number of entries in @scatterlist
  * @direction: DMA direction
  * @flags: DMAEngine flags
+ * @context: transaction context (ignored)
  *
  * Prepare a set of descriptors for a DMA_SLAVE transaction. Following the
  * DMA_SLAVE API, this gets the device-specific information from the
@@ -772,7 +744,8 @@ fail:
  */
 static struct dma_async_tx_descriptor *fsl_dma_prep_slave_sg(
 	struct dma_chan *dchan, struct scatterlist *sgl, unsigned int sg_len,
-	enum dma_transfer_direction direction, unsigned long flags)
+	enum dma_transfer_direction direction, unsigned long flags,
+	void *context)
 {
 	/*
 	 * This operation is not supported on the Freescale DMA controller
@@ -856,10 +829,6 @@ static void fsldma_cleanup_descriptor(struct fsldma_chan *chan,
 				      struct fsl_desc_sw *desc)
 {
 	struct dma_async_tx_descriptor *txd = &desc->async_tx;
-	struct device *dev = chan->common.device->dev;
-	dma_addr_t src = get_desc_src(chan, desc);
-	dma_addr_t dst = get_desc_dst(chan, desc);
-	u32 len = get_desc_cnt(chan, desc);
 
 	/* Run the link descriptor callback function */
 	if (txd->callback) {
@@ -872,22 +841,7 @@ static void fsldma_cleanup_descriptor(struct fsldma_chan *chan,
 	/* Run any dependencies */
 	dma_run_dependencies(txd);
 
-	/* Unmap the dst buffer, if requested */
-	if (!(txd->flags & DMA_COMPL_SKIP_DEST_UNMAP)) {
-		if (txd->flags & DMA_COMPL_DEST_UNMAP_SINGLE)
-			dma_unmap_single(dev, dst, len, DMA_FROM_DEVICE);
-		else
-			dma_unmap_page(dev, dst, len, DMA_FROM_DEVICE);
-	}
-
-	/* Unmap the src buffer, if requested */
-	if (!(txd->flags & DMA_COMPL_SKIP_SRC_UNMAP)) {
-		if (txd->flags & DMA_COMPL_SRC_UNMAP_SINGLE)
-			dma_unmap_single(dev, src, len, DMA_TO_DEVICE);
-		else
-			dma_unmap_page(dev, src, len, DMA_TO_DEVICE);
-	}
-
+	dma_descriptor_unmap(txd);
 #ifdef FSL_DMA_LD_DEBUG
 	chan_dbg(chan, "LD %p free\n", desc);
 #endif
@@ -983,20 +937,7 @@ static enum dma_status fsl_tx_status(struct dma_chan *dchan,
 					dma_cookie_t cookie,
 					struct dma_tx_state *txstate)
 {
-	struct fsldma_chan *chan = to_fsl_chan(dchan);
-	dma_cookie_t last_complete;
-	dma_cookie_t last_used;
-	unsigned long flags;
-
-	spin_lock_irqsave(&chan->desc_lock, flags);
-
-	last_complete = chan->completed_cookie;
-	last_used = dchan->cookie;
-
-	spin_unlock_irqrestore(&chan->desc_lock, flags);
-
-	dma_set_tx_state(txstate, last_complete, last_used, 0);
-	return dma_async_is_complete(cookie, last_complete, last_used);
+	return dma_cookie_status(dchan, cookie, txstate);
 }
 
 /*----------------------------------------------------------------------------*/
@@ -1024,7 +965,7 @@ static irqreturn_t fsldma_chan_irq(int irq, void *data)
 	/*
 	 * Programming Error
 	 * The DMA_INTERRUPT async_tx is a NULL transfer, which will
-	 * triger a PE interrupt.
+	 * trigger a PE interrupt.
 	 */
 	if (stat & FSL_DMA_SR_PE) {
 		chan_dbg(chan, "irq: Programming Error INT\n");
@@ -1087,8 +1028,8 @@ static void dma_do_tasklet(unsigned long data)
 
 		desc = to_fsl_desc(chan->ld_running.prev);
 		cookie = desc->async_tx.cookie;
+		dma_cookie_complete(&desc->async_tx);
 
-		chan->completed_cookie = cookie;
 		chan_dbg(chan, "completed_cookie=%d\n", cookie);
 	}
 
@@ -1230,7 +1171,7 @@ out_unwind:
 /* OpenFirmware Subsystem                                                     */
 /*----------------------------------------------------------------------------*/
 
-static int __devinit fsl_dma_chan_probe(struct fsldma_device *fdev,
+static int fsl_dma_chan_probe(struct fsldma_device *fdev,
 	struct device_node *node, u32 feature, const char *compatible)
 {
 	struct fsldma_chan *chan;
@@ -1270,7 +1211,9 @@ static int __devinit fsl_dma_chan_probe(struct fsldma_device *fdev,
 	WARN_ON(fdev->feature != chan->feature);
 
 	chan->dev = fdev->dev;
-	chan->id = ((res.start - 0x100) & 0xfff) >> 7;
+	chan->id = (res.start & 0xfff) < 0x300 ?
+		   ((res.start - 0x100) & 0xfff) >> 7 :
+		   ((res.start - 0x200) & 0xfff) >> 7;
 	if (chan->id >= FSL_DMA_MAX_CHANS_PER_DEVICE) {
 		dev_err(fdev->dev, "too many channels for device\n");
 		err = -EINVAL;
@@ -1303,6 +1246,7 @@ static int __devinit fsl_dma_chan_probe(struct fsldma_device *fdev,
 	chan->idle = true;
 
 	chan->common.device = &fdev->common;
+	dma_cookie_init(&chan->common);
 
 	/* find the IRQ line, if it exists in the device tree */
 	chan->irq = irq_of_parse_and_map(node, 0);
@@ -1332,7 +1276,7 @@ static void fsl_dma_chan_remove(struct fsldma_chan *chan)
 	kfree(chan);
 }
 
-static int __devinit fsldma_of_probe(struct platform_device *op)
+static int fsldma_of_probe(struct platform_device *op)
 {
 	struct fsldma_device *fdev;
 	struct device_node *child;
@@ -1376,7 +1320,7 @@ static int __devinit fsldma_of_probe(struct platform_device *op)
 
 	dma_set_mask(&(op->dev), DMA_BIT_MASK(36));
 
-	dev_set_drvdata(&op->dev, fdev);
+	platform_set_drvdata(op, fdev);
 
 	/*
 	 * We cannot use of_platform_bus_probe() because there is no
@@ -1425,7 +1369,7 @@ static int fsldma_of_remove(struct platform_device *op)
 	struct fsldma_device *fdev;
 	unsigned int i;
 
-	fdev = dev_get_drvdata(&op->dev);
+	fdev = platform_get_drvdata(op);
 	dma_async_device_unregister(&fdev->common);
 
 	fsldma_free_irqs(fdev);
@@ -1436,13 +1380,13 @@ static int fsldma_of_remove(struct platform_device *op)
 	}
 
 	iounmap(fdev->regs);
-	dev_set_drvdata(&op->dev, NULL);
 	kfree(fdev);
 
 	return 0;
 }
 
 static const struct of_device_id fsldma_of_ids[] = {
+	{ .compatible = "fsl,elo3-dma", },
 	{ .compatible = "fsl,eloplus-dma", },
 	{ .compatible = "fsl,elo-dma", },
 	{}
@@ -1464,7 +1408,7 @@ static struct platform_driver fsldma_of_driver = {
 
 static __init int fsldma_init(void)
 {
-	pr_info("Freescale Elo / Elo Plus DMA driver\n");
+	pr_info("Freescale Elo series DMA driver\n");
 	return platform_driver_register(&fsldma_of_driver);
 }
 
@@ -1476,5 +1420,5 @@ static void __exit fsldma_exit(void)
 subsys_initcall(fsldma_init);
 module_exit(fsldma_exit);
 
-MODULE_DESCRIPTION("Freescale Elo / Elo Plus DMA driver");
+MODULE_DESCRIPTION("Freescale Elo series DMA driver");
 MODULE_LICENSE("GPL");

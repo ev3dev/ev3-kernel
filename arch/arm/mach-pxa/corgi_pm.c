@@ -19,6 +19,7 @@
 #include <linux/interrupt.h>
 #include <linux/platform_device.h>
 #include <linux/apm-emulation.h>
+#include <linux/io.h>
 
 #include <asm/irq.h>
 #include <asm/mach-types.h>
@@ -197,7 +198,7 @@ static struct sharpsl_charger_machinfo corgi_pm_machinfo = {
 
 static struct platform_device *corgipm_device;
 
-static int __devinit corgipm_init(void)
+static int corgipm_init(void)
 {
 	int ret;
 
