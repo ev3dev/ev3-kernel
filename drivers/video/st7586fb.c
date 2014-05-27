@@ -1,11 +1,11 @@
 /*
  * linux/drivers/video/st7856fb.c -- FB driver for ST7856 display controller
- *
- * Based on st7735fb.c by Matt Porter
+ * *
  * Layout is based on skeletonfb.c by James Simmons and Geert Uytterhoeven.
  *
  * Copyright (C) 2011 Matt Porter <matt@ohporter.com>
  * Copyright (C) 2011 Texas Instruments
+ * Copyright (C) 2013-2014 David Lechner <david@lechnology.com>
  *
  * This file is subject to the terms and conditions of the GNU General Public
  * License. See the file COPYING in the main directory of this archive for
@@ -91,7 +91,7 @@ static struct fb_fix_screeninfo st7586fb_fix __devinitdata = {
 	.xpanstep	= 0,
 	.ypanstep	= 0,
 	.ywrapstep	= 0,
-	.line_length	= (WIDTH + 2) / 3,
+	.line_length	= (WIDTH + 31) / 32 * 4, /* must be multiple of 4 */
 	.accel		= FB_ACCEL_NONE,
 };
 
@@ -239,58 +239,50 @@ static void st7586fb_update_display(struct st7586fb_par *par)
 {
 	const int bytes_per_row_in = par->info->fix.line_length;
 	const int bytes_per_row_out = (WIDTH + 2) / 3;
-	const int out_size = bytes_per_row_out * HEIGHT;
 	int ret = 0, i = 0;
 	int row, in_offset, out_offset;
-	u8 *vmem = par->info->screen_base;
-	u8 *vmem2;
-
-	vmem2 = kmalloc(out_size, GFP_KERNEL);
-	if (vmem2 == NULL) {
-		pr_err("%s: spi_write failed to update display buffer - kmalloc failed\n",
-			par->info->fix.id);
-		return;
-	}
+	u8 *in = par->info->screen_base;
+	u8 *out = par->display_data;
 
 	for (row = 0; row < HEIGHT; row++) {
 		in_offset = row * bytes_per_row_in;
 		out_offset = row * bytes_per_row_out;
 		for (i = 0; i < bytes_per_row_in; i++) {
-			vmem2[out_offset] = vmem[i + in_offset] & 0x01 ? 7 << 5 : 0;
-			vmem2[out_offset] |= vmem[i + in_offset] & 0x02 ? 7 << 2 : 0;
-			vmem2[out_offset] |= vmem[i + in_offset] & 0x04 ? 3 : 0;
+			out[out_offset] = in[i + in_offset] & 0x01 ? 7 << 5 : 0;
+			out[out_offset] |= in[i + in_offset] & 0x02 ? 7 << 2 : 0;
+			out[out_offset] |= in[i + in_offset] & 0x04 ? 3 : 0;
 			out_offset++;
-			vmem2[out_offset] = vmem[i + in_offset] & 0x08 ? 7 << 5 : 0;
-			vmem2[out_offset] |= vmem[i + in_offset] & 0x10 ? 7 << 2 : 0;
-			vmem2[out_offset] |= vmem[i + in_offset] & 0x20 ? 3 : 0;
+			out[out_offset] = in[i + in_offset] & 0x08 ? 7 << 5 : 0;
+			out[out_offset] |= in[i + in_offset] & 0x10 ? 7 << 2 : 0;
+			out[out_offset] |= in[i + in_offset] & 0x20 ? 3 : 0;
 			out_offset++;
-			vmem2[out_offset] = vmem[i + in_offset] & 0x40 ? 7 << 5 : 0;
-			vmem2[out_offset] |= vmem[i + in_offset] & 0x80 ? 7 << 2 : 0;
+			out[out_offset] = in[i + in_offset] & 0x40 ? 7 << 5 : 0;
+			out[out_offset] |= in[i + in_offset] & 0x80 ? 7 << 2 : 0;
 			if (++i >= bytes_per_row_in)
 				break;
-			vmem2[out_offset] |= vmem[i + in_offset] & 0x01 ? 3 : 0;
+			out[out_offset] |= in[i + in_offset] & 0x01 ? 3 : 0;
 			out_offset++;
-			vmem2[out_offset] = vmem[i + in_offset] & 0x02 ? 7 << 5 : 0;
-			vmem2[out_offset] |= vmem[i + in_offset] & 0x04 ? 7 << 2 : 0;
-			vmem2[out_offset] |= vmem[i + in_offset] & 0x08 ? 3 : 0;
+			out[out_offset] = in[i + in_offset] & 0x02 ? 7 << 5 : 0;
+			out[out_offset] |= in[i + in_offset] & 0x04 ? 7 << 2 : 0;
+			out[out_offset] |= in[i + in_offset] & 0x08 ? 3 : 0;
 			out_offset++;
-			vmem2[out_offset] = vmem[i + in_offset] & 0x10 ? 7 << 5 : 0;
-			vmem2[out_offset] |= vmem[i + in_offset] & 0x20 ? 7 << 2 : 0;
-			vmem2[out_offset] |= vmem[i + in_offset] & 0x40 ? 3 : 0;
+			out[out_offset] = in[i + in_offset] & 0x10 ? 7 << 5 : 0;
+			out[out_offset] |= in[i + in_offset] & 0x20 ? 7 << 2 : 0;
+			out[out_offset] |= in[i + in_offset] & 0x40 ? 3 : 0;
 			out_offset++;
-			vmem2[out_offset] = vmem[i + in_offset] & 0x80 ? 7 << 5 : 0;
+			out[out_offset] = in[i + in_offset] & 0x80 ? 7 << 5 : 0;
 			if (++i >= bytes_per_row_in)
 				break;
-			vmem2[out_offset] |= vmem[i + in_offset] & 0x01 ? 7 << 2 : 0;
-			vmem2[out_offset] |= vmem[i + in_offset] & 0x02 ? 3 : 0;
+			out[out_offset] |= in[i + in_offset] & 0x01 ? 7 << 2 : 0;
+			out[out_offset] |= in[i + in_offset] & 0x02 ? 3 : 0;
 			out_offset++;
-			vmem2[out_offset] = vmem[i + in_offset] & 0x04 ? 7 << 5 : 0;
-			vmem2[out_offset] |= vmem[i + in_offset] & 0x08 ? 7 << 2 : 0;
-			vmem2[out_offset] |= vmem[i + in_offset] & 0x10 ? 3 : 0;
+			out[out_offset] = in[i + in_offset] & 0x04 ? 7 << 5 : 0;
+			out[out_offset] |= in[i + in_offset] & 0x08 ? 7 << 2 : 0;
+			out[out_offset] |= in[i + in_offset] & 0x10 ? 3 : 0;
 			out_offset++;
-			vmem2[out_offset] = vmem[i + in_offset] & 0x20 ? 7 << 5 : 0;
-			vmem2[out_offset] |= vmem[i + in_offset] & 0x40 ? 7 << 2 : 0;
-			vmem2[out_offset] |= vmem[i + in_offset] & 0x80 ? 3 : 0;
+			out[out_offset] = in[i + in_offset] & 0x20 ? 7 << 5 : 0;
+			out[out_offset] |= in[i + in_offset] & 0x40 ? 7 << 2 : 0;
+			out[out_offset] |= in[i + in_offset] & 0x80 ? 3 : 0;
 			out_offset++;
 		}
 	}
@@ -299,10 +291,7 @@ static void st7586fb_update_display(struct st7586fb_par *par)
 	st7586_write_cmd(par, ST7586_RAMWR);
 
 	/* Blast framebuffer to ST7586 internal display RAM */
-	ret = st7586_write_data_buf(par, vmem2, out_size);
-
-	kfree(vmem2);
-
+	ret = st7586_write_data_buf(par, out, par->display_data_size);
 	if (ret < 0)
 	pr_err("%s: spi_write failed to update display buffer\n",
 		par->info->fix.id);
@@ -457,8 +446,9 @@ static int __devinit st7586fb_probe (struct spi_device *spi)
 {
 	int chip = spi_get_device_id(spi)->driver_data;
 	struct st7586fb_platform_data *pdata = spi->dev.platform_data;
-	int vmem_size = (WIDTH + 2) / 3 * HEIGHT;
-	u8 *vmem;
+	int vmem_size = st7586fb_fix.line_length * HEIGHT;
+	int vmem2_size = (WIDTH + 2) / 3 * HEIGHT;
+	u8 *vmem, *vmem2;
 	struct fb_info *info;
 	struct st7586fb_par *par;
 	int retval = -ENOMEM;
@@ -478,6 +468,10 @@ static int __devinit st7586fb_probe (struct spi_device *spi)
 	vmem = (u8 *)kmalloc(vmem_size, GFP_KERNEL);
 	if (!vmem)
 		return retval;
+
+	vmem2 = (u8 *)kmalloc(vmem2_size, GFP_KERNEL);
+	if (!vmem2)
+		goto vmem2_kmalloc_fail;
 
 	// Zero memory for easy detection if any new data has been written to screenbuffer
 	memset(vmem, 0, vmem_size);
@@ -511,6 +505,8 @@ static int __devinit st7586fb_probe (struct spi_device *spi)
 	par->a0 = pdata->a0_gpio;
 	par->cs = pdata->cs_gpio;
 	par->buf = kmalloc(1, GFP_KERNEL);
+	par->display_data = vmem2;
+	par->display_data_size = vmem2_size;
 	INIT_DELAYED_WORK(&par->dwork, st7586fb_deferred_work);
 
 	retval = register_framebuffer(info);
@@ -529,7 +525,7 @@ static int __devinit st7586fb_probe (struct spi_device *spi)
 
 	printk(KERN_INFO
 		"fb%d: %s frame buffer device, using %d.%d KiB of video memory\n",
-		info->node, info->fix.id, vmem_size / 1024, vmem_size % 1024 * 10 / 1024);
+		info->node, info->fix.id, (vmem_size + vmem2_size) / 1024, (vmem_size + vmem2_size) % 1024 * 10 / 1024);
 
 	return 0;
 
@@ -541,6 +537,9 @@ fbreg_fail:
 	framebuffer_release(info);
 
 fballoc_fail:
+	kfree(vmem2);
+
+vmem2_kmalloc_fail:
 	kfree(vmem);
 
 	return retval;
@@ -601,7 +600,7 @@ static void __exit st7586fb_exit(void)
 module_init(st7586fb_init);
 module_exit(st7586fb_exit);
 
-MODULE_DESCRIPTION("FB driver for ST7586 display controller");
+MODULE_DESCRIPTION("Framebuffer driver for ST7586 display controller");
 MODULE_AUTHOR("Matt Porter <mporter@ti.com>");
+MODULE_AUTHOR("David Lechner <david@lechnology.com>");
 MODULE_LICENSE("GPL");
-
