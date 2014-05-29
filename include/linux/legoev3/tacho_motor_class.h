@@ -24,11 +24,11 @@ enum tacho_motor_regulation_mode {
 	NUM_REGULATION_MODES,
 };
 
-enum tacho_motor_brake_mode {
-	BRAKE_OFF,
-	BRAKE_ON,
-	HOLD_ON,
-	NUM_BRAKE_MODES,
+enum tacho_motor_stop_mode {
+	STOP_COAST,
+	STOP_BRAKE,
+	STOP_HOLD,
+	NUM_STOP_MODES,
 };
 
 enum tacho_motor_position_mode {
@@ -108,8 +108,8 @@ struct function_pointers {
  	int  (*get_regulation_mode)(struct tacho_motor_device *tm);
  	void (*set_regulation_mode)(struct tacho_motor_device *tm, long regulation_mode);
 
- 	int  (*get_brake_mode)(struct tacho_motor_device *tm);
- 	void (*set_brake_mode)(struct tacho_motor_device *tm, long brake_mode);
+ 	int  (*get_stop_mode)(struct tacho_motor_device *tm);
+ 	void (*set_stop_mode)(struct tacho_motor_device *tm, long stop_mode);
 
  	int  (*get_position_mode)(struct tacho_motor_device *tm);
  	void (*set_position_mode)(struct tacho_motor_device *tm, long position_mode);
