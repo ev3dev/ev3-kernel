@@ -158,12 +158,12 @@ static const short legoev3_button_pins[] __initconst = {
 #include <linux/input.h>
 
 static struct gpio_keys_button ev3_gpio_keys_table[] = {
-	{KEY_UP,    EV3_BUTTON_0_PIN, 1, "ev3:UP",    EV_KEY, 0, 50, 1},
-	{KEY_ENTER, EV3_BUTTON_1_PIN, 1, "ev3:ENTER", EV_KEY, 0, 50, 1},
-	{KEY_DOWN,  EV3_BUTTON_2_PIN, 1, "ev3:DOWN",  EV_KEY, 0, 50, 1},
-	{KEY_RIGHT, EV3_BUTTON_3_PIN, 1, "ev3:RIGHT", EV_KEY, 0, 50, 1},
-	{KEY_LEFT,  EV3_BUTTON_4_PIN, 1, "ev3:LEFT",  EV_KEY, 0, 50, 1},
-	{KEY_ESC,   EV3_BUTTON_5_PIN, 1, "ev3:ESC",   EV_KEY, 0, 50, 1},
+	{KEY_UP,        EV3_BUTTON_0_PIN, 1, "ev3:UP",    EV_KEY, 0, 50, 1},
+	{KEY_ENTER,     EV3_BUTTON_1_PIN, 1, "ev3:ENTER", EV_KEY, 0, 50, 1},
+	{KEY_DOWN,      EV3_BUTTON_2_PIN, 1, "ev3:DOWN",  EV_KEY, 0, 50, 1},
+	{KEY_RIGHT,     EV3_BUTTON_3_PIN, 1, "ev3:RIGHT", EV_KEY, 0, 50, 1},
+	{KEY_LEFT,      EV3_BUTTON_4_PIN, 1, "ev3:LEFT",  EV_KEY, 0, 50, 1},
+	{KEY_BACKSPACE, EV3_BUTTON_5_PIN, 1, "ev3:BACK",   EV_KEY, 0, 50, 1},
 };
 
 static struct gpio_keys_platform_data ev3_gpio_keys_data = {
