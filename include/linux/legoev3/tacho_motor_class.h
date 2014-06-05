@@ -120,6 +120,18 @@ struct function_pointers {
  	int  (*get_polarity_mode)(struct tacho_motor_device *tm);
  	void (*set_polarity_mode)(struct tacho_motor_device *tm, long polarity_mode);
 
+ 	int  (*get_speed_regulation_P)(struct tacho_motor_device *tm);
+ 	void (*set_speed_regulation_P)(struct tacho_motor_device *tm, long speed_regulation_P);
+
+ 	int  (*get_speed_regulation_I)(struct tacho_motor_device *tm);
+ 	void (*set_speed_regulation_I)(struct tacho_motor_device *tm, long speed_regulation_I);
+
+ 	int  (*get_speed_regulation_D)(struct tacho_motor_device *tm);
+ 	void (*set_speed_regulation_D)(struct tacho_motor_device *tm, long speed_regulation_D);
+
+ 	int  (*get_speed_regulation_K)(struct tacho_motor_device *tm);
+ 	void (*set_speed_regulation_K)(struct tacho_motor_device *tm, long speed_regulation_K);
+
  	int  (*get_ramp_up)(struct tacho_motor_device *tm);
  	void (*set_ramp_up)(struct tacho_motor_device *tm, long ramp_up);
 
