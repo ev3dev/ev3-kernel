@@ -88,9 +88,8 @@ struct function_pointers {
 	int  (*get_position)(struct tacho_motor_device *tm);
 	void (*set_position)(struct tacho_motor_device *tm, long position);
 
-	int  (*get_speed)(struct tacho_motor_device *tm);
-	int  (*get_power)(struct tacho_motor_device *tm);
 	int  (*get_state)(struct tacho_motor_device *tm);
+	int  (*get_duty_cycle)(struct tacho_motor_device *tm);
 	int  (*get_pulses_per_second)(struct tacho_motor_device *tm);
 
 	int  (*get_duty_cycle_sp)(struct tacho_motor_device *tm);
