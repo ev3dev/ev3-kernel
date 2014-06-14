@@ -44,6 +44,8 @@ struct st7586fb_par {
 	int a0;
 	int cs;
 	u8 *buf;
+	u8 *display_data;
+	int display_data_size;
 	struct delayed_work dwork;
 };
 
