@@ -24,16 +24,11 @@ enum tacho_motor_regulation_mode {
 	NUM_REGULATION_MODES,
 };
 
-enum tacho_motor_brake_mode {
-	BRAKE_OFF,
-	BRAKE_ON,
-	NUM_BRAKE_MODES,
-};
-
-enum tacho_motor_hold_mode {
-	HOLD_OFF,
-	HOLD_ON,
-	NUM_HOLD_MODES,
+enum tacho_motor_stop_mode {
+	STOP_COAST,
+	STOP_BRAKE,
+	STOP_HOLD,
+	NUM_STOP_MODES,
 };
 
 enum tacho_motor_position_mode {
@@ -93,10 +88,12 @@ struct function_pointers {
 	int  (*get_position)(struct tacho_motor_device *tm);
 	void (*set_position)(struct tacho_motor_device *tm, long position);
 
-	int  (*get_speed)(struct tacho_motor_device *tm);
-	int  (*get_power)(struct tacho_motor_device *tm);
 	int  (*get_state)(struct tacho_motor_device *tm);
+	int  (*get_duty_cycle)(struct tacho_motor_device *tm);
 	int  (*get_pulses_per_second)(struct tacho_motor_device *tm);
+
+	int  (*get_duty_cycle_sp)(struct tacho_motor_device *tm);
+	void (*set_duty_cycle_sp)(struct tacho_motor_device *tm, long duty_cycle_sp);
 
 	int  (*get_speed_setpoint)(struct tacho_motor_device *tm);
 	void (*set_speed_setpoint)(struct tacho_motor_device *tm, long speed_setpoint);
@@ -113,17 +110,26 @@ struct function_pointers {
  	int  (*get_regulation_mode)(struct tacho_motor_device *tm);
  	void (*set_regulation_mode)(struct tacho_motor_device *tm, long regulation_mode);
 
- 	int  (*get_brake_mode)(struct tacho_motor_device *tm);
- 	void (*set_brake_mode)(struct tacho_motor_device *tm, long brake_mode);
-
- 	int  (*get_hold_mode)(struct tacho_motor_device *tm);
- 	void (*set_hold_mode)(struct tacho_motor_device *tm, long hold_mode);
+ 	int  (*get_stop_mode)(struct tacho_motor_device *tm);
+ 	void (*set_stop_mode)(struct tacho_motor_device *tm, long stop_mode);
 
  	int  (*get_position_mode)(struct tacho_motor_device *tm);
  	void (*set_position_mode)(struct tacho_motor_device *tm, long position_mode);
 
  	int  (*get_polarity_mode)(struct tacho_motor_device *tm);
  	void (*set_polarity_mode)(struct tacho_motor_device *tm, long polarity_mode);
+
+ 	int  (*get_speed_regulation_P)(struct tacho_motor_device *tm);
+ 	void (*set_speed_regulation_P)(struct tacho_motor_device *tm, long speed_regulation_P);
+
+ 	int  (*get_speed_regulation_I)(struct tacho_motor_device *tm);
+ 	void (*set_speed_regulation_I)(struct tacho_motor_device *tm, long speed_regulation_I);
+
+ 	int  (*get_speed_regulation_D)(struct tacho_motor_device *tm);
+ 	void (*set_speed_regulation_D)(struct tacho_motor_device *tm, long speed_regulation_D);
+
+ 	int  (*get_speed_regulation_K)(struct tacho_motor_device *tm);
+ 	void (*set_speed_regulation_K)(struct tacho_motor_device *tm, long speed_regulation_K);
 
  	int  (*get_ramp_up)(struct tacho_motor_device *tm);
  	void (*set_ramp_up)(struct tacho_motor_device *tm, long ramp_up);
