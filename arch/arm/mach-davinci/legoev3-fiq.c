@@ -89,7 +89,6 @@ struct legoev3_fiq_ehrpwm_data {
 	u8 *dma_area;
 	int volume;
 	unsigned playback_ptr;
-	unsigned period_ticks;
 	size_t frame_bytes;
 	size_t buffer_bytes;
 	snd_pcm_uframes_t period_size;
@@ -192,10 +191,49 @@ static inline int legoev3_fiq_get_irq(void)
 	return __raw_readl(legoev3_fiq_data->intc_base + GPIR);
 }
 
+#define TBPRD 0xA /* Time-Base Period Register */
+static inline int fiq_ehrpwm_get_period_ticks(void)
+{
+	return __raw_readw(legoev3_fiq_data->ehrpwm_base + TBPRD);
+}
+
 #define CMPB 0x14 /* Counter-Compare B Register */
 static inline void fiq_ehrpwm_set_duty_ticks(unsigned ticks)
 {
 	__raw_writew(ticks, legoev3_fiq_data->ehrpwm_base + CMPB);
+}
+
+#define ETSEL 0x32 /* Event-Trigger Selection Register */
+#define INTEN (BIT(3)) /* Interrupt enable bit */
+#define INTSEL_MASK (BIT(2)|BIT(1)|BIT(0)) /* Interrupt selection mask */
+#define INTSEL_TBPRD 2
+static inline void fiq_ehrpwm_et_int_enable(void)
+{
+	short dir = __raw_readw(legoev3_fiq_data->ehrpwm_base + ETSEL);
+	dir |= INTEN;
+	__raw_writew(dir, legoev3_fiq_data->ehrpwm_base + ETSEL);
+}
+
+static inline void fiq_ehrpwm_et_int_disable(void)
+{
+	short dir = __raw_readw(legoev3_fiq_data->ehrpwm_base + ETSEL);
+	dir &= ~INTEN;
+	__raw_writew(dir, legoev3_fiq_data->ehrpwm_base + ETSEL);
+}
+
+#define ETPS 0x34 /* Event-Trigger Prescale Register */
+#define INTPRD_MASK (BIT(1)|BIT(0))
+static inline void fiq_ehrpwm_et_int_set_period(unsigned char period)
+{
+	short dir = __raw_readw(legoev3_fiq_data->ehrpwm_base + ETSEL);
+	dir &= ~INTSEL_MASK;
+	dir |= INTSEL_TBPRD;
+	__raw_writew(dir, legoev3_fiq_data->ehrpwm_base + ETSEL);
+
+	dir = __raw_readw(legoev3_fiq_data->ehrpwm_base + ETPS);
+		dir &= ~INTPRD_MASK;
+		dir |= period & INTPRD_MASK;
+	__raw_writew(dir, legoev3_fiq_data->ehrpwm_base + ETPS);
 }
 
 #define ETFLG 0x36 /* Event-Trigger Flag Register */
@@ -398,14 +436,16 @@ legoev3_fiq_timer_callback(struct legoev3_fiq_port_i2c_data *data)
 static void legoev3_fiq_ehrpwm_callback(struct legoev3_fiq_ehrpwm_data *data)
 {
 	int sample;
-	unsigned long duty_ticks;
+	unsigned long duty_ticks, period_ticks;
 
 	if (unlikely(!data->requested_flag || !data->dma_area))
 		return;
 
+	period_ticks = fiq_ehrpwm_get_period_ticks();
+
 	if (unlikely(data->ramp_step))
 	{
-		duty_ticks = (data->ramp_value * data->period_ticks) >> 16;
+		duty_ticks = (data->ramp_value * period_ticks) >> 16;
 		if (duty_ticks==0)
 			duty_ticks = 1;
 		fiq_ehrpwm_set_duty_ticks(duty_ticks);
@@ -427,7 +467,7 @@ static void legoev3_fiq_ehrpwm_callback(struct legoev3_fiq_ehrpwm_data *data)
 
 	sample = *(short *)(data->dma_area + data->playback_ptr);
 	sample = (sample * data->volume) >> 8;
-	duty_ticks = ((sample + 0x7FFF) * data->period_ticks) >> 16;
+	duty_ticks = ((sample + 0x7FFF) * period_ticks) >> 16;
 
 	fiq_ehrpwm_set_duty_ticks(duty_ticks);
 
@@ -641,6 +681,41 @@ legoev3_fiq_gpio_irq_period_elapsed_callback(int irq, void *ehrpwm_data)
 	return IRQ_HANDLED;
 }
 
+int legoev3_fiq_ehrpwm_int_enable(void)
+{
+	if (!legoev3_fiq_data || !legoev3_fiq_data->ehrpwm_data.requested_flag)
+		return -ENODEV;
+
+	fiq_ehrpwm_et_int_enable();
+	return 0;
+}
+EXPORT_SYMBOL_GPL(legoev3_fiq_ehrpwm_int_enable);
+
+int legoev3_fiq_ehrpwm_int_disable(void)
+{
+	if (!legoev3_fiq_data || !legoev3_fiq_data->ehrpwm_data.requested_flag)
+		return -ENODEV;
+
+	fiq_ehrpwm_et_int_disable();
+	return 0;
+}
+EXPORT_SYMBOL_GPL(legoev3_fiq_ehrpwm_int_disable);
+
+/*
+ * Only called when the ehrpwm interrupt is configured as regular IRQ and
+ * not as a FIQ. In other words, this is for debugging (when assigned to IRQ)
+ * and serves as a dummy callback during normal usage (when assigned to FIQ).
+ */
+static irqreturn_t legoev3_fiq_ehrpwm_et_callback(int irq, void *data)
+{
+	fiq_c_handler_t handler = get_fiq_c_handler();
+
+	if (handler)
+		handler();
+
+	return IRQ_HANDLED;
+}
+
 int legoev3_fiq_ehrpwm_request(void)
 {
 	int err;
@@ -665,6 +740,14 @@ int legoev3_fiq_ehrpwm_request(void)
 		return err;
 	}
 
+	err = request_irq(legoev3_fiq_data->ehrpwm_irq,
+			  legoev3_fiq_ehrpwm_et_callback, 0,
+			  "legoev3_fiq_ehrpwm_debug",
+			  &legoev3_fiq_data->ehrpwm_data);
+	if (err)
+		dev_warn(&legoev3_fiq_data->pdev->dev,
+			 "Failed to request ehrpwm irq.");
+
 	return 0;
 }
 EXPORT_SYMBOL_GPL(legoev3_fiq_ehrpwm_request);
@@ -680,7 +763,7 @@ void legoev3_fiq_ehrpwm_release(void)
 	{
 		/*
 		 * we are still in the process of ramping down,
-		 * wait for completition 
+		 * wait for competition
 		 */
 		for (i=0; i<5; ++i)
 		{
@@ -695,20 +778,24 @@ void legoev3_fiq_ehrpwm_release(void)
 	local_fiq_disable();
 	free_irq(legoev3_fiq_data->status_gpio_irq,
 		 &legoev3_fiq_data->ehrpwm_data);
+	free_irq(legoev3_fiq_data->ehrpwm_irq, &legoev3_fiq_data->ehrpwm_data);
 	legoev3_fiq_data->ehrpwm_data.period_elapsed_flag = 0;
 	legoev3_fiq_data->ehrpwm_data.requested_flag = 0;
 	local_fiq_enable();
 }
 EXPORT_SYMBOL_GPL(legoev3_fiq_ehrpwm_release);
 
-int legoev3_fiq_ehrpwm_prepare(struct snd_pcm_substream *substream,
-			       unsigned period_ticks, int volume,
+int legoev3_fiq_ehrpwm_prepare(struct snd_pcm_substream *substream, int volume,
+			       unsigned char int_period,
 			       void (*period_elapsed)(void *), void *context)
 {
 	struct legoev3_fiq_ehrpwm_data *data;
 
-	if (!legoev3_fiq_data)
+	if (!legoev3_fiq_data || !legoev3_fiq_data->ehrpwm_data.requested_flag)
 		return -ENODEV;
+
+	if (int_period > 3)
+		return -EINVAL;
 
 	data = &legoev3_fiq_data->ehrpwm_data;
 
@@ -717,7 +804,6 @@ int legoev3_fiq_ehrpwm_prepare(struct snd_pcm_substream *substream,
 	data->dma_area			= substream->runtime->dma_area;
 	data->playback_ptr		= 0;
 	data->volume			= volume;
-	data->period_ticks		= period_ticks;
 	data->frame_bytes		= frames_to_bytes(substream->runtime, 1);
 	data->buffer_bytes		= snd_pcm_lib_buffer_bytes(substream);
 	data->period_size		= substream->runtime->period_size;
@@ -725,8 +811,9 @@ int legoev3_fiq_ehrpwm_prepare(struct snd_pcm_substream *substream,
 	data->period_elapsed		= period_elapsed;
 	data->period_elapsed_data	= context;
 	data->period_elapsed_flag	= 0;
-	data->ramp_step                 = 0;
-	data->ramp_value                = 0;
+	data->ramp_step			= 0;
+	data->ramp_value		= 0;
+	fiq_ehrpwm_et_int_set_period(int_period);
 
 	local_fiq_enable();
 
@@ -735,7 +822,7 @@ int legoev3_fiq_ehrpwm_prepare(struct snd_pcm_substream *substream,
 EXPORT_SYMBOL_GPL(legoev3_fiq_ehrpwm_prepare);
 
 void legoev3_fiq_ehrpwm_ramp(struct snd_pcm_substream *substream,
-                             int direction, unsigned ramp_ms)
+			     int direction, unsigned ramp_ms)
 {
 	struct legoev3_fiq_ehrpwm_data *data;
 	int ramp_samples = substream->runtime->rate * ramp_ms / 1000;

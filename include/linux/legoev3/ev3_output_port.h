@@ -35,7 +35,6 @@ struct ev3_output_port_platform_data {
 	unsigned pin5_gpio;
 	unsigned pin5_int_gpio;
 	unsigned pin6_dir_gpio;
-	const char *pwm_dev_name;
 };
 
 struct ev3_motor_platform_data {

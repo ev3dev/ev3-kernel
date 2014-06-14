@@ -457,7 +457,7 @@ static struct clk_lookup da850_clks[] = {
 	CLK(NULL,		"tptc1",	&tptc1_clk),
 	CLK(NULL,		"tpcc1",	&tpcc1_clk),
 	CLK(NULL,		"tptc2",	&tptc2_clk),
-	CLK("pruss_uio",	"pruss",	&pruss_clk),
+	CLK(NULL	,	"pruss",	&pruss_clk),
 	CLK("serial8250.0",	NULL,		&uart0_clk),
 	CLK("serial8250.1",	NULL,		&uart1_clk),
 	CLK("serial8250.2",	NULL,		&uart2_clk),
@@ -481,9 +481,9 @@ static struct clk_lookup da850_clks[] = {
 	CLK("vpif",		NULL,		&vpif_clk),
 	CLK("ahci",		NULL,		&sata_clk),
 	CLK("davinci-rproc.0",	NULL,		&dsp_clk),
-	CLK("ehrpwm",		"fck",		&ehrpwm_clk),
-	CLK("ehrpwm",		"tbclk",	&ehrpwm_tbclk),
-	CLK("ecap",		"fck",		&ecap_clk),
+	CLK(NULL,		"ehrpwm",	&ehrpwm_clk),
+	CLK(NULL,		"tbclk",	&ehrpwm_tbclk),
+	CLK(NULL,		"ecap",		&ecap_clk),
 	CLK(NULL,		NULL,		NULL),
 };
 

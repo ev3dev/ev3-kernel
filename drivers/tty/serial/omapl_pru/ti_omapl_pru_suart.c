@@ -174,7 +174,7 @@ static void omapl_pru_tx_chars(struct omapl_pru_suart *soft_uart, u32 uart_no)
 
 static void omapl_pru_rx_chars(struct omapl_pru_suart *soft_uart, u32 uart_no)
 {
-	struct tty_struct *tty = soft_uart->port[uart_no].state->port.tty;
+	struct tty_port *port = &soft_uart->port[uart_no].state->port;
 	char tty_flg[SUART_FIFO_LEN + 1] = {[0 ... SUART_FIFO_LEN] = TTY_NORMAL};
 	u16 rx_status, data_len = SUART_FIFO_LEN;
 	unsigned int data_len_read = 0;
@@ -218,18 +218,18 @@ static void omapl_pru_rx_chars(struct omapl_pru_suart *soft_uart, u32 uart_no)
 	}
 	/* update the tty data structure */
 	if(data_len_read)
-		tty_insert_flip_string_flags(tty, suart_data,
+		tty_insert_flip_string_flags(port, suart_data,
 					tty_flg, data_len_read);
 
 	if ((rx_status & CHN_TXRX_STATUS_ERR) && !ignore_break
 				&& (data_len_read < (SUART_FIFO_LEN + 1)))
-		tty_insert_flip_char(tty, suart_data[data_len_read],
+		tty_insert_flip_char(port, suart_data[data_len_read],
 					tty_flg[data_len_read]);
 
 	pru_softuart_clrRxStatus(&soft_uart->suart_hdl[uart_no]);
 	/* push data into tty */
 	spin_unlock(&soft_uart->port[uart_no].lock);
-	tty_flip_buffer_push(tty);
+	tty_flip_buffer_push(port);
 	spin_lock(&soft_uart->port[uart_no].lock);
 }
 

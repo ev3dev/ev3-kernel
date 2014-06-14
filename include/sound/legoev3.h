@@ -14,8 +14,6 @@
 #include <linux/pwm.h>
 
 struct snd_legoev3_platform_data {
-	char *pwm_dev_name;
-	struct pwm_device *pwm;
 	unsigned amp_gpio;
 };
 

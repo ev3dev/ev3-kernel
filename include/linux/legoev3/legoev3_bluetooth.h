@@ -31,7 +31,6 @@ struct legoev3_bluetooth_platform_data {
 	int pic_ena_gpio;
 	int pic_rst_gpio;
 	int pic_cts_gpio;
-	const char *clk_pwm_dev;
 };
 
 #endif /* _LINUX_LEGOEV3_BLUETOOTH_H */
