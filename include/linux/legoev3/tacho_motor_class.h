@@ -18,6 +18,8 @@
 
 #include <linux/device.h>
 
+#define TACHO_MOTOR_PORT_NAME_SIZE 30
+
 enum tacho_motor_regulation_mode {
 	REGULATION_OFF,
 	REGULATION_ON,
@@ -75,8 +77,8 @@ enum
 struct function_pointers;
 
 struct tacho_motor_device {
+	char port_name[TACHO_MOTOR_PORT_NAME_SIZE + 1];
 	const struct function_pointers const *fp;
-
 	/* private */
 	struct device dev;
 };
@@ -89,20 +91,22 @@ struct function_pointers {
 	void (*set_position)(struct tacho_motor_device *tm, long position);
 
 	int  (*get_state)(struct tacho_motor_device *tm);
+
 	int  (*get_duty_cycle)(struct tacho_motor_device *tm);
+
 	int  (*get_pulses_per_second)(struct tacho_motor_device *tm);
 
 	int  (*get_duty_cycle_sp)(struct tacho_motor_device *tm);
 	void (*set_duty_cycle_sp)(struct tacho_motor_device *tm, long duty_cycle_sp);
 
-	int  (*get_speed_setpoint)(struct tacho_motor_device *tm);
-	void (*set_speed_setpoint)(struct tacho_motor_device *tm, long speed_setpoint);
+	int  (*get_pulses_per_second_sp)(struct tacho_motor_device *tm);
+	void (*set_pulses_per_second_sp)(struct tacho_motor_device *tm, long pulses_per_second_sp);
 
-	int  (*get_time_setpoint)(struct tacho_motor_device *tm);
-	void (*set_time_setpoint)(struct tacho_motor_device *tm, long time_setpoint);
+	int  (*get_time_sp)(struct tacho_motor_device *tm);
+	void (*set_time_sp)(struct tacho_motor_device *tm, long time_sp);
 
-	int  (*get_position_setpoint)(struct tacho_motor_device *tm);
-	void (*set_position_setpoint)(struct tacho_motor_device *tm, long position_setpoint);
+	int  (*get_position_sp)(struct tacho_motor_device *tm);
+	void (*set_position_sp)(struct tacho_motor_device *tm, long position_sp);
 
 	int  (*get_run_mode)(struct tacho_motor_device *tm);
 	void (*set_run_mode)(struct tacho_motor_device *tm, long run_mode);
@@ -131,14 +135,17 @@ struct function_pointers {
  	int  (*get_speed_regulation_K)(struct tacho_motor_device *tm);
  	void (*set_speed_regulation_K)(struct tacho_motor_device *tm, long speed_regulation_K);
 
- 	int  (*get_ramp_up)(struct tacho_motor_device *tm);
- 	void (*set_ramp_up)(struct tacho_motor_device *tm, long ramp_up);
+ 	int  (*get_ramp_up_sp)(struct tacho_motor_device *tm);
+ 	void (*set_ramp_up_sp)(struct tacho_motor_device *tm, long ramp_up_sp);
 
- 	int  (*get_ramp_down)(struct tacho_motor_device *tm);
- 	void (*set_ramp_down)(struct tacho_motor_device *tm, long ramp_down);
+ 	int  (*get_ramp_down_sp)(struct tacho_motor_device *tm);
+ 	void (*set_ramp_down_sp)(struct tacho_motor_device *tm, long ramp_down_sp);
  
 	int  (*get_run)(struct tacho_motor_device *tm);
-	void (*set_run)(struct tacho_motor_device *tm, long);
+	void (*set_run)(struct tacho_motor_device *tm, long run);
+
+	int  (*get_estop)(struct tacho_motor_device *tm);
+	void (*set_estop)(struct tacho_motor_device *tm, long estop);
 
 	void (*set_reset)(struct tacho_motor_device *tm, long reset);
 };
