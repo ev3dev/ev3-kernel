@@ -150,8 +150,10 @@ struct function_pointers {
 	void (*set_reset)(struct tacho_motor_device *tm, long reset);
 };
 
-extern int register_tacho_motor(struct tacho_motor_device *,
-				 struct device *);
+extern void tacho_motor_notify_state_change(struct tacho_motor_device *);
+
+extern int register_tacho_motor(struct tacho_motor_device *, struct device *);
+
 extern void unregister_tacho_motor(struct tacho_motor_device *);
 
 extern struct class tacho_motor_class;
