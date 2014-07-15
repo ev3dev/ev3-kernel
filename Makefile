@@ -1,7 +1,7 @@
 VERSION = 3
 PATCHLEVEL = 14
 SUBLEVEL = 7
-EXTRAVERSION = -1-ev3dev
+EXTRAVERSION = -2-ev3dev-pre1
 NAME = Remembering Coco
 
 # *DOCUMENTATION*
