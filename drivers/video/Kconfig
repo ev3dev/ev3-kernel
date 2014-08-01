@@ -89,6 +89,8 @@ config FIRMWARE_EDID
 	 combination with certain motherboards and monitors are known to
 	 suffer from this problem.
 
+source "drivers/video/fbtft/Kconfig"
+
 config FB_DDC
        tristate
        depends on FB
