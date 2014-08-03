@@ -159,19 +159,9 @@ static void set_palette(struct vc_data *vc);
 static int printable;		/* Is console ready for printing? */
 int default_utf8 = true;
 module_param(default_utf8, int, S_IRUGO | S_IWUSR);
-#if (CONFIG_MACH_DAVINCI_LEGOEV3 || CONFIG_MACH_DAVINCI_LEGOEV3_MODULE) \
-	&& !(CONFIG_MACH_DAVINCI_LEGOEV3_ST7735R || MACH_DAVINCI_LEGOEV3_ST7735R_MODULE)
 int global_cursor_default = 0;
-#else
-int global_cursor_default = 1;
-#endif
 module_param(global_cursor_default, int, S_IRUGO | S_IWUSR);
-#if (CONFIG_MACH_DAVINCI_LEGOEV3 || CONFIG_MACH_DAVINCI_LEGOEV3_MODULE) \
-	&& !(CONFIG_MACH_DAVINCI_LEGOEV3_ST7735R || MACH_DAVINCI_LEGOEV3_ST7735R_MODULE)
-int default_screen_mode = 1;
-#else
 int default_screen_mode = 0;
-#endif
 module_param(default_screen_mode, int, S_IRUGO | S_IWUSR);
 
 static int cur_default = CUR_DEFAULT;
@@ -797,9 +787,12 @@ int vc_allocate(unsigned int currcons)	/* return 0 on success */
 	    }
 
 	    /* If no drivers have overridden us and the user didn't pass a
-	       boot option, default to displaying the cursor */
+	       boot option, default to displaying the cursor and normal
+	       screen mode */
 	    if (global_cursor_default == -1)
 		    global_cursor_default = 1;
+	    if (default_screen_mode == -1)
+		    default_screen_mode = 0;
 
 	    vc_init(vc, vc->vc_rows, vc->vc_cols, 1);
 	    vcs_make_sysfs(currcons);
@@ -4200,6 +4193,7 @@ EXPORT_SYMBOL(console_blank_hook);
 EXPORT_SYMBOL(console_blanked);
 EXPORT_SYMBOL(vc_cons);
 EXPORT_SYMBOL(global_cursor_default);
+EXPORT_SYMBOL(default_screen_mode);
 #ifndef VT_SINGLE_DRIVER
 EXPORT_SYMBOL(give_up_console);
 #endif

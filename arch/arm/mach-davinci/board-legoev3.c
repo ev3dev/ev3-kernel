@@ -19,6 +19,7 @@
 #include <linux/init.h>
 #include <linux/clk.h>
 #include <linux/console.h>
+#include <linux/delay.h>
 #include <linux/gpio.h>
 #include <linux/gpio_keys.h>
 #include <linux/input.h>
@@ -31,10 +32,11 @@
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/partitions.h>
 #include <linux/mtd/physmap.h>
+#include <linux/platform_data/fbtft.h>
 #include <linux/regulator/machine.h>
 #include <linux/spi/spi.h>
 #include <linux/spi/flash.h>
-#include <linux/delay.h>
+#include <linux/vt_kern.h>
 #include <linux/wl12xx.h>
 
 #include <asm/mach-types.h>
@@ -49,12 +51,19 @@
 
 #include <sound/legoev3.h>
 
+#include <video/st7586fb.h>
+
 #include "board-legoev3.h"
 
 /*
  * LCD configuration:
  * ==================
- * The LCD is connected via SPI1 and uses the st7586fb frame buffer driver.
+ * The LCD is connected via SPI1. The stock LCD uses the st7586fb frame buffer
+ * driver. We also support the Adafruit 1.8" TFT which uses the fb_st7735r
+ * frame buffer driver. The installed display is detected by looking at
+ * EV3_LCD_CS_PIN. It is connected to the CS input on the stock LCD, which pulls
+ * high. On the Adafruit, it is used to drive the backlight PWM, so it is just
+ * floating.
  */
 
 static const short legoev3_lcd_pins[] __initconst = {
@@ -62,11 +71,32 @@ static const short legoev3_lcd_pins[] __initconst = {
 	-1
 };
 
-#if CONFIG_MACH_DAVINCI_LEGOEV3_ST7735R
+/* Stock LCD */
 
-#include <linux/platform_data/fbtft.h>
+static const struct st7586fb_platform_data legoev3_st7586fb_data = {
+	.rst_gpio	= EV3_LCD_RESET_PIN,
+	.a0_gpio	= EV3_LCD_A0_PIN,
+	.cs_gpio	= EV3_LCD_CS_PIN,
+};
 
-/* Using driver for Adafruit 1.8" TFT */
+static struct davinci_spi_config legoev3_st7586fb_cfg = {
+	.io_type	= SPI_IO_TYPE_DMA,
+	.c2tdelay	= 10,
+	.t2cdelay	= 10,
+};
+
+static struct spi_board_info legoev3_st7586fb_spi1_board_info[] = {
+	{
+		.modalias		= "st7586fb-legoev3",
+		.platform_data		= &legoev3_st7586fb_data,
+		.controller_data	= &legoev3_st7586fb_cfg,
+		.mode			= SPI_MODE_3 | SPI_NO_CS,
+		.max_speed_hz		= 10000000,
+		.bus_num		= 1,
+	},
+};
+
+/* Adafruit 1.8" TFT */
 
 static const struct fbtft_platform_data legoev3_st7735r_data = {
 	.display = {
@@ -82,7 +112,7 @@ static const struct fbtft_platform_data legoev3_st7735r_data = {
 	},
 };
 
-static struct spi_board_info legoev3_spi1_board_info[] = {
+static struct spi_board_info legoev3_st7735r_spi1_board_info[] = {
 	{
 		.modalias		= "fb_st7735r",
 		.platform_data		= &legoev3_st7735r_data,
@@ -91,35 +121,6 @@ static struct spi_board_info legoev3_spi1_board_info[] = {
 		.bus_num		= 1,
 	},
 };
-
-#else
-
-#include <video/st7586fb.h>
-
-static const struct st7586fb_platform_data legoev3_st7586fb_data = {
-	.rst_gpio	= EV3_LCD_RESET_PIN,
-	.a0_gpio	= EV3_LCD_A0_PIN,
-	.cs_gpio	= EV3_LCD_CS_PIN,
-};
-
-static struct davinci_spi_config legoev3_st7586fb_cfg = {
-	.io_type	= SPI_IO_TYPE_DMA,
-	.c2tdelay	= 10,
-	.t2cdelay	= 10,
-};
-
-static struct spi_board_info legoev3_spi1_board_info[] = {
-	{
-		.modalias		= "st7586fb-legoev3",
-		.platform_data		= &legoev3_st7586fb_data,
-		.controller_data	= &legoev3_st7586fb_cfg,
-		.mode			= SPI_MODE_3 | SPI_NO_CS,
-		.max_speed_hz		= 10000000,
-		.bus_num		= 1,
-	},
-};
-
-#endif
 
 /*
  * LED configuration:
@@ -841,6 +842,7 @@ static struct pwm_lookup legoev3_pwm_lookup[] = {
 static __init void legoev3_init(void)
 {
 	int ret;
+	bool stock_lcd;
 	u8 ehrpwm_mask = 0;
 
 	/* Disable all internal pullup/pulldown resistors */
@@ -858,12 +860,34 @@ static __init void legoev3_init(void)
 	if (ret)
 		pr_warn("legoev3_init: LCD pin mux setup failed:"
 			" %d\n", ret);
-	ret = spi_register_board_info(legoev3_spi1_board_info,
-				      ARRAY_SIZE(legoev3_spi1_board_info));
+	/* detect LCD - stock LCD pulls pin high */
+	ret = gpio_request_one(EV3_LCD_CS_PIN, GPIOF_INIT_LOW, NULL);
+	if (ret)
+		pr_warn("legoev3_init: Could not request EV3_LCD_CS_PIN:"
+			" %d\n", ret);
+	gpio_direction_input(EV3_LCD_CS_PIN);
+	stock_lcd = gpio_get_value(EV3_LCD_CS_PIN);
+	gpio_free(EV3_LCD_CS_PIN);
+	printk("%s: global_cursor_default: %d, default_screen_mode: %d",
+		__func__, global_cursor_default, default_screen_mode);
+	global_cursor_default = 1;
+	if (default_screen_mode == 0 && stock_lcd)
+		default_screen_mode = 1;
+	if (stock_lcd)
+		ret = spi_register_board_info(legoev3_st7586fb_spi1_board_info,
+				ARRAY_SIZE(legoev3_st7586fb_spi1_board_info));
+	else
+		ret = spi_register_board_info(legoev3_st7735r_spi1_board_info,
+				ARRAY_SIZE(legoev3_st7735r_spi1_board_info));
 	if (ret)
 		pr_warn("%s: spi1/frambuffer registration failed: %d\n",
 			__func__, ret);
-	ret = da8xx_register_spi_bus(1, ARRAY_SIZE(legoev3_spi1_board_info));
+	if (stock_lcd)
+		ret = da8xx_register_spi_bus(1,
+				ARRAY_SIZE(legoev3_st7586fb_spi1_board_info));
+	else
+		ret = da8xx_register_spi_bus(1,
+				ARRAY_SIZE(legoev3_st7735r_spi1_board_info));
 	if (ret)
 		pr_warn("%s: SPI 1 registration failed: %d\n", __func__, ret);
 
