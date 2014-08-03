@@ -232,6 +232,8 @@ struct fbtft_par {
 	bool first_update_done;
 	struct timespec update_time;
 	bool bgr;
+	struct hrtimer backlight_pwm_timer;
+	struct work_struct backlight_pwm_work;
 	void *extra;
 };
 

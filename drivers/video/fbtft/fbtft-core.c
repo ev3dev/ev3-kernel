@@ -201,18 +201,67 @@ void fbtft_free_gpios(struct fbtft_par *par)
 }
 
 #ifdef CONFIG_FB_BACKLIGHT
+
+#define FBTFT_BL_MAX_BRIGHTNESS 1000
+#define FBTFT_BL_INVERTED BL_CORE_DRIVER1
+#define FBTFT_BL_ON_TIME (NSEC_PER_SEC / 1000 \
+	* bd->props.brightness / bd->props.max_brightness)
+#define FBTFT_BL_OFF_TIME (NSEC_PER_SEC / 1000 \
+	* (bd->props.max_brightness - bd->props.brightness) \
+	/ bd->props.max_brightness)
+
+static void fbtft_backlight_pwm_work (struct work_struct *work)
+{
+	struct fbtft_par *par = container_of(work, struct fbtft_par,
+					     backlight_pwm_work);
+	struct backlight_device *bd = par->info->bl_dev;
+	int value = gpio_get_value(par->gpio.led[0]);
+
+	gpio_direction_output(par->gpio.led[0], !value);
+}
+
+static enum hrtimer_restart fbtft_backlight_pwm_timeout(struct hrtimer *timer)
+{
+	struct fbtft_par *par = container_of(timer, struct fbtft_par,
+					     backlight_pwm_timer);
+	struct backlight_device *bd = par->info->bl_dev;
+	bool polarity = !!(bd->props.state & FBTFT_BL_INVERTED);
+	ktime_t tnew;
+
+	if (!!gpio_get_value(par->gpio.led[0]) ^ polarity)
+		tnew = ktime_set(0, FBTFT_BL_ON_TIME);
+	else
+		tnew = ktime_set(0, FBTFT_BL_OFF_TIME);
+	hrtimer_forward_now(&par->backlight_pwm_timer, tnew);
+
+	if (gpio_cansleep(par->gpio.led[0]))
+		schedule_work(&par->backlight_pwm_work);
+	else
+		fbtft_backlight_pwm_work(&par->backlight_pwm_work);
+
+	return HRTIMER_RESTART;
+}
+
 int fbtft_backlight_update_status(struct backlight_device *bd)
 {
 	struct fbtft_par *par = bl_get_data(bd);
-	bool polarity = !!(bd->props.state & BL_CORE_DRIVER1);
+	bool polarity = !!(bd->props.state & FBTFT_BL_INVERTED);
 
 	fbtft_par_dbg(DEBUG_BACKLIGHT, par,
-		"%s: polarity=%d, power=%d, fb_blank=%d\n",
-		__func__, polarity, bd->props.power, bd->props.fb_blank);
+		"%s: brightness=%d, polarity=%d, power=%d, fb_blank=%d\n",
+		__func__, bd->props.brightness, polarity, bd->props.power,
+		bd->props.fb_blank);
 
-	if ((bd->props.power == FB_BLANK_UNBLANK) && (bd->props.fb_blank == FB_BLANK_UNBLANK))
+	hrtimer_cancel(&par->backlight_pwm_timer);
+	if ((bd->props.power == FB_BLANK_UNBLANK)
+			&& (bd->props.fb_blank == FB_BLANK_UNBLANK)
+			&& (bd->props.brightness))
+	{
 		gpio_set_value(par->gpio.led[0], polarity);
-	else
+		if (bd->props.brightness != bd->props.max_brightness)
+			hrtimer_start(&par->backlight_pwm_timer,
+				      ktime_set(0, 0), HRTIMER_MODE_REL);
+	} else
 		gpio_set_value(par->gpio.led[0], !polarity);
 
 	return 0;
@@ -229,6 +278,8 @@ void fbtft_unregister_backlight(struct fbtft_par *par)
 
 	fbtft_par_dbg(DEBUG_BACKLIGHT, par, "%s()\n", __func__);
 
+	hrtimer_cancel(&par->backlight_pwm_timer);
+	cancel_work_sync(&par->backlight_pwm_work);
 	if (par->info->bl_dev) {
 		par->info->bl_dev->props.power = FB_BLANK_POWERDOWN;
 		backlight_update_status(par->info->bl_dev);
@@ -242,7 +293,10 @@ void fbtft_unregister_backlight(struct fbtft_par *par)
 void fbtft_register_backlight(struct fbtft_par *par)
 {
 	struct backlight_device *bd;
-	struct backlight_properties bl_props = { 0, };
+	struct backlight_properties bl_props = {
+		.brightness	= FBTFT_BL_MAX_BRIGHTNESS,
+		.max_brightness	= FBTFT_BL_MAX_BRIGHTNESS,
+	};
 	struct backlight_ops *bl_ops;
 
 	fbtft_par_dbg(DEBUG_BACKLIGHT, par, "%s()\n", __func__);
@@ -267,7 +321,12 @@ void fbtft_register_backlight(struct fbtft_par *par)
 	/* Assume backlight is off, get polarity from current state of pin */
 	bl_props.power = FB_BLANK_POWERDOWN;
 	if (!gpio_get_value(par->gpio.led[0]))
-		bl_props.state |= BL_CORE_DRIVER1;
+		bl_props.state |= FBTFT_BL_INVERTED;
+
+	INIT_WORK(&par->backlight_pwm_work, fbtft_backlight_pwm_work);
+
+	hrtimer_init(&par->backlight_pwm_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+	par->backlight_pwm_timer.function = fbtft_backlight_pwm_timeout;
 
 	bd = backlight_device_register(dev_driver_string(par->info->device),
 				par->info->device, par, bl_ops, &bl_props);
