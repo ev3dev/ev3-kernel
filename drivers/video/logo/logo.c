@@ -62,6 +62,9 @@ const struct linux_logo * __init_refok fb_find_logo(int depth)
 	}
 	
 	if (depth >= 8) {
+#ifdef CONFIG_LOGO_EV3DEV_CLUT224
+		logo = &logo_ev3dev_clut224;
+#endif
 #ifdef CONFIG_LOGO_LINUX_CLUT224
 		/* Generic Linux logo */
 		logo = &logo_linux_clut224;

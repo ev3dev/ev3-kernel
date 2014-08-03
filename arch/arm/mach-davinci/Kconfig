@@ -208,11 +208,19 @@ config MACH_DAVINCI_LEGOEV3
 	bool "LEGO MINDSTORMS EV3 Programmable Brick"
 	depends on ARCH_DAVINCI_DA850
 	select DAVINCI_MUX
-        select CONFIG_DA850_UI_NONE
+	select CONFIG_DA850_UI_NONE
 	help
 	  Say Y here to select the LEGO MINDSTORMS EV3 Programmable Brick .
 	  Information on this board may be found at
 	  http://mindstorms.lego.com/
+
+config MACH_DAVINCI_LEGOEV3_ST7735R
+	bool "Color Display (Adafruit 1.8\" TFT)"
+	depends on MACH_DAVINCI_LEGOEV3
+	select FB_TFT_ST7735R
+	help
+	  Say Y here if your EV3 has a st7735r LCD (like the Adafruit 1.8" TFT)
+	  instead of the monochorome LCD that came with the EV3.
 
 config LEGOEV3_FIQ
 	bool "FIQ backend for LEGO Mindstorms EV3 input ports"
@@ -229,7 +237,7 @@ config DA850_FIX_PLL0_SYSCLK3RATE
 	default 0
 	help
 	  Set this value with desired EMIF clock rate, Otherwise EMIF clock
-          rate is decided based on OPP value.
+	  rate is decided based on OPP value.
 
 config DA850_WL12XX
 	bool "AM18x wl1271 daughter board"

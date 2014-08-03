@@ -49,8 +49,6 @@
 
 #include <sound/legoev3.h>
 
-#include <video/st7586fb.h>
-
 #include "board-legoev3.h"
 
 /*
@@ -63,6 +61,40 @@ static const short legoev3_lcd_pins[] __initconst = {
 	EV3_LCD_DATA_OUT, EV3_LCD_RESET, EV3_LCD_A0, EV3_LCD_CS
 	-1
 };
+
+#if CONFIG_MACH_DAVINCI_LEGOEV3_ST7735R
+
+#include <linux/platform_data/fbtft.h>
+
+/* Using driver for Adafruit 1.8" TFT */
+
+static const struct fbtft_platform_data legoev3_st7735r_data = {
+	.display = {
+		.buswidth = 8,
+		.backlight = 1,
+	},
+	.rotate = 90,
+	.gpios = (const struct fbtft_gpio []) {
+		{ "reset", EV3_LCD_RESET_PIN },
+		{ "dc", EV3_LCD_A0_PIN },
+		{ "led", EV3_LCD_CS_PIN },
+		{},
+	},
+};
+
+static struct spi_board_info legoev3_spi1_board_info[] = {
+	{
+		.modalias		= "fb_st7735r",
+		.platform_data		= &legoev3_st7735r_data,
+		.mode			= SPI_MODE_0 | SPI_NO_CS,
+		.max_speed_hz		= 32000000,
+		.bus_num		= 1,
+	},
+};
+
+#else
+
+#include <video/st7586fb.h>
 
 static const struct st7586fb_platform_data legoev3_st7586fb_data = {
 	.rst_gpio	= EV3_LCD_RESET_PIN,
@@ -86,6 +118,8 @@ static struct spi_board_info legoev3_spi1_board_info[] = {
 		.bus_num		= 1,
 	},
 };
+
+#endif
 
 /*
  * LED configuration:

@@ -159,9 +159,19 @@ static void set_palette(struct vc_data *vc);
 static int printable;		/* Is console ready for printing? */
 int default_utf8 = true;
 module_param(default_utf8, int, S_IRUGO | S_IWUSR);
-int global_cursor_default = 0; /* changed from -1 for ev3dev */
+#if (CONFIG_MACH_DAVINCI_LEGOEV3 || CONFIG_MACH_DAVINCI_LEGOEV3_MODULE) \
+	&& !(CONFIG_MACH_DAVINCI_LEGOEV3_ST7735R || MACH_DAVINCI_LEGOEV3_ST7735R_MODULE)
+int global_cursor_default = 0;
+#else
+int global_cursor_default = 1;
+#endif
 module_param(global_cursor_default, int, S_IRUGO | S_IWUSR);
-int default_screen_mode = 1; /* changed from 0 for ev3dev */
+#if (CONFIG_MACH_DAVINCI_LEGOEV3 || CONFIG_MACH_DAVINCI_LEGOEV3_MODULE) \
+	&& !(CONFIG_MACH_DAVINCI_LEGOEV3_ST7735R || MACH_DAVINCI_LEGOEV3_ST7735R_MODULE)
+int default_screen_mode = 1;
+#else
+int default_screen_mode = 0;
+#endif
 module_param(default_screen_mode, int, S_IRUGO | S_IWUSR);
 
 static int cur_default = CUR_DEFAULT;

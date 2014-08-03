@@ -32,6 +32,11 @@ config LOGO_EV3DEV_MONO
 	depends on MACH_DAVINCI_LEGOEV3
 	default y
 
+config LOGO_EV3DEV_CLUT224
+	bool "ev3dev color logo"
+	depends on MACH_DAVINCI_LEGOEV3_ST7735R
+	default y
+
 config LOGO_BLACKFIN_VGA16
 	bool "16-colour Blackfin Processor Linux logo"
 	depends on BLACKFIN
