@@ -1,7 +1,7 @@
 VERSION = 3
 PATCHLEVEL = 14
-SUBLEVEL = 7
-EXTRAVERSION = -2-ev3dev-pre1
+SUBLEVEL = 17
+EXTRAVERSION = -1-ev3dev
 NAME = Remembering Coco
 
 # *DOCUMENTATION*
@@ -638,6 +638,8 @@ ifndef CONFIG_FUNCTION_TRACER
 KBUILD_CFLAGS	+= -fomit-frame-pointer
 endif
 endif
+
+KBUILD_CFLAGS   += $(call cc-option, -fno-var-tracking-assignments)
 
 ifdef CONFIG_DEBUG_INFO
 KBUILD_CFLAGS	+= -g
