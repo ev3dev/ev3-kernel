@@ -161,7 +161,7 @@ int default_utf8 = true;
 module_param(default_utf8, int, S_IRUGO | S_IWUSR);
 int global_cursor_default = 0;
 module_param(global_cursor_default, int, S_IRUGO | S_IWUSR);
-int default_screen_mode = 0;
+int default_screen_mode = 1;
 module_param(default_screen_mode, int, S_IRUGO | S_IWUSR);
 
 static int cur_default = CUR_DEFAULT;
