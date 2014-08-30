@@ -1694,6 +1694,10 @@ static int serial_link_irq_chain(struct uart_8250_port *up)
 
 static void serial_unlink_irq_chain(struct uart_8250_port *up)
 {
+	/*
+	 * yes, some broken gcc emit "warning: 'i' may be used uninitialized"
+	 * but no, we are not going to take a patch that assigns NULL below.
+	 */
 	struct irq_info *i;
 	struct hlist_node *n;
 	struct hlist_head *h;
@@ -1922,13 +1926,8 @@ static void serial8250_put_poll_char(struct uart_port *port,
 	wait_for_xmitr(up, BOTH_EMPTY);
 	/*
 	 *	Send the character out.
-	 *	If a LF, also do CR...
 	 */
 	serial_port_out(port, UART_TX, c);
-	if (c == 10) {
-		wait_for_xmitr(up, BOTH_EMPTY);
-		serial_port_out(port, UART_TX, 13);
-	}
 
 	/*
 	 *	Finally, wait for transmitter to become empty
@@ -2334,9 +2333,11 @@ serial8250_do_set_termios(struct uart_port *port, struct ktermios *termios,
 	 * the trigger, or the MCR RTS bit is cleared.  In the case where
 	 * the remote UART is not using CTS auto flow control, we must
 	 * have sufficient FIFO entries for the latency of the remote
-	 * UART to respond.  IOW, at least 16 bytes of FIFO.
+	 * UART to respond.  IOW, at least 16 bytes of FIFO. Also enable
+	 * AFE if hw flow control is supported
 	 */
-	if (up->capabilities & UART_CAP_AFE && port->fifosize >= 16) {
+	if ((up->capabilities & UART_CAP_AFE && (port->fifosize >= 16)) ||
+	    (port->flags & UPF_HARD_FLOW)) {
 		up->mcr &= ~UART_MCR_AFE;
 		if (termios->c_cflag & CRTSCTS)
 			up->mcr |= UART_MCR_AFE;
@@ -2882,14 +2883,10 @@ serial8250_console_write(struct console *co, const char *s, unsigned int count)
 
 	touch_nmi_watchdog();
 
-	local_irq_save(flags);
-	if (port->sysrq) {
-		/* serial8250_handle_irq() already took the lock */
-		locked = 0;
-	} else if (oops_in_progress) {
-		locked = spin_trylock(&port->lock);
-	} else
-		spin_lock(&port->lock);
+	if (port->sysrq || oops_in_progress)
+		locked = spin_trylock_irqsave(&port->lock, flags);
+	else
+		spin_lock_irqsave(&port->lock, flags);
 
 	/*
 	 *	First save the IER then disable the interrupts
@@ -2921,8 +2918,7 @@ serial8250_console_write(struct console *co, const char *s, unsigned int count)
 		serial8250_modem_status(up);
 
 	if (locked)
-		spin_unlock(&port->lock);
-	local_irq_restore(flags);
+		spin_unlock_irqrestore(&port->lock, flags);
 }
 
 static int __init serial8250_console_setup(struct console *co, char *options)

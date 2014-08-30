@@ -300,7 +300,7 @@ bool iscsit_check_np_match(
 		port = ntohs(sock_in->sin_port);
 	}
 
-	if ((ip_match == true) && (np->np_port == port) &&
+	if (ip_match && (np->np_port == port) &&
 	    (np->np_network_transport == network_transport))
 		return true;
 
@@ -325,7 +325,7 @@ static struct iscsi_np *iscsit_get_np(
 		}
 
 		match = iscsit_check_np_match(sockaddr, np, network_transport);
-		if (match == true) {
+		if (match) {
 			/*
 			 * Increment the np_exports reference count now to
 			 * prevent iscsit_del_np() below from being called
@@ -500,6 +500,23 @@ static int iscsit_queue_rsp(struct iscsi_conn *conn, struct iscsi_cmd *cmd)
 	return 0;
 }
 
+static void iscsit_aborted_task(struct iscsi_conn *conn, struct iscsi_cmd *cmd)
+{
+	bool scsi_cmd = (cmd->iscsi_opcode == ISCSI_OP_SCSI_CMD);
+
+	spin_lock_bh(&conn->cmd_lock);
+	if (!list_empty(&cmd->i_conn_node))
+		list_del_init(&cmd->i_conn_node);
+	spin_unlock_bh(&conn->cmd_lock);
+
+	__iscsit_free_cmd(cmd, scsi_cmd, true);
+}
+
+static enum target_prot_op iscsit_get_sup_prot_ops(struct iscsi_conn *conn)
+{
+	return TARGET_PROT_NORMAL;
+}
+
 static struct iscsit_transport iscsi_target_transport = {
 	.name			= "iSCSI/TCP",
 	.transport_type		= ISCSI_TCP,
@@ -514,6 +531,8 @@ static struct iscsit_transport iscsi_target_transport = {
 	.iscsit_response_queue	= iscsit_response_queue,
 	.iscsit_queue_data_in	= iscsit_queue_rsp,
 	.iscsit_queue_status	= iscsit_queue_rsp,
+	.iscsit_aborted_task	= iscsit_aborted_task,
+	.iscsit_get_sup_prot_ops = iscsit_get_sup_prot_ops,
 };
 
 static int __init iscsi_target_init_module(void)
@@ -1102,7 +1121,7 @@ iscsit_get_immediate_data(struct iscsi_cmd *cmd, struct iscsi_scsi_req *hdr,
 	/*
 	 * Special case for Unsupported SAM WRITE Opcodes and ImmediateData=Yes.
 	 */
-	if (dump_payload == true)
+	if (dump_payload)
 		goto after_immediate_data;
 
 	immed_ret = iscsit_handle_immediate_data(cmd, hdr,
@@ -1503,6 +1522,16 @@ int iscsit_setup_nop_out(struct iscsi_conn *conn, struct iscsi_cmd *cmd,
 			 struct iscsi_nopout *hdr)
 {
 	u32 payload_length = ntoh24(hdr->dlength);
+
+	if (!(hdr->flags & ISCSI_FLAG_CMD_FINAL)) {
+		pr_err("NopOUT Flag's, Left Most Bit not set, protocol error.\n");
+		if (!cmd)
+			return iscsit_add_reject(conn, ISCSI_REASON_PROTOCOL_ERROR,
+						 (unsigned char *)hdr);
+		
+		return iscsit_reject_cmd(cmd, ISCSI_REASON_PROTOCOL_ERROR,
+					 (unsigned char *)hdr);
+	}
 
 	if (hdr->itt == RESERVED_ITT && !(hdr->opcode & ISCSI_OP_IMMEDIATE)) {
 		pr_err("NOPOUT ITT is reserved, but Immediate Bit is"
@@ -3461,10 +3490,8 @@ iscsit_build_sendtargets_response(struct iscsi_cmd *cmd,
 
 				len = sprintf(buf, "TargetAddress="
 					"%s:%hu,%hu",
-					(inaddr_any == false) ?
-						np->np_ip : conn->local_ip,
-					(inaddr_any == false) ?
-						np->np_port : conn->local_port,
+					inaddr_any ? conn->local_ip : np->np_ip,
+					inaddr_any ? conn->local_port : np->np_port,
 					tpg->tpgt);
 				len += 1;
 

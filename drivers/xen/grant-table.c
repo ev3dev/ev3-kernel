@@ -933,9 +933,6 @@ int gnttab_map_refs(struct gnttab_map_grant_ref *map_ops,
 		    struct page **pages, unsigned int count)
 {
 	int i, ret;
-	bool lazy = false;
-	pte_t *pte;
-	unsigned long mfn;
 
 	ret = HYPERVISOR_grant_table_op(GNTTABOP_map_grant_ref, map_ops, count);
 	if (ret)
@@ -947,45 +944,7 @@ int gnttab_map_refs(struct gnttab_map_grant_ref *map_ops,
 			gnttab_retry_eagain_gop(GNTTABOP_map_grant_ref, map_ops + i,
 						&map_ops[i].status, __func__);
 
-	/* this is basically a nop on x86 */
-	if (xen_feature(XENFEAT_auto_translated_physmap)) {
-		for (i = 0; i < count; i++) {
-			if (map_ops[i].status)
-				continue;
-			set_phys_to_machine(map_ops[i].host_addr >> PAGE_SHIFT,
-					map_ops[i].dev_bus_addr >> PAGE_SHIFT);
-		}
-		return ret;
-	}
-
-	if (!in_interrupt() && paravirt_get_lazy_mode() == PARAVIRT_LAZY_NONE) {
-		arch_enter_lazy_mmu_mode();
-		lazy = true;
-	}
-
-	for (i = 0; i < count; i++) {
-		/* Do not add to override if the map failed. */
-		if (map_ops[i].status)
-			continue;
-
-		if (map_ops[i].flags & GNTMAP_contains_pte) {
-			pte = (pte_t *) (mfn_to_virt(PFN_DOWN(map_ops[i].host_addr)) +
-				(map_ops[i].host_addr & ~PAGE_MASK));
-			mfn = pte_mfn(*pte);
-		} else {
-			mfn = PFN_DOWN(map_ops[i].dev_bus_addr);
-		}
-		ret = m2p_add_override(mfn, pages[i], kmap_ops ?
-				       &kmap_ops[i] : NULL);
-		if (ret)
-			goto out;
-	}
-
- out:
-	if (lazy)
-		arch_leave_lazy_mmu_mode();
-
-	return ret;
+	return set_foreign_p2m_mapping(map_ops, kmap_ops, pages, count);
 }
 EXPORT_SYMBOL_GPL(gnttab_map_refs);
 
@@ -993,39 +952,13 @@ int gnttab_unmap_refs(struct gnttab_unmap_grant_ref *unmap_ops,
 		      struct gnttab_map_grant_ref *kmap_ops,
 		      struct page **pages, unsigned int count)
 {
-	int i, ret;
-	bool lazy = false;
+	int ret;
 
 	ret = HYPERVISOR_grant_table_op(GNTTABOP_unmap_grant_ref, unmap_ops, count);
 	if (ret)
 		return ret;
 
-	/* this is basically a nop on x86 */
-	if (xen_feature(XENFEAT_auto_translated_physmap)) {
-		for (i = 0; i < count; i++) {
-			set_phys_to_machine(unmap_ops[i].host_addr >> PAGE_SHIFT,
-					INVALID_P2M_ENTRY);
-		}
-		return ret;
-	}
-
-	if (!in_interrupt() && paravirt_get_lazy_mode() == PARAVIRT_LAZY_NONE) {
-		arch_enter_lazy_mmu_mode();
-		lazy = true;
-	}
-
-	for (i = 0; i < count; i++) {
-		ret = m2p_remove_override(pages[i], kmap_ops ?
-				       &kmap_ops[i] : NULL);
-		if (ret)
-			goto out;
-	}
-
- out:
-	if (lazy)
-		arch_leave_lazy_mmu_mode();
-
-	return ret;
+	return clear_foreign_p2m_mapping(unmap_ops, kmap_ops, pages, count);
 }
 EXPORT_SYMBOL_GPL(gnttab_unmap_refs);
 
@@ -1235,7 +1168,8 @@ int gnttab_resume(void)
 
 int gnttab_suspend(void)
 {
-	gnttab_interface->unmap_frames();
+	if (!xen_feature(XENFEAT_auto_translated_physmap))
+		gnttab_interface->unmap_frames();
 	return 0;
 }
 
@@ -1261,18 +1195,20 @@ static int gnttab_expand(unsigned int req_entries)
 int gnttab_init(void)
 {
 	int i;
+	unsigned long max_nr_grant_frames;
 	unsigned int max_nr_glist_frames, nr_glist_frames;
 	unsigned int nr_init_grefs;
 	int ret;
 
 	gnttab_request_version();
+	max_nr_grant_frames = gnttab_max_grant_frames();
 	nr_grant_frames = 1;
 
 	/* Determine the maximum number of frames required for the
 	 * grant reference free list on the current hypervisor.
 	 */
 	BUG_ON(grefs_per_grant_frame == 0);
-	max_nr_glist_frames = (gnttab_max_grant_frames() *
+	max_nr_glist_frames = (max_nr_grant_frames *
 			       grefs_per_grant_frame / RPP);
 
 	gnttab_list = kmalloc(max_nr_glist_frames * sizeof(grant_ref_t *),
@@ -1288,6 +1224,11 @@ int gnttab_init(void)
 			goto ini_nomem;
 		}
 	}
+
+	ret = arch_gnttab_init(max_nr_grant_frames,
+			       nr_status_frames(max_nr_grant_frames));
+	if (ret < 0)
+		goto ini_nomem;
 
 	if (gnttab_setup() < 0) {
 		ret = -ENODEV;

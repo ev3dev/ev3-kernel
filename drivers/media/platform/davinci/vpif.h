@@ -533,30 +533,6 @@ static inline void channel2_clipping_enable(int enable)
 	}
 }
 
-/* function to enable clipping (for both active and blanking regions) on ch 2 */
-static inline void channel3_clipping_enable(int enable)
-{
-	if (enable) {
-		vpif_set_bit(VPIF_CH3_CTRL, VPIF_CH3_CLIP_ANC_EN);
-		vpif_set_bit(VPIF_CH3_CTRL, VPIF_CH3_CLIP_ACTIVE_EN);
-	} else {
-		vpif_clr_bit(VPIF_CH3_CTRL, VPIF_CH3_CLIP_ANC_EN);
-		vpif_clr_bit(VPIF_CH3_CTRL, VPIF_CH3_CLIP_ACTIVE_EN);
-	}
-}
-
-/* function to enable clipping (for both active and blanking regions) on ch 2 */
-static inline void channel2_clipping_enable(int enable)
-{
-	if (enable) {
-		vpif_set_bit(VPIF_CH2_CTRL, VPIF_CH2_CLIP_ANC_EN);
-		vpif_set_bit(VPIF_CH2_CTRL, VPIF_CH2_CLIP_ACTIVE_EN);
-	} else {
-		vpif_clr_bit(VPIF_CH2_CTRL, VPIF_CH2_CLIP_ANC_EN);
-		vpif_clr_bit(VPIF_CH2_CTRL, VPIF_CH2_CLIP_ACTIVE_EN);
-	}
-}
-
 /* function to enable clipping (for both active and blanking regions) on ch 3 */
 static inline void channel3_clipping_enable(int enable)
 {

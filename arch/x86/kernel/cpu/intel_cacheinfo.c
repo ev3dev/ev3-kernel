@@ -730,6 +730,18 @@ unsigned int init_intel_cacheinfo(struct cpuinfo_x86 *c)
 #endif
 	}
 
+#ifdef CONFIG_X86_HT
+	/*
+	 * If cpu_llc_id is not yet set, this means cpuid_level < 4 which in
+	 * turns means that the only possibility is SMT (as indicated in
+	 * cpuid1). Since cpuid2 doesn't specify shared caches, and we know
+	 * that SMT shares all caches, we can unconditionally set cpu_llc_id to
+	 * c->phys_proc_id.
+	 */
+	if (per_cpu(cpu_llc_id, cpu) == BAD_APICID)
+		per_cpu(cpu_llc_id, cpu) = c->phys_proc_id;
+#endif
+
 	c->x86_cache_size = l3 ? l3 : (l2 ? l2 : (l1i+l1d));
 
 	return l2;
@@ -1225,21 +1237,24 @@ static struct notifier_block cacheinfo_cpu_notifier = {
 
 static int __init cache_sysfs_init(void)
 {
-	int i;
+	int i, err = 0;
 
 	if (num_cache_leaves == 0)
 		return 0;
 
+	cpu_notifier_register_begin();
 	for_each_online_cpu(i) {
-		int err;
 		struct device *dev = get_cpu_device(i);
 
 		err = cache_add_dev(dev);
 		if (err)
-			return err;
+			goto out;
 	}
-	register_hotcpu_notifier(&cacheinfo_cpu_notifier);
-	return 0;
+	__register_hotcpu_notifier(&cacheinfo_cpu_notifier);
+
+out:
+	cpu_notifier_register_done();
+	return err;
 }
 
 device_initcall(cache_sysfs_init);

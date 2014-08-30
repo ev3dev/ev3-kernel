@@ -116,7 +116,7 @@ static int cap_dentry_init_security(struct dentry *dentry, int mode,
 					struct qstr *name, void **ctx,
 					u32 *ctxlen)
 {
-	return 0;
+	return -EOPNOTSUPP;
 }
 
 static int cap_inode_alloc_security(struct inode *inode)
@@ -879,7 +879,7 @@ static void cap_key_free(struct key *key)
 }
 
 static int cap_key_permission(key_ref_t key_ref, const struct cred *cred,
-			      key_perm_t perm)
+			      unsigned perm)
 {
 	return 0;
 }

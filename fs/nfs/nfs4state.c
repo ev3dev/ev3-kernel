@@ -1140,9 +1140,9 @@ static int nfs4_run_state_manager(void *);
 
 static void nfs4_clear_state_manager_bit(struct nfs_client *clp)
 {
-	smp_mb__before_clear_bit();
+	smp_mb__before_atomic();
 	clear_bit(NFS4CLNT_MANAGER_RUNNING, &clp->cl_state);
-	smp_mb__after_clear_bit();
+	smp_mb__after_atomic();
 	wake_up_bit(&clp->cl_state, NFS4CLNT_MANAGER_RUNNING);
 	rpc_wake_up(&clp->cl_rpcwaitq);
 }
@@ -1316,7 +1316,7 @@ static int nfs4_state_mark_reclaim_reboot(struct nfs_client *clp, struct nfs4_st
 	return 1;
 }
 
-static int nfs4_state_mark_reclaim_nograce(struct nfs_client *clp, struct nfs4_state *state)
+int nfs4_state_mark_reclaim_nograce(struct nfs_client *clp, struct nfs4_state *state)
 {
 	set_bit(NFS_STATE_RECLAIM_NOGRACE, &state->flags);
 	clear_bit(NFS_STATE_RECLAIM_REBOOT, &state->flags);
@@ -2075,8 +2075,10 @@ again:
 	switch (status) {
 	case 0:
 		break;
-	case -NFS4ERR_DELAY:
 	case -ETIMEDOUT:
+		if (clnt->cl_softrtry)
+			break;
+	case -NFS4ERR_DELAY:
 	case -EAGAIN:
 		ssleep(1);
 	case -NFS4ERR_STALE_CLIENTID:

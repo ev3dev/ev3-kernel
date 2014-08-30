@@ -445,6 +445,9 @@ static int radeon_info_ioctl(struct drm_device *dev, void *data, struct drm_file
 		case RADEON_CS_RING_UVD:
 			*value = rdev->ring[R600_RING_TYPE_UVD_INDEX].ready;
 			break;
+		case RADEON_CS_RING_VCE:
+			*value = rdev->ring[TN_RING_TYPE_VCE1_INDEX].ready;
+			break;
 		default:
 			return -EINVAL;
 		}
@@ -488,6 +491,43 @@ static int radeon_info_ioctl(struct drm_device *dev, void *data, struct drm_file
 			*value = rdev->pm.dpm.dyn_state.max_clock_voltage_on_ac.sclk * 10;
 		else
 			*value = rdev->pm.default_sclk * 10;
+		break;
+	case RADEON_INFO_VCE_FW_VERSION:
+		*value = rdev->vce.fw_version;
+		break;
+	case RADEON_INFO_VCE_FB_VERSION:
+		*value = rdev->vce.fb_version;
+		break;
+	case RADEON_INFO_NUM_BYTES_MOVED:
+		value = (uint32_t*)&value64;
+		value_size = sizeof(uint64_t);
+		value64 = atomic64_read(&rdev->num_bytes_moved);
+		break;
+	case RADEON_INFO_VRAM_USAGE:
+		value = (uint32_t*)&value64;
+		value_size = sizeof(uint64_t);
+		value64 = atomic64_read(&rdev->vram_usage);
+		break;
+	case RADEON_INFO_GTT_USAGE:
+		value = (uint32_t*)&value64;
+		value_size = sizeof(uint64_t);
+		value64 = atomic64_read(&rdev->gtt_usage);
+		break;
+	case RADEON_INFO_ACTIVE_CU_COUNT:
+		if (rdev->family >= CHIP_BONAIRE)
+			*value = rdev->config.cik.active_cus;
+		else if (rdev->family >= CHIP_TAHITI)
+			*value = rdev->config.si.active_cus;
+		else if (rdev->family >= CHIP_CAYMAN)
+			*value = rdev->config.cayman.active_simds;
+		else if (rdev->family >= CHIP_CEDAR)
+			*value = rdev->config.evergreen.active_simds;
+		else if (rdev->family >= CHIP_RV770)
+			*value = rdev->config.rv770.active_simds;
+		else if (rdev->family >= CHIP_R600)
+			*value = rdev->config.r600.active_simds;
+		else
+			*value = 1;
 		break;
 	default:
 		DRM_DEBUG_KMS("Invalid request %d\n", info->request);
@@ -539,7 +579,7 @@ int radeon_driver_open_kms(struct drm_device *dev, struct drm_file *file_priv)
 	/* new gpu have virtual address space support */
 	if (rdev->family >= CHIP_CAYMAN) {
 		struct radeon_fpriv *fpriv;
-		struct radeon_bo_va *bo_va;
+		struct radeon_vm *vm;
 		int r;
 
 		fpriv = kzalloc(sizeof(*fpriv), GFP_KERNEL);
@@ -547,27 +587,37 @@ int radeon_driver_open_kms(struct drm_device *dev, struct drm_file *file_priv)
 			return -ENOMEM;
 		}
 
-		radeon_vm_init(rdev, &fpriv->vm);
-
-		r = radeon_bo_reserve(rdev->ring_tmp_bo.bo, false);
-		if (r)
-			return r;
-
-		/* map the ib pool buffer read only into
-		 * virtual address space */
-		bo_va = radeon_vm_bo_add(rdev, &fpriv->vm,
-					 rdev->ring_tmp_bo.bo);
-		r = radeon_vm_bo_set_addr(rdev, bo_va, RADEON_VA_IB_OFFSET,
-					  RADEON_VM_PAGE_READABLE |
-					  RADEON_VM_PAGE_SNOOPED);
-
-		radeon_bo_unreserve(rdev->ring_tmp_bo.bo);
+		vm = &fpriv->vm;
+		r = radeon_vm_init(rdev, vm);
 		if (r) {
-			radeon_vm_fini(rdev, &fpriv->vm);
 			kfree(fpriv);
 			return r;
 		}
 
+		if (rdev->accel_working) {
+			r = radeon_bo_reserve(rdev->ring_tmp_bo.bo, false);
+			if (r) {
+				radeon_vm_fini(rdev, vm);
+				kfree(fpriv);
+				return r;
+			}
+
+			/* map the ib pool buffer read only into
+			 * virtual address space */
+			vm->ib_bo_va = radeon_vm_bo_add(rdev, vm,
+							rdev->ring_tmp_bo.bo);
+			r = radeon_vm_bo_set_addr(rdev, vm->ib_bo_va,
+						  RADEON_VA_IB_OFFSET,
+						  RADEON_VM_PAGE_READABLE |
+						  RADEON_VM_PAGE_SNOOPED);
+
+			radeon_bo_unreserve(rdev->ring_tmp_bo.bo);
+			if (r) {
+				radeon_vm_fini(rdev, vm);
+				kfree(fpriv);
+				return r;
+			}
+		}
 		file_priv->driver_priv = fpriv;
 	}
 
@@ -592,19 +642,19 @@ void radeon_driver_postclose_kms(struct drm_device *dev,
 	/* new gpu have virtual address space support */
 	if (rdev->family >= CHIP_CAYMAN && file_priv->driver_priv) {
 		struct radeon_fpriv *fpriv = file_priv->driver_priv;
-		struct radeon_bo_va *bo_va;
+		struct radeon_vm *vm = &fpriv->vm;
 		int r;
 
-		r = radeon_bo_reserve(rdev->ring_tmp_bo.bo, false);
-		if (!r) {
-			bo_va = radeon_vm_bo_find(&fpriv->vm,
-						  rdev->ring_tmp_bo.bo);
-			if (bo_va)
-				radeon_vm_bo_rmv(rdev, bo_va);
-			radeon_bo_unreserve(rdev->ring_tmp_bo.bo);
+		if (rdev->accel_working) {
+			r = radeon_bo_reserve(rdev->ring_tmp_bo.bo, false);
+			if (!r) {
+				if (vm->ib_bo_va)
+					radeon_vm_bo_rmv(rdev, vm->ib_bo_va);
+				radeon_bo_unreserve(rdev->ring_tmp_bo.bo);
+			}
 		}
 
-		radeon_vm_fini(rdev, &fpriv->vm);
+		radeon_vm_fini(rdev, vm);
 		kfree(fpriv);
 		file_priv->driver_priv = NULL;
 	}
@@ -628,6 +678,7 @@ void radeon_driver_preclose_kms(struct drm_device *dev,
 	if (rdev->cmask_filp == file_priv)
 		rdev->cmask_filp = NULL;
 	radeon_uvd_free_handles(rdev, file_priv);
+	radeon_vce_free_handles(rdev, file_priv);
 }
 
 /*
@@ -822,5 +873,6 @@ const struct drm_ioctl_desc radeon_ioctls_kms[] = {
 	DRM_IOCTL_DEF_DRV(RADEON_GEM_GET_TILING, radeon_gem_get_tiling_ioctl, DRM_AUTH|DRM_UNLOCKED|DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(RADEON_GEM_BUSY, radeon_gem_busy_ioctl, DRM_AUTH|DRM_UNLOCKED|DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(RADEON_GEM_VA, radeon_gem_va_ioctl, DRM_AUTH|DRM_UNLOCKED|DRM_RENDER_ALLOW),
+	DRM_IOCTL_DEF_DRV(RADEON_GEM_OP, radeon_gem_op_ioctl, DRM_AUTH|DRM_UNLOCKED|DRM_RENDER_ALLOW),
 };
-int radeon_max_kms_ioctl = DRM_ARRAY_SIZE(radeon_ioctls_kms);
+int radeon_max_kms_ioctl = ARRAY_SIZE(radeon_ioctls_kms);

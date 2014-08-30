@@ -1,7 +1,6 @@
 config PANEL
 	tristate "Parallel port LCD/Keypad Panel support"
-	depends on PARPORT && !(FB_DA8XX = y) && !(FB_DA8XX = m)
-	select PARPORT_DA8XX
+	depends on PARPORT
 	---help---
 	  Say Y here if you have an HD44780 or KS-0074 LCD connected to your
 	  parallel port. This driver also features 4 and 6-key keypads. The LCD
@@ -277,11 +276,3 @@ config PANEL_BOOT_MESSAGE
 
 	  An empty message will only clear the display at driver init time. Any other
 	  printf()-formatted message is valid with newline and escape codes.
-
-config PARPORT_DA8XX
-	tristate "DA8XX/OMAP-L1/AM1xxx Dummy Parallel Port"
-	depends on ARCH_DAVINCI_DA8XX && PANEL && !(FB_DA8XX = y) && !(FB_DA8XX = m)
-	select PARPORT_NOT_PC
-	help
-	  Say Y here if you need support for the DA8XX/OMAP-L1XX/AM1XXX
-	  character LCD which is using the staging panel driver.

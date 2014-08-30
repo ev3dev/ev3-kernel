@@ -189,6 +189,7 @@ scsi_abort_command(struct scsi_cmnd *scmd)
 		/*
 		 * Retry after abort failed, escalate to next level.
 		 */
+		scmd->eh_eflags &= ~SCSI_EH_ABORT_SCHEDULED;
 		SCSI_LOG_ERROR_RECOVERY(3,
 			scmd_printk(KERN_INFO, scmd,
 				    "scmd %p previous abort failed\n", scmd));
@@ -286,15 +287,15 @@ enum blk_eh_timer_return scsi_times_out(struct request *req)
 	else if (host->hostt->eh_timed_out)
 		rtn = host->hostt->eh_timed_out(scmd);
 
-	if (rtn == BLK_EH_NOT_HANDLED && !host->hostt->no_async_abort)
-		if (scsi_abort_command(scmd) == SUCCESS)
+	if (rtn == BLK_EH_NOT_HANDLED) {
+		if (!host->hostt->no_async_abort &&
+		    scsi_abort_command(scmd) == SUCCESS)
 			return BLK_EH_NOT_HANDLED;
 
-	set_host_byte(scmd, DID_TIME_OUT);
-
-	if (unlikely(rtn == BLK_EH_NOT_HANDLED &&
-		     !scsi_eh_scmd_add(scmd, SCSI_EH_CANCEL_CMD)))
-		rtn = BLK_EH_HANDLED;
+		set_host_byte(scmd, DID_TIME_OUT);
+		if (!scsi_eh_scmd_add(scmd, SCSI_EH_CANCEL_CMD))
+			rtn = BLK_EH_HANDLED;
+	}
 
 	return rtn;
 }
@@ -920,10 +921,12 @@ void scsi_eh_prep_cmnd(struct scsi_cmnd *scmd, struct scsi_eh_save *ses,
 	ses->prot_op = scmd->prot_op;
 
 	scmd->prot_op = SCSI_PROT_NORMAL;
+	scmd->eh_eflags = 0;
 	scmd->cmnd = ses->eh_cmnd;
 	memset(scmd->cmnd, 0, BLK_MAX_CDB);
 	memset(&scmd->sdb, 0, sizeof(scmd->sdb));
 	scmd->request->next_rq = NULL;
+	scmd->result = 0;
 
 	if (sense_bytes) {
 		scmd->sdb.length = min_t(unsigned, SCSI_SENSE_BUFFERSIZE,
@@ -1026,6 +1029,7 @@ retry:
 		rtn = NEEDS_RETRY;
 	} else {
 		timeleft = wait_for_completion_timeout(&done, timeout);
+		rtn = SUCCESS;
 	}
 
 	shost->eh_action = NULL;
@@ -1948,6 +1952,8 @@ static void scsi_eh_lock_door(struct scsi_device *sdev)
 	 */
 	req = blk_get_request(sdev->request_queue, READ, GFP_KERNEL);
 
+	blk_rq_set_block_pc(req);
+
 	req->cmd[0] = ALLOW_MEDIUM_REMOVAL;
 	req->cmd[1] = 0;
 	req->cmd[2] = 0;
@@ -1957,7 +1963,6 @@ static void scsi_eh_lock_door(struct scsi_device *sdev)
 
 	req->cmd_len = COMMAND_SIZE(req->cmd[0]);
 
-	req->cmd_type = REQ_TYPE_BLOCK_PC;
 	req->cmd_flags |= REQ_QUIET;
 	req->timeout = 10 * HZ;
 	req->retries = 5;
@@ -2297,7 +2302,18 @@ scsi_reset_provider(struct scsi_device *dev, int flag)
 	if (scsi_autopm_get_host(shost) < 0)
 		return FAILED;
 
+	if (!get_device(&dev->sdev_gendev)) {
+		rtn = FAILED;
+		goto out_put_autopm_host;
+	}
+
 	scmd = scsi_get_command(dev, GFP_KERNEL);
+	if (!scmd) {
+		rtn = FAILED;
+		put_device(&dev->sdev_gendev);
+		goto out_put_autopm_host;
+	}
+
 	blk_rq_init(NULL, &req);
 	scmd->request = &req;
 
@@ -2354,6 +2370,7 @@ scsi_reset_provider(struct scsi_device *dev, int flag)
 	scsi_run_host_queues(shost);
 
 	scsi_next_command(scmd);
+out_put_autopm_host:
 	scsi_autopm_put_host(shost);
 	return rtn;
 }

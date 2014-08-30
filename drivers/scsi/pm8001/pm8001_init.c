@@ -625,7 +625,7 @@ static void pm8001_init_sas_add(struct pm8001_hba_info *pm8001_ha)
 	pm8001_ha->nvmd_completion = &completion;
 
 	if (pm8001_ha->chip_id == chip_8001) {
-		if (deviceid == 0x8081) {
+		if (deviceid == 0x8081 || deviceid == 0x0042) {
 			payload.minor_function = 4;
 			payload.length = 4096;
 		} else {
@@ -646,6 +646,9 @@ static void pm8001_init_sas_add(struct pm8001_hba_info *pm8001_ha)
 			if (deviceid == 0x8081)
 				pm8001_ha->sas_addr[j] =
 					payload.func_specific[0x704 + i];
+			else if (deviceid == 0x0042)
+				pm8001_ha->sas_addr[j] =
+					payload.func_specific[0x010 + i];
 		} else
 			pm8001_ha->sas_addr[j] =
 					payload.func_specific[0x804 + i];
@@ -674,7 +677,7 @@ static void pm8001_init_sas_add(struct pm8001_hba_info *pm8001_ha)
  * pm8001_get_phy_settings_info : Read phy setting values.
  * @pm8001_ha : our hba.
  */
-void pm8001_get_phy_settings_info(struct pm8001_hba_info *pm8001_ha)
+static int pm8001_get_phy_settings_info(struct pm8001_hba_info *pm8001_ha)
 {
 
 #ifdef PM8001_READ_VPD
@@ -688,11 +691,15 @@ void pm8001_get_phy_settings_info(struct pm8001_hba_info *pm8001_ha)
 	payload.offset = 0;
 	payload.length = 4096;
 	payload.func_specific = kzalloc(4096, GFP_KERNEL);
+	if (!payload.func_specific)
+		return -ENOMEM;
 	/* Read phy setting values from flash */
 	PM8001_CHIP_DISP->get_nvmd_req(pm8001_ha, &payload);
 	wait_for_completion(&completion);
 	pm8001_set_phy_profile(pm8001_ha, sizeof(u8), payload.func_specific);
+	kfree(payload.func_specific);
 #endif
+	return 0;
 }
 
 #ifdef PM8001_USE_MSIX
@@ -713,11 +720,9 @@ static u32 pm8001_setup_msix(struct pm8001_hba_info *pm8001_ha)
 	/* SPCv controllers supports 64 msi-x */
 	if (pm8001_ha->chip_id == chip_8001) {
 		number_of_intr = 1;
-		flag |= IRQF_DISABLED;
 	} else {
 		number_of_intr = PM8001_MAX_MSIX_VEC;
 		flag &= ~IRQF_SHARED;
-		flag |= IRQF_DISABLED;
 	}
 
 	max_entry = sizeof(pm8001_ha->msix_entries) /
@@ -878,8 +883,11 @@ static int pm8001_pci_probe(struct pci_dev *pdev,
 	pm8001_init_sas_add(pm8001_ha);
 	/* phy setting support for motherboard controller */
 	if (pdev->subsystem_vendor != PCI_VENDOR_ID_ADAPTEC2 &&
-		pdev->subsystem_vendor != 0)
-		pm8001_get_phy_settings_info(pm8001_ha);
+		pdev->subsystem_vendor != 0) {
+		rc = pm8001_get_phy_settings_info(pm8001_ha);
+		if (rc)
+			goto err_out_shost;
+	}
 	pm8001_post_sas_ha_init(shost, chip);
 	rc = sas_register_ha(SHOST_TO_SAS_HA(shost));
 	if (rc)
@@ -1072,10 +1080,7 @@ err_out_enable:
  */
 static struct pci_device_id pm8001_pci_table[] = {
 	{ PCI_VDEVICE(PMC_Sierra, 0x8001), chip_8001 },
-	{
-		PCI_DEVICE(0x117c, 0x0042),
-		.driver_data = chip_8001
-	},
+	{ PCI_VDEVICE(ATTO, 0x0042), chip_8001 },
 	/* Support for SPC/SPCv/SPCve controllers */
 	{ PCI_VDEVICE(ADAPTEC2, 0x8001), chip_8001 },
 	{ PCI_VDEVICE(PMC_Sierra, 0x8008), chip_8008 },

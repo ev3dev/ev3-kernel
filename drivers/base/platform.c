@@ -136,9 +136,17 @@ EXPORT_SYMBOL_GPL(platform_get_resource_byname);
  */
 int platform_get_irq_byname(struct platform_device *dev, const char *name)
 {
-	struct resource *r = platform_get_resource_byname(dev, IORESOURCE_IRQ,
-							  name);
+	struct resource *r;
 
+	if (IS_ENABLED(CONFIG_OF_IRQ) && dev->dev.of_node) {
+		int ret;
+
+		ret = of_irq_get_byname(dev->dev.of_node, name);
+		if (ret >= 0 || ret == -EPROBE_DEFER)
+			return ret;
+	}
+
+	r = platform_get_resource_byname(dev, IORESOURCE_IRQ, name);
 	return r ? r->start : -ENXIO;
 }
 EXPORT_SYMBOL_GPL(platform_get_irq_byname);
@@ -491,11 +499,10 @@ static int platform_drv_probe(struct device *_dev)
 	struct platform_device *dev = to_platform_device(_dev);
 	int ret;
 
-	if (ACPI_HANDLE(_dev))
-		acpi_dev_pm_attach(_dev, true);
+	acpi_dev_pm_attach(_dev, true);
 
 	ret = drv->probe(dev);
-	if (ret && ACPI_HANDLE(_dev))
+	if (ret)
 		acpi_dev_pm_detach(_dev, true);
 
 	if (drv->prevent_deferred_probe && ret == -EPROBE_DEFER) {
@@ -518,8 +525,7 @@ static int platform_drv_remove(struct device *_dev)
 	int ret;
 
 	ret = drv->remove(dev);
-	if (ACPI_HANDLE(_dev))
-		acpi_dev_pm_detach(_dev, true);
+	acpi_dev_pm_detach(_dev, true);
 
 	return ret;
 }
@@ -530,8 +536,7 @@ static void platform_drv_shutdown(struct device *_dev)
 	struct platform_device *dev = to_platform_device(_dev);
 
 	drv->shutdown(dev);
-	if (ACPI_HANDLE(_dev))
-		acpi_dev_pm_detach(_dev, true);
+	acpi_dev_pm_detach(_dev, true);
 }
 
 /**

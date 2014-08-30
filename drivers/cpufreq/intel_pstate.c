@@ -32,8 +32,6 @@
 #include <asm/msr.h>
 #include <asm/cpu_device_id.h>
 
-#define SAMPLE_COUNT		3
-
 #define BYT_RATIOS		0x66a
 #define BYT_VIDS		0x66b
 #define BYT_TURBO_RATIOS	0x66c
@@ -89,8 +87,6 @@ struct _pid {
 
 struct cpudata {
 	int cpu;
-
-	char name[64];
 
 	struct timer_list timer;
 
@@ -156,7 +152,7 @@ static inline void pid_reset(struct _pid *pid, int setpoint, int busy,
 	pid->setpoint = setpoint;
 	pid->deadband  = deadband;
 	pid->integral  = int_tofp(integral);
-	pid->last_err  = setpoint - busy;
+	pid->last_err  = int_tofp(setpoint) - int_tofp(busy);
 }
 
 static inline void pid_p_gain_set(struct _pid *pid, int percent)
@@ -459,7 +455,7 @@ static void core_set_pstate(struct cpudata *cpudata, int pstate)
 	if (limits.no_turbo && !limits.turbo_disabled)
 		val |= (u64)1 << 32;
 
-	wrmsrl(MSR_IA32_PERF_CTL, val);
+	wrmsrl_on_cpu(cpudata->cpu, MSR_IA32_PERF_CTL, val);
 }
 
 static struct cpu_defaults core_params = {
@@ -550,8 +546,6 @@ static inline void intel_pstate_pstate_decrease(struct cpudata *cpu, int steps)
 
 static void intel_pstate_get_cpu_pstates(struct cpudata *cpu)
 {
-	sprintf(cpu->name, "Intel 2nd generation core");
-
 	cpu->pstate.min_pstate = pstate_funcs.get_min();
 	cpu->pstate.max_pstate = pstate_funcs.get_max();
 	cpu->pstate.turbo_pstate = pstate_funcs.get_turbo();
@@ -561,9 +555,9 @@ static void intel_pstate_get_cpu_pstates(struct cpudata *cpu)
 	intel_pstate_set_pstate(cpu, cpu->pstate.min_pstate);
 }
 
-static inline void intel_pstate_calc_busy(struct cpudata *cpu,
-					struct sample *sample)
+static inline void intel_pstate_calc_busy(struct cpudata *cpu)
 {
+	struct sample *sample = &cpu->sample;
 	int64_t core_pct;
 	int32_t rem;
 
@@ -596,7 +590,7 @@ static inline void intel_pstate_sample(struct cpudata *cpu)
 	cpu->sample.aperf -= cpu->prev_aperf;
 	cpu->sample.mperf -= cpu->prev_mperf;
 
-	intel_pstate_calc_busy(cpu, &cpu->sample);
+	intel_pstate_calc_busy(cpu);
 
 	cpu->prev_aperf = aperf;
 	cpu->prev_mperf = mperf;
@@ -685,23 +679,20 @@ static const struct x86_cpu_id intel_pstate_cpu_ids[] = {
 	ICPU(0x37, byt_params),
 	ICPU(0x3a, core_params),
 	ICPU(0x3c, core_params),
+	ICPU(0x3d, core_params),
 	ICPU(0x3e, core_params),
 	ICPU(0x3f, core_params),
 	ICPU(0x45, core_params),
 	ICPU(0x46, core_params),
+	ICPU(0x4f, core_params),
+	ICPU(0x56, core_params),
 	{}
 };
 MODULE_DEVICE_TABLE(x86cpu, intel_pstate_cpu_ids);
 
 static int intel_pstate_init_cpu(unsigned int cpunum)
 {
-
-	const struct x86_cpu_id *id;
 	struct cpudata *cpu;
-
-	id = x86_match_cpu(intel_pstate_cpu_ids);
-	if (!id)
-		return -ENODEV;
 
 	all_cpu_data[cpunum] = kzalloc(sizeof(struct cpudata), GFP_KERNEL);
 	if (!all_cpu_data[cpunum])
@@ -779,14 +770,17 @@ static int intel_pstate_verify_policy(struct cpufreq_policy *policy)
 	return 0;
 }
 
-static int intel_pstate_cpu_exit(struct cpufreq_policy *policy)
+static void intel_pstate_stop_cpu(struct cpufreq_policy *policy)
 {
-	int cpu = policy->cpu;
+	int cpu_num = policy->cpu;
+	struct cpudata *cpu = all_cpu_data[cpu_num];
 
-	del_timer(&all_cpu_data[cpu]->timer);
-	kfree(all_cpu_data[cpu]);
-	all_cpu_data[cpu] = NULL;
-	return 0;
+	pr_info("intel_pstate CPU %d exiting\n", cpu_num);
+
+	del_timer_sync(&all_cpu_data[cpu_num]->timer);
+	intel_pstate_set_pstate(cpu, cpu->pstate.min_pstate);
+	kfree(all_cpu_data[cpu_num]);
+	all_cpu_data[cpu_num] = NULL;
 }
 
 static int intel_pstate_cpu_init(struct cpufreq_policy *policy)
@@ -830,7 +824,7 @@ static struct cpufreq_driver intel_pstate_driver = {
 	.setpolicy	= intel_pstate_set_policy,
 	.get		= intel_pstate_get,
 	.init		= intel_pstate_cpu_init,
-	.exit		= intel_pstate_cpu_exit,
+	.stop_cpu	= intel_pstate_stop_cpu,
 	.name		= "intel_pstate",
 };
 

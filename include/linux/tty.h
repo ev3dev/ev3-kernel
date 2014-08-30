@@ -1,7 +1,6 @@
 #ifndef _LINUX_TTY_H
 #define _LINUX_TTY_H
 
-#define N_LEGOEV3	29	/* LEGO Mindstorms EV3 UART sensors */
 #include <linux/fs.h>
 #include <linux/major.h>
 #include <linux/termios.h>
@@ -519,9 +518,9 @@ extern void tty_port_put(struct tty_port *port);
 
 static inline struct tty_port *tty_port_get(struct tty_port *port)
 {
-	if (port)
-		kref_get(&port->kref);
-	return port;
+	if (port && kref_get_unless_zero(&port->kref))
+		return port;
+	return NULL;
 }
 
 /* If the cts flow control is enabled, return true. */

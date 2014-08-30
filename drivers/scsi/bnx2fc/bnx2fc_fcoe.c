@@ -22,7 +22,7 @@ DEFINE_PER_CPU(struct bnx2fc_percpu_s, bnx2fc_percpu);
 
 #define DRV_MODULE_NAME		"bnx2fc"
 #define DRV_MODULE_VERSION	BNX2FC_VERSION
-#define DRV_MODULE_RELDATE	"Sep 17, 2013"
+#define DRV_MODULE_RELDATE	"Dec 11, 2013"
 
 
 static char version[] =
@@ -464,7 +464,7 @@ static int bnx2fc_l2_rcv_thread(void *arg)
 	struct fcoe_percpu_s *bg = arg;
 	struct sk_buff *skb;
 
-	set_user_nice(current, -20);
+	set_user_nice(current, MIN_NICE);
 	set_current_state(TASK_INTERRUPTIBLE);
 	while (!kthread_should_stop()) {
 		schedule();
@@ -516,23 +516,17 @@ static void bnx2fc_recv_frame(struct sk_buff *skb)
 	skb_pull(skb, sizeof(struct fcoe_hdr));
 	fr_len = skb->len - sizeof(struct fcoe_crc_eof);
 
-	stats = per_cpu_ptr(lport->stats, get_cpu());
-	stats->RxFrames++;
-	stats->RxWords += fr_len / FCOE_WORD_TO_BYTE;
-
 	fp = (struct fc_frame *)skb;
 	fc_frame_init(fp);
 	fr_dev(fp) = lport;
 	fr_sof(fp) = hp->fcoe_sof;
 	if (skb_copy_bits(skb, fr_len, &crc_eof, sizeof(crc_eof))) {
-		put_cpu();
 		kfree_skb(skb);
 		return;
 	}
 	fr_eof(fp) = crc_eof.fcoe_eof;
 	fr_crc(fp) = crc_eof.fcoe_crc32;
 	if (pskb_trim(skb, fr_len)) {
-		put_cpu();
 		kfree_skb(skb);
 		return;
 	}
@@ -544,7 +538,6 @@ static void bnx2fc_recv_frame(struct sk_buff *skb)
 		port = lport_priv(vn_port);
 		if (!ether_addr_equal(port->data_src_addr, dest_mac)) {
 			BNX2FC_HBA_DBG(lport, "fpma mismatch\n");
-			put_cpu();
 			kfree_skb(skb);
 			return;
 		}
@@ -552,7 +545,6 @@ static void bnx2fc_recv_frame(struct sk_buff *skb)
 	if (fh->fh_r_ctl == FC_RCTL_DD_SOL_DATA &&
 	    fh->fh_type == FC_TYPE_FCP) {
 		/* Drop FCP data. We dont this in L2 path */
-		put_cpu();
 		kfree_skb(skb);
 		return;
 	}
@@ -562,7 +554,6 @@ static void bnx2fc_recv_frame(struct sk_buff *skb)
 		case ELS_LOGO:
 			if (ntoh24(fh->fh_s_id) == FC_FID_FLOGI) {
 				/* drop non-FIP LOGO */
-				put_cpu();
 				kfree_skb(skb);
 				return;
 			}
@@ -572,10 +563,13 @@ static void bnx2fc_recv_frame(struct sk_buff *skb)
 
 	if (fh->fh_r_ctl == FC_RCTL_BA_ABTS) {
 		/* Drop incoming ABTS */
-		put_cpu();
 		kfree_skb(skb);
 		return;
 	}
+
+	stats = per_cpu_ptr(lport->stats, smp_processor_id());
+	stats->RxFrames++;
+	stats->RxWords += fr_len / FCOE_WORD_TO_BYTE;
 
 	if (le32_to_cpu(fr_crc(fp)) !=
 			~crc32(~0, skb->data, fr_len)) {
@@ -583,11 +577,9 @@ static void bnx2fc_recv_frame(struct sk_buff *skb)
 			printk(KERN_WARNING PFX "dropping frame with "
 			       "CRC error\n");
 		stats->InvalidCRCCount++;
-		put_cpu();
 		kfree_skb(skb);
 		return;
 	}
-	put_cpu();
 	fc_exch_recv(lport, fp);
 }
 
@@ -602,7 +594,7 @@ int bnx2fc_percpu_io_thread(void *arg)
 	struct bnx2fc_work *work, *tmp;
 	LIST_HEAD(work_list);
 
-	set_user_nice(current, -20);
+	set_user_nice(current, MIN_NICE);
 	set_current_state(TASK_INTERRUPTIBLE);
 	while (!kthread_should_stop()) {
 		schedule();
@@ -850,6 +842,9 @@ static void bnx2fc_indicate_netevent(void *context, unsigned long event,
 				__bnx2fc_destroy(interface);
 		}
 		mutex_unlock(&bnx2fc_dev_lock);
+
+		/* Ensure ALL destroy work has been completed before return */
+		flush_workqueue(bnx2fc_wq);
 		return;
 
 	default:
@@ -2389,6 +2384,9 @@ static void bnx2fc_ulp_exit(struct cnic_dev *dev)
 			__bnx2fc_destroy(interface);
 	mutex_unlock(&bnx2fc_dev_lock);
 
+	/* Ensure ALL destroy work has been completed before return */
+	flush_workqueue(bnx2fc_wq);
+
 	bnx2fc_ulp_stop(hba);
 	/* unregister cnic device */
 	if (test_and_clear_bit(BNX2FC_CNIC_REGISTERED, &hba->reg_with_cnic))
@@ -2586,12 +2584,16 @@ static int __init bnx2fc_mod_init(void)
 		spin_lock_init(&p->fp_work_lock);
 	}
 
+	cpu_notifier_register_begin();
+
 	for_each_online_cpu(cpu) {
 		bnx2fc_percpu_thread_create(cpu);
 	}
 
 	/* Initialize per CPU interrupt thread */
-	register_hotcpu_notifier(&bnx2fc_cpu_notifier);
+	__register_hotcpu_notifier(&bnx2fc_cpu_notifier);
+
+	cpu_notifier_register_done();
 
 	cnic_register_driver(CNIC_ULP_FCOE, &bnx2fc_cnic_cb);
 
@@ -2656,12 +2658,16 @@ static void __exit bnx2fc_mod_exit(void)
 	if (l2_thread)
 		kthread_stop(l2_thread);
 
-	unregister_hotcpu_notifier(&bnx2fc_cpu_notifier);
+	cpu_notifier_register_begin();
 
 	/* Destroy per cpu threads */
 	for_each_online_cpu(cpu) {
 		bnx2fc_percpu_thread_destroy(cpu);
 	}
+
+	__unregister_hotcpu_notifier(&bnx2fc_cpu_notifier);
+
+	cpu_notifier_register_done();
 
 	destroy_workqueue(bnx2fc_wq);
 	/*

@@ -17,6 +17,7 @@
 #include <linux/module.h>
 #include <linux/msi.h>
 #include <linux/of_address.h>
+#include <linux/of_pci.h>
 #include <linux/pci.h>
 #include <linux/pci_regs.h>
 #include <linux/types.h>
@@ -155,15 +156,17 @@ static struct irq_chip dw_msi_irq_chip = {
 };
 
 /* MSI int handler */
-void dw_handle_msi_irq(struct pcie_port *pp)
+irqreturn_t dw_handle_msi_irq(struct pcie_port *pp)
 {
 	unsigned long val;
 	int i, pos, irq;
+	irqreturn_t ret = IRQ_NONE;
 
 	for (i = 0; i < MAX_MSI_CTRLS; i++) {
 		dw_pcie_rd_own_conf(pp, PCIE_MSI_INTR0_STATUS + i * 12, 4,
 				(u32 *)&val);
 		if (val) {
+			ret = IRQ_HANDLED;
 			pos = 0;
 			while ((pos = find_next_bit(&val, 32, pos)) != 32) {
 				irq = irq_find_mapping(pp->irq_domain,
@@ -176,6 +179,8 @@ void dw_handle_msi_irq(struct pcie_port *pp)
 			}
 		}
 	}
+
+	return ret;
 }
 
 void dw_pcie_msi_init(struct pcie_port *pp)
@@ -294,14 +299,12 @@ no_valid_irq:
 static void clear_irq(unsigned int irq)
 {
 	unsigned int pos, nvec;
-	struct irq_desc *desc;
 	struct msi_desc *msi;
 	struct pcie_port *pp;
 	struct irq_data *data = irq_get_irq_data(irq);
 
 	/* get the port structure */
-	desc = irq_to_desc(irq);
-	msi = irq_desc_get_msi_desc(desc);
+	msi = irq_data_get_msi(data);
 	pp = sys_to_pcie(msi->dev->bus->sysdata);
 	if (!pp) {
 		BUG();
@@ -492,7 +495,7 @@ int __init dw_pcie_host_init(struct pcie_port *pp)
 	dw_pci.nr_controllers = 1;
 	dw_pci.private_data = (void **)&pp;
 
-	pci_common_init(&dw_pci);
+	pci_common_init_dev(pp->dev, &dw_pci);
 	pci_assign_unassigned_resources();
 #ifdef CONFIG_PCI_DOMAINS
 	dw_pci.domain++;
@@ -640,7 +643,6 @@ static int dw_pcie_rd_conf(struct pci_bus *bus, u32 devfn, int where,
 			int size, u32 *val)
 {
 	struct pcie_port *pp = sys_to_pcie(bus->sysdata);
-	unsigned long flags;
 	int ret;
 
 	if (!pp) {
@@ -653,13 +655,11 @@ static int dw_pcie_rd_conf(struct pci_bus *bus, u32 devfn, int where,
 		return PCIBIOS_DEVICE_NOT_FOUND;
 	}
 
-	spin_lock_irqsave(&pp->conf_lock, flags);
 	if (bus->number != pp->root_bus_nr)
 		ret = dw_pcie_rd_other_conf(pp, bus, devfn,
 						where, size, val);
 	else
 		ret = dw_pcie_rd_own_conf(pp, where, size, val);
-	spin_unlock_irqrestore(&pp->conf_lock, flags);
 
 	return ret;
 }
@@ -668,7 +668,6 @@ static int dw_pcie_wr_conf(struct pci_bus *bus, u32 devfn,
 			int where, int size, u32 val)
 {
 	struct pcie_port *pp = sys_to_pcie(bus->sysdata);
-	unsigned long flags;
 	int ret;
 
 	if (!pp) {
@@ -679,13 +678,11 @@ static int dw_pcie_wr_conf(struct pci_bus *bus, u32 devfn,
 	if (dw_pcie_valid_config(pp, bus, PCI_SLOT(devfn)) == 0)
 		return PCIBIOS_DEVICE_NOT_FOUND;
 
-	spin_lock_irqsave(&pp->conf_lock, flags);
 	if (bus->number != pp->root_bus_nr)
 		ret = dw_pcie_wr_other_conf(pp, bus, devfn,
 						where, size, val);
 	else
 		ret = dw_pcie_wr_own_conf(pp, where, size, val);
-	spin_unlock_irqrestore(&pp->conf_lock, flags);
 
 	return ret;
 }
@@ -725,7 +722,7 @@ static struct pci_bus *dw_pcie_scan_bus(int nr, struct pci_sys_data *sys)
 
 	if (pp) {
 		pp->root_bus_nr = sys->busnr;
-		bus = pci_scan_root_bus(NULL, sys->busnr, &dw_pcie_ops,
+		bus = pci_scan_root_bus(pp->dev, sys->busnr, &dw_pcie_ops,
 					sys, &sys->resources);
 	} else {
 		bus = NULL;
@@ -738,8 +735,13 @@ static struct pci_bus *dw_pcie_scan_bus(int nr, struct pci_sys_data *sys)
 static int dw_pcie_map_irq(const struct pci_dev *dev, u8 slot, u8 pin)
 {
 	struct pcie_port *pp = sys_to_pcie(dev->bus->sysdata);
+	int irq;
 
-	return pp->irq;
+	irq = of_irq_parse_and_map_pci(dev, slot, pin);
+	if (!irq)
+		irq = pp->irq;
+
+	return irq;
 }
 
 static void dw_pcie_add_bus(struct pci_bus *bus)
@@ -766,7 +768,7 @@ void dw_pcie_setup_rc(struct pcie_port *pp)
 	u32 membase;
 	u32 memlimit;
 
-	/* set the number of lines as 4 */
+	/* set the number of lanes */
 	dw_pcie_readl_rc(pp, PCIE_PORT_LINK_CONTROL, &val);
 	val &= ~PORT_LINK_MODE_MASK;
 	switch (pp->lanes) {

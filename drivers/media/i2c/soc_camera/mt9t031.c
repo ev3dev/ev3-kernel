@@ -606,11 +606,6 @@ static int mt9t031_s_power(struct v4l2_subdev *sd, int on)
 	return 0;
 }
 
-static int mt9t031_set_std(struct v4l2_subdev *sd, v4l2_std_id norm)
-{
-	return 0;
-}
-
 /*
  * Interface active, can use i2c. If it fails, it can indeed mean, that
  * this wasn't our capture interface, so, we wait for the right one
@@ -671,7 +666,6 @@ static const struct v4l2_ctrl_ops mt9t031_ctrl_ops = {
 
 static struct v4l2_subdev_core_ops mt9t031_subdev_core_ops = {
 	.s_power	= mt9t031_s_power,
-	.s_std		= mt9t031_set_std,
 #ifdef CONFIG_VIDEO_ADV_DEBUG
 	.g_register	= mt9t031_g_register,
 	.s_register	= mt9t031_s_register,

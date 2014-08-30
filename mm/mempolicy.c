@@ -65,6 +65,8 @@
    kernel is not always grateful with that.
 */
 
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include <linux/mempolicy.h>
 #include <linux/mm.h>
 #include <linux/highmem.h>
@@ -91,6 +93,7 @@
 #include <linux/ctype.h>
 #include <linux/mm_inline.h>
 #include <linux/mmu_notifier.h>
+#include <linux/printk.h>
 
 #include <asm/tlbflush.h>
 #include <asm/uaccess.h>
@@ -796,36 +799,6 @@ static int mbind_range(struct mm_struct *mm, unsigned long start,
 	return err;
 }
 
-/*
- * Update task->flags PF_MEMPOLICY bit: set iff non-default
- * mempolicy.  Allows more rapid checking of this (combined perhaps
- * with other PF_* flag bits) on memory allocation hot code paths.
- *
- * If called from outside this file, the task 'p' should -only- be
- * a newly forked child not yet visible on the task list, because
- * manipulating the task flags of a visible task is not safe.
- *
- * The above limitation is why this routine has the funny name
- * mpol_fix_fork_child_flag().
- *
- * It is also safe to call this with a task pointer of current,
- * which the static wrapper mpol_set_task_struct_flag() does,
- * for use within this file.
- */
-
-void mpol_fix_fork_child_flag(struct task_struct *p)
-{
-	if (p->mempolicy)
-		p->flags |= PF_MEMPOLICY;
-	else
-		p->flags &= ~PF_MEMPOLICY;
-}
-
-static void mpol_set_task_struct_flag(void)
-{
-	mpol_fix_fork_child_flag(current);
-}
-
 /* Set the process memory policy */
 static long do_set_mempolicy(unsigned short mode, unsigned short flags,
 			     nodemask_t *nodes)
@@ -862,7 +835,6 @@ static long do_set_mempolicy(unsigned short mode, unsigned short flags,
 	}
 	old = current->mempolicy;
 	current->mempolicy = new;
-	mpol_set_task_struct_flag();
 	if (new && new->mode == MPOL_INTERLEAVE &&
 	    nodes_weight(new->v.nodes))
 		current->il_next = first_node(new->v.nodes);
@@ -1060,7 +1032,7 @@ static int migrate_to_node(struct mm_struct *mm, int source, int dest,
 			flags | MPOL_MF_DISCONTIG_OK, &pagelist);
 
 	if (!list_empty(&pagelist)) {
-		err = migrate_pages(&pagelist, new_node_page, dest,
+		err = migrate_pages(&pagelist, new_node_page, NULL, dest,
 					MIGRATE_SYNC, MR_SYSCALL);
 		if (err)
 			putback_movable_pages(&pagelist);
@@ -1306,7 +1278,7 @@ static long do_mbind(unsigned long start, unsigned long len,
 
 		if (!list_empty(&pagelist)) {
 			WARN_ON_ONCE(flags & MPOL_MF_LAZY);
-			nr_failed = migrate_pages(&pagelist, new_page,
+			nr_failed = migrate_pages(&pagelist, new_page, NULL,
 				start, MIGRATE_SYNC, MR_MEMPOLICY_MBIND);
 			if (nr_failed)
 				putback_movable_pages(&pagelist);
@@ -1391,7 +1363,7 @@ static int copy_nodes_to_user(unsigned long __user *mask, unsigned long maxnode,
 }
 
 SYSCALL_DEFINE6(mbind, unsigned long, start, unsigned long, len,
-		unsigned long, mode, unsigned long __user *, nmask,
+		unsigned long, mode, const unsigned long __user *, nmask,
 		unsigned long, maxnode, unsigned, flags)
 {
 	nodemask_t nodes;
@@ -1412,7 +1384,7 @@ SYSCALL_DEFINE6(mbind, unsigned long, start, unsigned long, len,
 }
 
 /* Set the process memory policy */
-SYSCALL_DEFINE3(set_mempolicy, int, mode, unsigned long __user *, nmask,
+SYSCALL_DEFINE3(set_mempolicy, int, mode, const unsigned long __user *, nmask,
 		unsigned long, maxnode)
 {
 	int err;
@@ -1554,10 +1526,10 @@ SYSCALL_DEFINE5(get_mempolicy, int __user *, policy,
 
 #ifdef CONFIG_COMPAT
 
-asmlinkage long compat_sys_get_mempolicy(int __user *policy,
-				     compat_ulong_t __user *nmask,
-				     compat_ulong_t maxnode,
-				     compat_ulong_t addr, compat_ulong_t flags)
+COMPAT_SYSCALL_DEFINE5(get_mempolicy, int __user *, policy,
+		       compat_ulong_t __user *, nmask,
+		       compat_ulong_t, maxnode,
+		       compat_ulong_t, addr, compat_ulong_t, flags)
 {
 	long err;
 	unsigned long __user *nm = NULL;
@@ -1584,8 +1556,8 @@ asmlinkage long compat_sys_get_mempolicy(int __user *policy,
 	return err;
 }
 
-asmlinkage long compat_sys_set_mempolicy(int mode, compat_ulong_t __user *nmask,
-				     compat_ulong_t maxnode)
+COMPAT_SYSCALL_DEFINE3(set_mempolicy, int, mode, compat_ulong_t __user *, nmask,
+		       compat_ulong_t, maxnode)
 {
 	long err = 0;
 	unsigned long __user *nm = NULL;
@@ -1607,9 +1579,9 @@ asmlinkage long compat_sys_set_mempolicy(int mode, compat_ulong_t __user *nmask,
 	return sys_set_mempolicy(mode, nm, nr_bits+1);
 }
 
-asmlinkage long compat_sys_mbind(compat_ulong_t start, compat_ulong_t len,
-			     compat_ulong_t mode, compat_ulong_t __user *nmask,
-			     compat_ulong_t maxnode, compat_ulong_t flags)
+COMPAT_SYSCALL_DEFINE6(mbind, compat_ulong_t, start, compat_ulong_t, len,
+		       compat_ulong_t, mode, compat_ulong_t __user *, nmask,
+		       compat_ulong_t, maxnode, compat_ulong_t, flags)
 {
 	long err = 0;
 	unsigned long __user *nm = NULL;
@@ -1635,9 +1607,9 @@ asmlinkage long compat_sys_mbind(compat_ulong_t start, compat_ulong_t len,
 
 /*
  * get_vma_policy(@task, @vma, @addr)
- * @task - task for fallback if vma policy == default
- * @vma   - virtual memory area whose policy is sought
- * @addr  - address in @vma for shared policy lookup
+ * @task: task for fallback if vma policy == default
+ * @vma: virtual memory area whose policy is sought
+ * @addr: address in @vma for shared policy lookup
  *
  * Returns effective policy for a VMA at specified address.
  * Falls back to @task or system default policy, as necessary.
@@ -1780,21 +1752,18 @@ static unsigned interleave_nodes(struct mempolicy *policy)
 /*
  * Depending on the memory policy provide a node from which to allocate the
  * next slab entry.
- * @policy must be protected by freeing by the caller.  If @policy is
- * the current task's mempolicy, this protection is implicit, as only the
- * task can change it's policy.  The system default policy requires no
- * such protection.
  */
-unsigned slab_node(void)
+unsigned int mempolicy_slab_node(void)
 {
 	struct mempolicy *policy;
+	int node = numa_mem_id();
 
 	if (in_interrupt())
-		return numa_node_id();
+		return node;
 
 	policy = current->mempolicy;
 	if (!policy || policy->flags & MPOL_F_LOCAL)
-		return numa_node_id();
+		return node;
 
 	switch (policy->mode) {
 	case MPOL_PREFERRED:
@@ -1814,11 +1783,11 @@ unsigned slab_node(void)
 		struct zonelist *zonelist;
 		struct zone *zone;
 		enum zone_type highest_zoneidx = gfp_zone(GFP_KERNEL);
-		zonelist = &NODE_DATA(numa_node_id())->node_zonelists[0];
+		zonelist = &NODE_DATA(node)->node_zonelists[0];
 		(void)first_zones_zonelist(zonelist, highest_zoneidx,
 							&policy->v.nodes,
 							&zone);
-		return zone ? zone->node : numa_node_id();
+		return zone ? zone->node : node;
 	}
 
 	default:
@@ -1886,18 +1855,18 @@ int node_random(const nodemask_t *maskp)
 #ifdef CONFIG_HUGETLBFS
 /*
  * huge_zonelist(@vma, @addr, @gfp_flags, @mpol)
- * @vma = virtual memory area whose policy is sought
- * @addr = address in @vma for shared policy lookup and interleave policy
- * @gfp_flags = for requested zone
- * @mpol = pointer to mempolicy pointer for reference counted mempolicy
- * @nodemask = pointer to nodemask pointer for MPOL_BIND nodemask
+ * @vma: virtual memory area whose policy is sought
+ * @addr: address in @vma for shared policy lookup and interleave policy
+ * @gfp_flags: for requested zone
+ * @mpol: pointer to mempolicy pointer for reference counted mempolicy
+ * @nodemask: pointer to nodemask pointer for MPOL_BIND nodemask
  *
  * Returns a zonelist suitable for a huge page allocation and a pointer
  * to the struct mempolicy for conditional unref after allocation.
  * If the effective policy is 'BIND, returns a pointer to the mempolicy's
  * @nodemask for filtering the zonelist.
  *
- * Must be protected by get_mems_allowed()
+ * Must be protected by read_mems_allowed_begin()
  */
 struct zonelist *huge_zonelist(struct vm_area_struct *vma, unsigned long addr,
 				gfp_t gfp_flags, struct mempolicy **mpol,
@@ -2061,7 +2030,7 @@ alloc_pages_vma(gfp_t gfp, int order, struct vm_area_struct *vma,
 
 retry_cpuset:
 	pol = get_vma_policy(current, vma, addr);
-	cpuset_mems_cookie = get_mems_allowed();
+	cpuset_mems_cookie = read_mems_allowed_begin();
 
 	if (unlikely(pol->mode == MPOL_INTERLEAVE)) {
 		unsigned nid;
@@ -2069,7 +2038,7 @@ retry_cpuset:
 		nid = interleave_nid(pol, vma, addr, PAGE_SHIFT + order);
 		mpol_cond_put(pol);
 		page = alloc_page_interleave(gfp, order, nid);
-		if (unlikely(!put_mems_allowed(cpuset_mems_cookie) && !page))
+		if (unlikely(!page && read_mems_allowed_retry(cpuset_mems_cookie)))
 			goto retry_cpuset;
 
 		return page;
@@ -2079,7 +2048,7 @@ retry_cpuset:
 				      policy_nodemask(gfp, pol));
 	if (unlikely(mpol_needs_cond_ref(pol)))
 		__mpol_put(pol);
-	if (unlikely(!put_mems_allowed(cpuset_mems_cookie) && !page))
+	if (unlikely(!page && read_mems_allowed_retry(cpuset_mems_cookie)))
 		goto retry_cpuset;
 	return page;
 }
@@ -2113,7 +2082,7 @@ struct page *alloc_pages_current(gfp_t gfp, unsigned order)
 		pol = &default_policy;
 
 retry_cpuset:
-	cpuset_mems_cookie = get_mems_allowed();
+	cpuset_mems_cookie = read_mems_allowed_begin();
 
 	/*
 	 * No reference counting needed for current->mempolicy
@@ -2126,7 +2095,7 @@ retry_cpuset:
 				policy_zonelist(gfp, pol, numa_node_id()),
 				policy_nodemask(gfp, pol));
 
-	if (unlikely(!put_mems_allowed(cpuset_mems_cookie) && !page))
+	if (unlikely(!page && read_mems_allowed_retry(cpuset_mems_cookie)))
 		goto retry_cpuset;
 
 	return page;
@@ -2297,41 +2266,12 @@ static void sp_free(struct sp_node *n)
 	kmem_cache_free(sn_cache, n);
 }
 
-#ifdef CONFIG_NUMA_BALANCING
-static bool numa_migrate_deferred(struct task_struct *p, int last_cpupid)
-{
-	/* Never defer a private fault */
-	if (cpupid_match_pid(p, last_cpupid))
-		return false;
-
-	if (p->numa_migrate_deferred) {
-		p->numa_migrate_deferred--;
-		return true;
-	}
-	return false;
-}
-
-static inline void defer_numa_migrate(struct task_struct *p)
-{
-	p->numa_migrate_deferred = sysctl_numa_balancing_migrate_deferred;
-}
-#else
-static inline bool numa_migrate_deferred(struct task_struct *p, int last_cpupid)
-{
-	return false;
-}
-
-static inline void defer_numa_migrate(struct task_struct *p)
-{
-}
-#endif /* CONFIG_NUMA_BALANCING */
-
 /**
  * mpol_misplaced - check whether current page node is valid in policy
  *
- * @page   - page to be checked
- * @vma    - vm area where page mapped
- * @addr   - virtual address where page mapped
+ * @page: page to be checked
+ * @vma: vm area where page mapped
+ * @addr: virtual address where page mapped
  *
  * Lookup current policy node id for vma,addr and "compare to" page's
  * node id.
@@ -2399,52 +2339,9 @@ int mpol_misplaced(struct page *page, struct vm_area_struct *vma, unsigned long 
 
 	/* Migrate the page towards the node whose CPU is referencing it */
 	if (pol->flags & MPOL_F_MORON) {
-		int last_cpupid;
-		int this_cpupid;
-
 		polnid = thisnid;
-		this_cpupid = cpu_pid_to_cpupid(thiscpu, current->pid);
 
-		/*
-		 * Multi-stage node selection is used in conjunction
-		 * with a periodic migration fault to build a temporal
-		 * task<->page relation. By using a two-stage filter we
-		 * remove short/unlikely relations.
-		 *
-		 * Using P(p) ~ n_p / n_t as per frequentist
-		 * probability, we can equate a task's usage of a
-		 * particular page (n_p) per total usage of this
-		 * page (n_t) (in a given time-span) to a probability.
-		 *
-		 * Our periodic faults will sample this probability and
-		 * getting the same result twice in a row, given these
-		 * samples are fully independent, is then given by
-		 * P(n)^2, provided our sample period is sufficiently
-		 * short compared to the usage pattern.
-		 *
-		 * This quadric squishes small probabilities, making
-		 * it less likely we act on an unlikely task<->page
-		 * relation.
-		 */
-		last_cpupid = page_cpupid_xchg_last(page, this_cpupid);
-		if (!cpupid_pid_unset(last_cpupid) && cpupid_to_nid(last_cpupid) != thisnid) {
-
-			/* See sysctl_numa_balancing_migrate_deferred comment */
-			if (!cpupid_match_pid(current, last_cpupid))
-				defer_numa_migrate(current);
-
-			goto out;
-		}
-
-		/*
-		 * The quadratic filter above reduces extraneous migration
-		 * of shared pages somewhat. This code reduces it even more,
-		 * reducing the overhead of page migrations of shared pages.
-		 * This makes workloads with shared pages rely more on
-		 * "move task near its memory", and less on "move memory
-		 * towards its task", which is exactly what we want.
-		 */
-		if (numa_migrate_deferred(current, last_cpupid))
+		if (!should_numa_migrate_memory(current, page, curnid, thiscpu))
 			goto out;
 	}
 
@@ -2747,7 +2644,7 @@ void __init numa_policy_init(void)
 		node_set(prefer, interleave_nodes);
 
 	if (do_set_mempolicy(MPOL_INTERLEAVE, 0, &interleave_nodes))
-		printk("numa_policy_init: interleaving failed\n");
+		pr_err("%s: interleaving failed\n", __func__);
 
 	check_numabalancing_enable();
 }

@@ -113,7 +113,7 @@ kvp_register(int reg_value)
 		kvp_msg->kvp_hdr.operation = reg_value;
 		strcpy(version, HV_DRV_VERSION);
 		msg->len = sizeof(struct hv_kvp_msg);
-		cn_netlink_send(msg, 0, GFP_ATOMIC);
+		cn_netlink_send(msg, 0, 0, GFP_ATOMIC);
 		kfree(msg);
 	}
 }
@@ -129,12 +129,14 @@ kvp_work_func(struct work_struct *dummy)
 
 static void poll_channel(struct vmbus_channel *channel)
 {
-	unsigned long flags;
-
-	spin_lock_irqsave(&channel->inbound_lock, flags);
-	hv_kvp_onchannelcallback(channel);
-	spin_unlock_irqrestore(&channel->inbound_lock, flags);
+	if (channel->target_cpu != smp_processor_id())
+		smp_call_function_single(channel->target_cpu,
+					 hv_kvp_onchannelcallback,
+					 channel, true);
+	else
+		hv_kvp_onchannelcallback(channel);
 }
+
 
 static int kvp_handle_handshake(struct hv_kvp_msg *msg)
 {
@@ -444,7 +446,7 @@ kvp_send_key(struct work_struct *dummy)
 	}
 
 	msg->len = sizeof(struct hv_kvp_msg);
-	cn_netlink_send(msg, 0, GFP_ATOMIC);
+	cn_netlink_send(msg, 0, 0, GFP_ATOMIC);
 	kfree(msg);
 
 	return;
@@ -578,7 +580,6 @@ response_done:
 	vmbus_sendpacket(channel, recv_buffer, buf_len, req_id,
 				VM_PKT_DATA_INBAND, 0);
 	poll_channel(channel);
-
 }
 
 /*

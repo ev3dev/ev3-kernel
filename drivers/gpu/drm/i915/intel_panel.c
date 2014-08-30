@@ -33,8 +33,6 @@
 #include <linux/moduleparam.h>
 #include "intel_drv.h"
 
-#define PCI_LBPC 0xf4 /* legacy/combination backlight modes */
-
 void
 intel_fixed_panel_mode(const struct drm_display_mode *fixed_mode,
 		       struct drm_display_mode *adjusted_mode)
@@ -42,6 +40,59 @@ intel_fixed_panel_mode(const struct drm_display_mode *fixed_mode,
 	drm_mode_copy(adjusted_mode, fixed_mode);
 
 	drm_mode_set_crtcinfo(adjusted_mode, 0);
+}
+
+/**
+ * intel_find_panel_downclock - find the reduced downclock for LVDS in EDID
+ * @dev: drm device
+ * @fixed_mode : panel native mode
+ * @connector: LVDS/eDP connector
+ *
+ * Return downclock_avail
+ * Find the reduced downclock for LVDS/eDP in EDID.
+ */
+struct drm_display_mode *
+intel_find_panel_downclock(struct drm_device *dev,
+			struct drm_display_mode *fixed_mode,
+			struct drm_connector *connector)
+{
+	struct drm_display_mode *scan, *tmp_mode;
+	int temp_downclock;
+
+	temp_downclock = fixed_mode->clock;
+	tmp_mode = NULL;
+
+	list_for_each_entry(scan, &connector->probed_modes, head) {
+		/*
+		 * If one mode has the same resolution with the fixed_panel
+		 * mode while they have the different refresh rate, it means
+		 * that the reduced downclock is found. In such
+		 * case we can set the different FPx0/1 to dynamically select
+		 * between low and high frequency.
+		 */
+		if (scan->hdisplay == fixed_mode->hdisplay &&
+		    scan->hsync_start == fixed_mode->hsync_start &&
+		    scan->hsync_end == fixed_mode->hsync_end &&
+		    scan->htotal == fixed_mode->htotal &&
+		    scan->vdisplay == fixed_mode->vdisplay &&
+		    scan->vsync_start == fixed_mode->vsync_start &&
+		    scan->vsync_end == fixed_mode->vsync_end &&
+		    scan->vtotal == fixed_mode->vtotal) {
+			if (scan->clock < temp_downclock) {
+				/*
+				 * The downclock is already found. But we
+				 * expect to find the lower downclock.
+				 */
+				temp_downclock = scan->clock;
+				tmp_mode = scan;
+			}
+		}
+	}
+
+	if (temp_downclock < fixed_mode->clock)
+		return drm_mode_duplicate(dev, tmp_mode);
+	else
+		return NULL;
 }
 
 /* adjusted_mode has been preset to be the panel's fixed mode */
@@ -325,13 +376,28 @@ out:
 	pipe_config->gmch_pfit.lvds_border_bits = border;
 }
 
-static int i915_panel_invert_brightness;
-MODULE_PARM_DESC(invert_brightness, "Invert backlight brightness "
-	"(-1 force normal, 0 machine defaults, 1 force inversion), please "
-	"report PCI device ID, subsystem vendor and subsystem device ID "
-	"to dri-devel@lists.freedesktop.org, if your machine needs it. "
-	"It will then be included in an upcoming module version.");
-module_param_named(invert_brightness, i915_panel_invert_brightness, int, 0600);
+enum drm_connector_status
+intel_panel_detect(struct drm_device *dev)
+{
+	struct drm_i915_private *dev_priv = dev->dev_private;
+
+	/* Assume that the BIOS does not lie through the OpRegion... */
+	if (!i915.panel_ignore_lid && dev_priv->opregion.lid_state) {
+		return ioread32(dev_priv->opregion.lid_state) & 0x1 ?
+			connector_status_connected :
+			connector_status_disconnected;
+	}
+
+	switch (i915.panel_ignore_lid) {
+	case -2:
+		return connector_status_connected;
+	case -1:
+		return connector_status_disconnected;
+	default:
+		return connector_status_unknown;
+	}
+}
+
 static u32 intel_panel_compute_brightness(struct intel_connector *connector,
 					  u32 val)
 {
@@ -341,10 +407,10 @@ static u32 intel_panel_compute_brightness(struct intel_connector *connector,
 
 	WARN_ON(panel->backlight.max == 0);
 
-	if (i915_panel_invert_brightness < 0)
+	if (i915.invert_brightness < 0)
 		return val;
 
-	if (i915_panel_invert_brightness > 0 ||
+	if (i915.invert_brightness > 0 ||
 	    dev_priv->quirks & QUIRK_INVERT_BRIGHTNESS) {
 		return panel->backlight.max - val;
 	}
@@ -671,10 +737,6 @@ static void pch_enable_backlight(struct intel_connector *connector)
 	pch_ctl2 = panel->backlight.max << 16;
 	I915_WRITE(BLC_PWM_PCH_CTL2, pch_ctl2);
 
-	/* XXX: transitional */
-	if (dev_priv->quirks & QUIRK_NO_PCH_PWM_ENABLE)
-		return;
-
 	pch_ctl1 = 0;
 	if (panel->backlight.active_low_pwm)
 		pch_ctl1 |= BLM_PCH_POLARITY;
@@ -807,40 +869,18 @@ void intel_panel_enable_backlight(struct intel_connector *connector)
 	spin_unlock_irqrestore(&dev_priv->backlight_lock, flags);
 }
 
-enum drm_connector_status
-intel_panel_detect(struct drm_device *dev)
-{
-	struct drm_i915_private *dev_priv = dev->dev_private;
-
-	/* Assume that the BIOS does not lie through the OpRegion... */
-	if (!i915_panel_ignore_lid && dev_priv->opregion.lid_state) {
-		return ioread32(dev_priv->opregion.lid_state) & 0x1 ?
-			connector_status_connected :
-			connector_status_disconnected;
-	}
-
-	switch (i915_panel_ignore_lid) {
-	case -2:
-		return connector_status_connected;
-	case -1:
-		return connector_status_disconnected;
-	default:
-		return connector_status_unknown;
-	}
-}
-
 #if IS_ENABLED(CONFIG_BACKLIGHT_CLASS_DEVICE)
 static int intel_backlight_device_update_status(struct backlight_device *bd)
 {
 	struct intel_connector *connector = bl_get_data(bd);
 	struct drm_device *dev = connector->base.dev;
 
-	mutex_lock(&dev->mode_config.mutex);
+	drm_modeset_lock(&dev->mode_config.connection_mutex, NULL);
 	DRM_DEBUG_KMS("updating intel_backlight, brightness=%d/%d\n",
 		      bd->props.brightness, bd->props.max_brightness);
 	intel_panel_set_backlight(connector, bd->props.brightness,
 				  bd->props.max_brightness);
-	mutex_unlock(&dev->mode_config.mutex);
+	drm_modeset_unlock(&dev->mode_config.connection_mutex);
 	return 0;
 }
 
@@ -852,9 +892,9 @@ static int intel_backlight_device_get_brightness(struct backlight_device *bd)
 	int ret;
 
 	intel_runtime_pm_get(dev_priv);
-	mutex_lock(&dev->mode_config.mutex);
+	drm_modeset_lock(&dev->mode_config.connection_mutex, NULL);
 	ret = intel_panel_get_backlight(connector);
-	mutex_unlock(&dev->mode_config.mutex);
+	drm_modeset_unlock(&dev->mode_config.connection_mutex);
 	intel_runtime_pm_put(dev_priv);
 
 	return ret;
@@ -1077,6 +1117,15 @@ int intel_panel_setup_backlight(struct drm_connector *connector)
 	unsigned long flags;
 	int ret;
 
+	if (!dev_priv->vbt.backlight.present) {
+		if (dev_priv->quirks & QUIRK_BACKLIGHT_PRESENT) {
+			DRM_DEBUG_KMS("no backlight present per VBT, but present per quirk\n");
+		} else {
+			DRM_DEBUG_KMS("no backlight present per VBT\n");
+			return 0;
+		}
+	}
+
 	/* set level and max in panel struct */
 	spin_lock_irqsave(&dev_priv->backlight_lock, flags);
 	ret = dev_priv->display.setup_backlight(intel_connector);
@@ -1084,7 +1133,7 @@ int intel_panel_setup_backlight(struct drm_connector *connector)
 
 	if (ret) {
 		DRM_DEBUG_KMS("failed to setup backlight for connector %s\n",
-			      drm_get_connector_name(connector));
+			      connector->name);
 		return ret;
 	}
 
@@ -1108,59 +1157,6 @@ void intel_panel_destroy_backlight(struct drm_connector *connector)
 
 	panel->backlight.present = false;
 	intel_backlight_device_unregister(intel_connector);
-}
-
-/**
- * intel_find_panel_downclock - find the reduced downclock for LVDS in EDID
- * @dev: drm device
- * @fixed_mode : panel native mode
- * @connector: LVDS/eDP connector
- *
- * Return downclock_avail
- * Find the reduced downclock for LVDS/eDP in EDID.
- */
-struct drm_display_mode *
-intel_find_panel_downclock(struct drm_device *dev,
-			struct drm_display_mode *fixed_mode,
-			struct drm_connector *connector)
-{
-	struct drm_display_mode *scan, *tmp_mode;
-	int temp_downclock;
-
-	temp_downclock = fixed_mode->clock;
-	tmp_mode = NULL;
-
-	list_for_each_entry(scan, &connector->probed_modes, head) {
-		/*
-		 * If one mode has the same resolution with the fixed_panel
-		 * mode while they have the different refresh rate, it means
-		 * that the reduced downclock is found. In such
-		 * case we can set the different FPx0/1 to dynamically select
-		 * between low and high frequency.
-		 */
-		if (scan->hdisplay == fixed_mode->hdisplay &&
-		    scan->hsync_start == fixed_mode->hsync_start &&
-		    scan->hsync_end == fixed_mode->hsync_end &&
-		    scan->htotal == fixed_mode->htotal &&
-		    scan->vdisplay == fixed_mode->vdisplay &&
-		    scan->vsync_start == fixed_mode->vsync_start &&
-		    scan->vsync_end == fixed_mode->vsync_end &&
-		    scan->vtotal == fixed_mode->vtotal) {
-			if (scan->clock < temp_downclock) {
-				/*
-				 * The downclock is already found. But we
-				 * expect to find the lower downclock.
-				 */
-				temp_downclock = scan->clock;
-				tmp_mode = scan;
-			}
-		}
-	}
-
-	if (temp_downclock < fixed_mode->clock)
-		return drm_mode_duplicate(dev, tmp_mode);
-	else
-		return NULL;
 }
 
 /* Set up chip specific backlight functions */
@@ -1202,9 +1198,11 @@ void intel_panel_init_backlight_funcs(struct drm_device *dev)
 }
 
 int intel_panel_init(struct intel_panel *panel,
-		     struct drm_display_mode *fixed_mode)
+		     struct drm_display_mode *fixed_mode,
+		     struct drm_display_mode *downclock_mode)
 {
 	panel->fixed_mode = fixed_mode;
+	panel->downclock_mode = downclock_mode;
 
 	return 0;
 }

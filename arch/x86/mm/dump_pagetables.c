@@ -31,6 +31,7 @@ struct pg_state {
 	unsigned long current_address;
 	const struct addr_marker *marker;
 	unsigned long lines;
+	bool to_dmesg;
 };
 
 struct addr_marker {
@@ -92,10 +93,28 @@ static struct addr_marker address_markers[] = {
 #define PUD_LEVEL_MULT (PTRS_PER_PMD * PMD_LEVEL_MULT)
 #define PGD_LEVEL_MULT (PTRS_PER_PUD * PUD_LEVEL_MULT)
 
+#define pt_dump_seq_printf(m, to_dmesg, fmt, args...)		\
+({								\
+	if (to_dmesg)					\
+		printk(KERN_INFO fmt, ##args);			\
+	else							\
+		if (m)						\
+			seq_printf(m, fmt, ##args);		\
+})
+
+#define pt_dump_cont_printf(m, to_dmesg, fmt, args...)		\
+({								\
+	if (to_dmesg)					\
+		printk(KERN_CONT fmt, ##args);			\
+	else							\
+		if (m)						\
+			seq_printf(m, fmt, ##args);		\
+})
+
 /*
  * Print a readable form of a pgprot_t to the seq_file
  */
-static void printk_prot(struct seq_file *m, pgprot_t prot, int level)
+static void printk_prot(struct seq_file *m, pgprot_t prot, int level, bool dmsg)
 {
 	pgprotval_t pr = pgprot_val(prot);
 	static const char * const level_name[] =
@@ -103,47 +122,47 @@ static void printk_prot(struct seq_file *m, pgprot_t prot, int level)
 
 	if (!pgprot_val(prot)) {
 		/* Not present */
-		seq_printf(m, "                          ");
+		pt_dump_cont_printf(m, dmsg, "                          ");
 	} else {
 		if (pr & _PAGE_USER)
-			seq_printf(m, "USR ");
+			pt_dump_cont_printf(m, dmsg, "USR ");
 		else
-			seq_printf(m, "    ");
+			pt_dump_cont_printf(m, dmsg, "    ");
 		if (pr & _PAGE_RW)
-			seq_printf(m, "RW ");
+			pt_dump_cont_printf(m, dmsg, "RW ");
 		else
-			seq_printf(m, "ro ");
+			pt_dump_cont_printf(m, dmsg, "ro ");
 		if (pr & _PAGE_PWT)
-			seq_printf(m, "PWT ");
+			pt_dump_cont_printf(m, dmsg, "PWT ");
 		else
-			seq_printf(m, "    ");
+			pt_dump_cont_printf(m, dmsg, "    ");
 		if (pr & _PAGE_PCD)
-			seq_printf(m, "PCD ");
+			pt_dump_cont_printf(m, dmsg, "PCD ");
 		else
-			seq_printf(m, "    ");
+			pt_dump_cont_printf(m, dmsg, "    ");
 
 		/* Bit 9 has a different meaning on level 3 vs 4 */
 		if (level <= 3) {
 			if (pr & _PAGE_PSE)
-				seq_printf(m, "PSE ");
+				pt_dump_cont_printf(m, dmsg, "PSE ");
 			else
-				seq_printf(m, "    ");
+				pt_dump_cont_printf(m, dmsg, "    ");
 		} else {
 			if (pr & _PAGE_PAT)
-				seq_printf(m, "pat ");
+				pt_dump_cont_printf(m, dmsg, "pat ");
 			else
-				seq_printf(m, "    ");
+				pt_dump_cont_printf(m, dmsg, "    ");
 		}
 		if (pr & _PAGE_GLOBAL)
-			seq_printf(m, "GLB ");
+			pt_dump_cont_printf(m, dmsg, "GLB ");
 		else
-			seq_printf(m, "    ");
+			pt_dump_cont_printf(m, dmsg, "    ");
 		if (pr & _PAGE_NX)
-			seq_printf(m, "NX ");
+			pt_dump_cont_printf(m, dmsg, "NX ");
 		else
-			seq_printf(m, "x  ");
+			pt_dump_cont_printf(m, dmsg, "x  ");
 	}
-	seq_printf(m, "%s\n", level_name[level]);
+	pt_dump_cont_printf(m, dmsg, "%s\n", level_name[level]);
 }
 
 /*
@@ -183,7 +202,8 @@ static void note_page(struct seq_file *m, struct pg_state *st,
 		st->level = level;
 		st->marker = address_markers;
 		st->lines = 0;
-		seq_printf(m, "---[ %s ]---\n", st->marker->name);
+		pt_dump_seq_printf(m, st->to_dmesg, "---[ %s ]---\n",
+				   st->marker->name);
 	} else if (prot != cur || level != st->level ||
 		   st->current_address >= st->marker[1].start_address) {
 		const char *unit = units;
@@ -195,17 +215,20 @@ static void note_page(struct seq_file *m, struct pg_state *st,
 		 */
 		if (!st->marker->max_lines ||
 		    st->lines < st->marker->max_lines) {
-			seq_printf(m, "0x%0*lx-0x%0*lx   ",
-				   width, st->start_address,
-				   width, st->current_address);
+			pt_dump_seq_printf(m, st->to_dmesg,
+					   "0x%0*lx-0x%0*lx   ",
+					   width, st->start_address,
+					   width, st->current_address);
 
-			delta = (st->current_address - st->start_address) >> 10;
+			delta = st->current_address - st->start_address;
 			while (!(delta & 1023) && unit[1]) {
 				delta >>= 10;
 				unit++;
 			}
-			seq_printf(m, "%9lu%c ", delta, *unit);
-			printk_prot(m, st->current_prot, st->level);
+			pt_dump_cont_printf(m, st->to_dmesg, "%9lu%c ",
+					    delta, *unit);
+			printk_prot(m, st->current_prot, st->level,
+				    st->to_dmesg);
 		}
 		st->lines++;
 
@@ -215,8 +238,19 @@ static void note_page(struct seq_file *m, struct pg_state *st,
 		 * This helps in the interpretation.
 		 */
 		if (st->current_address >= st->marker[1].start_address) {
+			if (st->marker->max_lines &&
+			    st->lines > st->marker->max_lines) {
+				unsigned long nskip =
+					st->lines - st->marker->max_lines;
+				pt_dump_seq_printf(m, st->to_dmesg,
+						   "... %lu entr%s skipped ... \n",
+						   nskip,
+						   nskip == 1 ? "y" : "ies");
+			}
 			st->marker++;
-			seq_printf(m, "---[ %s ]---\n", st->marker->name);
+			st->lines = 0;
+			pt_dump_seq_printf(m, st->to_dmesg, "---[ %s ]---\n",
+					   st->marker->name);
 		}
 
 		st->start_address = st->current_address;
@@ -305,7 +339,7 @@ static void walk_pud_level(struct seq_file *m, struct pg_state *st, pgd_t addr,
 #define pgd_none(a)  pud_none(__pud(pgd_val(a)))
 #endif
 
-static void walk_pgd_level(struct seq_file *m)
+void ptdump_walk_pgd_level(struct seq_file *m, pgd_t *pgd)
 {
 #ifdef CONFIG_X86_64
 	pgd_t *start = (pgd_t *) &init_level4_pgt;
@@ -313,9 +347,12 @@ static void walk_pgd_level(struct seq_file *m)
 	pgd_t *start = swapper_pg_dir;
 #endif
 	int i;
-	struct pg_state st;
+	struct pg_state st = {};
 
-	memset(&st, 0, sizeof(st));
+	if (pgd) {
+		start = pgd;
+		st.to_dmesg = true;
+	}
 
 	for (i = 0; i < PTRS_PER_PGD; i++) {
 		st.current_address = normalize_addr(i * PGD_LEVEL_MULT);
@@ -340,7 +377,7 @@ static void walk_pgd_level(struct seq_file *m)
 
 static int ptdump_show(struct seq_file *m, void *v)
 {
-	walk_pgd_level(m);
+	ptdump_walk_pgd_level(m, NULL);
 	return 0;
 }
 

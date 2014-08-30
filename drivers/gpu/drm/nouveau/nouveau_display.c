@@ -42,7 +42,7 @@
 #include <core/class.h>
 
 static int
-nouveau_display_vblank_handler(void *data, int head)
+nouveau_display_vblank_handler(void *data, u32 type, int head)
 {
 	struct nouveau_drm *drm = data;
 	drm_handle_vblank(drm->dev, head);
@@ -105,7 +105,7 @@ nouveau_display_scanoutpos_head(struct drm_crtc *crtc, int *vpos, int *hpos,
 		if (retry) ndelay(crtc->linedur_ns);
 	} while (retry--);
 
-	*hpos = calc(args.hblanks, args.hblanke, args.htotal, args.hline);
+	*hpos = args.hline;
 	*vpos = calc(args.vblanks, args.vblanke, args.vtotal, args.vline);
 	if (stime) *stime = ns_to_ktime(args.time[0]);
 	if (etime) *etime = ns_to_ktime(args.time[1]);
@@ -178,7 +178,7 @@ nouveau_display_vblank_init(struct drm_device *dev)
 		return -ENOMEM;
 
 	for (i = 0; i < dev->mode_config.num_crtc; i++) {
-		ret = nouveau_event_new(pdisp->vblank, i,
+		ret = nouveau_event_new(pdisp->vblank, 1, i,
 					nouveau_display_vblank_handler,
 					drm, &disp->vblank[i]);
 		if (ret) {
@@ -393,7 +393,7 @@ nouveau_display_init(struct drm_device *dev)
 	/* enable hotplug interrupts */
 	list_for_each_entry(connector, &dev->mode_config.connector_list, head) {
 		struct nouveau_connector *conn = nouveau_connector(connector);
-		if (conn->hpd_func) nouveau_event_get(conn->hpd_func);
+		if (conn->hpd) nouveau_event_get(conn->hpd);
 	}
 
 	return ret;
@@ -408,7 +408,7 @@ nouveau_display_fini(struct drm_device *dev)
 	/* disable hotplug interrupts */
 	list_for_each_entry(connector, &dev->mode_config.connector_list, head) {
 		struct nouveau_connector *conn = nouveau_connector(connector);
-		if (conn->hpd_func) nouveau_event_put(conn->hpd_func);
+		if (conn->hpd) nouveau_event_put(conn->hpd);
 	}
 
 	drm_kms_helper_poll_disable(dev);
@@ -419,6 +419,7 @@ int
 nouveau_display_create(struct drm_device *dev)
 {
 	struct nouveau_drm *drm = nouveau_drm(dev);
+	struct nouveau_device *device = nouveau_dev(dev);
 	struct nouveau_display *disp;
 	int ret, gen;
 
@@ -459,7 +460,7 @@ nouveau_display_create(struct drm_device *dev)
 	}
 
 	dev->mode_config.funcs = &nouveau_mode_config_funcs;
-	dev->mode_config.fb_base = pci_resource_start(dev->pdev, 1);
+	dev->mode_config.fb_base = nv_device_resource_start(device, 1);
 
 	dev->mode_config.min_width = 0;
 	dev->mode_config.min_height = 0;
@@ -488,6 +489,7 @@ nouveau_display_create(struct drm_device *dev)
 
 	if (drm->vbios.dcb.entries) {
 		static const u16 oclass[] = {
+			GM107_DISP_CLASS,
 			NVF0_DISP_CLASS,
 			NVE0_DISP_CLASS,
 			NVD0_DISP_CLASS,
@@ -569,7 +571,7 @@ nouveau_display_suspend(struct drm_device *dev)
 	list_for_each_entry(crtc, &dev->mode_config.crtc_list, head) {
 		struct nouveau_framebuffer *nouveau_fb;
 
-		nouveau_fb = nouveau_framebuffer(crtc->fb);
+		nouveau_fb = nouveau_framebuffer(crtc->primary->fb);
 		if (!nouveau_fb || !nouveau_fb->nvbo)
 			continue;
 
@@ -596,7 +598,7 @@ nouveau_display_repin(struct drm_device *dev)
 	list_for_each_entry(crtc, &dev->mode_config.crtc_list, head) {
 		struct nouveau_framebuffer *nouveau_fb;
 
-		nouveau_fb = nouveau_framebuffer(crtc->fb);
+		nouveau_fb = nouveau_framebuffer(crtc->primary->fb);
 		if (!nouveau_fb || !nouveau_fb->nvbo)
 			continue;
 
@@ -693,7 +695,7 @@ nouveau_crtc_page_flip(struct drm_crtc *crtc, struct drm_framebuffer *fb,
 	const int swap_interval = (flags & DRM_MODE_PAGE_FLIP_ASYNC) ? 0 : 1;
 	struct drm_device *dev = crtc->dev;
 	struct nouveau_drm *drm = nouveau_drm(dev);
-	struct nouveau_bo *old_bo = nouveau_framebuffer(crtc->fb)->nvbo;
+	struct nouveau_bo *old_bo = nouveau_framebuffer(crtc->primary->fb)->nvbo;
 	struct nouveau_bo *new_bo = nouveau_framebuffer(fb)->nvbo;
 	struct nouveau_page_flip_state *s;
 	struct nouveau_channel *chan = drm->channel;
@@ -770,7 +772,7 @@ nouveau_crtc_page_flip(struct drm_crtc *crtc, struct drm_framebuffer *fb,
 	mutex_unlock(&chan->cli->mutex);
 
 	/* Update the crtc struct and cleanup */
-	crtc->fb = fb;
+	crtc->primary->fb = fb;
 
 	nouveau_bo_fence(old_bo, fence);
 	ttm_bo_unreserve(&old_bo->bo);

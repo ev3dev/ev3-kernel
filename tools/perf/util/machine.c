@@ -316,6 +316,17 @@ static struct thread *__machine__findnew_thread(struct machine *machine,
 		rb_link_node(&th->rb_node, parent, p);
 		rb_insert_color(&th->rb_node, &machine->threads);
 		machine->last_match = th;
+
+		/*
+		 * We have to initialize map_groups separately
+		 * after rb tree is updated.
+		 *
+		 * The reason is that we call machine__findnew_thread
+		 * within thread__init_map_groups to find the thread
+		 * leader and that would screwed the rb tree.
+		 */
+		if (thread__init_map_groups(th, machine))
+			return NULL;
 	}
 
 	return th;
@@ -327,9 +338,10 @@ struct thread *machine__findnew_thread(struct machine *machine, pid_t pid,
 	return __machine__findnew_thread(machine, pid, tid, true);
 }
 
-struct thread *machine__find_thread(struct machine *machine, pid_t tid)
+struct thread *machine__find_thread(struct machine *machine, pid_t pid,
+				    pid_t tid)
 {
-	return __machine__findnew_thread(machine, 0, tid, false);
+	return __machine__findnew_thread(machine, pid, tid, false);
 }
 
 int machine__process_comm_event(struct machine *machine, union perf_event *event,
@@ -484,18 +496,6 @@ struct process_args {
 	u64 start;
 };
 
-static int symbol__in_kernel(void *arg, const char *name,
-			     char type __maybe_unused, u64 start)
-{
-	struct process_args *args = arg;
-
-	if (strchr(name, '['))
-		return 0;
-
-	args->start = start;
-	return 1;
-}
-
 static void machine__get_kallsyms_filename(struct machine *machine, char *buf,
 					   size_t bufsz)
 {
@@ -505,27 +505,41 @@ static void machine__get_kallsyms_filename(struct machine *machine, char *buf,
 		scnprintf(buf, bufsz, "%s/proc/kallsyms", machine->root_dir);
 }
 
-/* Figure out the start address of kernel map from /proc/kallsyms */
-static u64 machine__get_kernel_start_addr(struct machine *machine)
+const char *ref_reloc_sym_names[] = {"_text", "_stext", NULL};
+
+/* Figure out the start address of kernel map from /proc/kallsyms.
+ * Returns the name of the start symbol in *symbol_name. Pass in NULL as
+ * symbol_name if it's not that important.
+ */
+static u64 machine__get_kernel_start_addr(struct machine *machine,
+					  const char **symbol_name)
 {
 	char filename[PATH_MAX];
-	struct process_args args;
+	int i;
+	const char *name;
+	u64 addr = 0;
 
 	machine__get_kallsyms_filename(machine, filename, PATH_MAX);
 
 	if (symbol__restricted_filename(filename, "/proc/kallsyms"))
 		return 0;
 
-	if (kallsyms__parse(filename, &args, symbol__in_kernel) <= 0)
-		return 0;
+	for (i = 0; (name = ref_reloc_sym_names[i]) != NULL; i++) {
+		addr = kallsyms__get_function_start(filename, name);
+		if (addr)
+			break;
+	}
 
-	return args.start;
+	if (symbol_name)
+		*symbol_name = name;
+
+	return addr;
 }
 
 int __machine__create_kernel_maps(struct machine *machine, struct dso *kernel)
 {
 	enum map_type type;
-	u64 start = machine__get_kernel_start_addr(machine);
+	u64 start = machine__get_kernel_start_addr(machine, NULL);
 
 	for (type = 0; type < MAP__NR_TYPES; ++type) {
 		struct kmap *kmap;
@@ -716,7 +730,7 @@ static char *get_kernel_version(const char *root_dir)
 }
 
 static int map_groups__set_modules_path_dir(struct map_groups *mg,
-				const char *dir_name)
+				const char *dir_name, int depth)
 {
 	struct dirent *dent;
 	DIR *dir = opendir(dir_name);
@@ -741,7 +755,15 @@ static int map_groups__set_modules_path_dir(struct map_groups *mg,
 			    !strcmp(dent->d_name, ".."))
 				continue;
 
-			ret = map_groups__set_modules_path_dir(mg, path);
+			/* Do not follow top-level source and build symlinks */
+			if (depth == 0) {
+				if (!strcmp(dent->d_name, "source") ||
+				    !strcmp(dent->d_name, "build"))
+					continue;
+			}
+
+			ret = map_groups__set_modules_path_dir(mg, path,
+							       depth + 1);
 			if (ret < 0)
 				goto out;
 		} else {
@@ -785,11 +807,11 @@ static int machine__set_modules_path(struct machine *machine)
 	if (!version)
 		return -1;
 
-	snprintf(modules_path, sizeof(modules_path), "%s/lib/modules/%s/kernel",
+	snprintf(modules_path, sizeof(modules_path), "%s/lib/modules/%s",
 		 machine->root_dir, version);
 	free(version);
 
-	return map_groups__set_modules_path_dir(&machine->kmaps, modules_path);
+	return map_groups__set_modules_path_dir(&machine->kmaps, modules_path, 0);
 }
 
 static int machine__create_module(void *arg, const char *name, u64 start)
@@ -832,23 +854,11 @@ static int machine__create_modules(struct machine *machine)
 	return 0;
 }
 
-const char *ref_reloc_sym_names[] = {"_text", "_stext", NULL};
-
 int machine__create_kernel_maps(struct machine *machine)
 {
 	struct dso *kernel = machine__get_kernel(machine);
-	char filename[PATH_MAX];
 	const char *name;
-	u64 addr = 0;
-	int i;
-
-	machine__get_kallsyms_filename(machine, filename, PATH_MAX);
-
-	for (i = 0; (name = ref_reloc_sym_names[i]) != NULL; i++) {
-		addr = kallsyms__get_function_start(filename, name);
-		if (addr)
-			break;
-	}
+	u64 addr = machine__get_kernel_start_addr(machine, &name);
 	if (!addr)
 		return -1;
 
@@ -1026,7 +1036,7 @@ int machine__process_mmap2_event(struct machine *machine,
 	}
 
 	thread = machine__findnew_thread(machine, event->mmap2.pid,
-					event->mmap2.pid);
+					event->mmap2.tid);
 	if (thread == NULL)
 		goto out_problem;
 
@@ -1040,6 +1050,8 @@ int machine__process_mmap2_event(struct machine *machine,
 			event->mmap2.pid, event->mmap2.maj,
 			event->mmap2.min, event->mmap2.ino,
 			event->mmap2.ino_generation,
+			event->mmap2.prot,
+			event->mmap2.flags,
 			event->mmap2.filename, type);
 
 	if (map == NULL)
@@ -1074,7 +1086,7 @@ int machine__process_mmap_event(struct machine *machine, union perf_event *event
 	}
 
 	thread = machine__findnew_thread(machine, event->mmap.pid,
-					 event->mmap.pid);
+					 event->mmap.tid);
 	if (thread == NULL)
 		goto out_problem;
 
@@ -1085,7 +1097,7 @@ int machine__process_mmap_event(struct machine *machine, union perf_event *event
 
 	map = map__new(&machine->user_dsos, event->mmap.start,
 			event->mmap.len, event->mmap.pgoff,
-			event->mmap.pid, 0, 0, 0, 0,
+			event->mmap.pid, 0, 0, 0, 0, 0, 0,
 			event->mmap.filename,
 			type);
 
@@ -1114,7 +1126,9 @@ static void machine__remove_thread(struct machine *machine, struct thread *th)
 int machine__process_fork_event(struct machine *machine, union perf_event *event,
 				struct perf_sample *sample)
 {
-	struct thread *thread = machine__find_thread(machine, event->fork.tid);
+	struct thread *thread = machine__find_thread(machine,
+						     event->fork.pid,
+						     event->fork.tid);
 	struct thread *parent = machine__findnew_thread(machine,
 							event->fork.ppid,
 							event->fork.ptid);
@@ -1140,7 +1154,9 @@ int machine__process_fork_event(struct machine *machine, union perf_event *event
 int machine__process_exit_event(struct machine *machine, union perf_event *event,
 				struct perf_sample *sample __maybe_unused)
 {
-	struct thread *thread = machine__find_thread(machine, event->fork.tid);
+	struct thread *thread = machine__find_thread(machine,
+						     event->fork.pid,
+						     event->fork.tid);
 
 	if (dump_trace)
 		perf_event__fprintf_task(event, stdout);
@@ -1184,39 +1200,22 @@ static bool symbol__match_regex(struct symbol *sym, regex_t *regex)
 	return 0;
 }
 
-static const u8 cpumodes[] = {
-	PERF_RECORD_MISC_USER,
-	PERF_RECORD_MISC_KERNEL,
-	PERF_RECORD_MISC_GUEST_USER,
-	PERF_RECORD_MISC_GUEST_KERNEL
-};
-#define NCPUMODES (sizeof(cpumodes)/sizeof(u8))
-
 static void ip__resolve_ams(struct machine *machine, struct thread *thread,
 			    struct addr_map_symbol *ams,
 			    u64 ip)
 {
 	struct addr_location al;
-	size_t i;
-	u8 m;
 
 	memset(&al, 0, sizeof(al));
+	/*
+	 * We cannot use the header.misc hint to determine whether a
+	 * branch stack address is user, kernel, guest, hypervisor.
+	 * Branches may straddle the kernel/user/hypervisor boundaries.
+	 * Thus, we have to try consecutively until we find a match
+	 * or else, the symbol is unknown
+	 */
+	thread__find_cpumode_addr_location(thread, machine, MAP__FUNCTION, ip, &al);
 
-	for (i = 0; i < NCPUMODES; i++) {
-		m = cpumodes[i];
-		/*
-		 * We cannot use the header.misc hint to determine whether a
-		 * branch stack address is user, kernel, guest, hypervisor.
-		 * Branches may straddle the kernel/user/hypervisor boundaries.
-		 * Thus, we have to try consecutively until we find a match
-		 * or else, the symbol is unknown
-		 */
-		thread__find_addr_location(thread, machine, m, MAP__FUNCTION,
-				ip, &al);
-		if (al.map)
-			goto found;
-	}
-found:
 	ams->addr = ip;
 	ams->al_addr = al.addr;
 	ams->sym = al.sym;
@@ -1238,37 +1237,35 @@ static void ip__resolve_data(struct machine *machine, struct thread *thread,
 	ams->map = al.map;
 }
 
-struct mem_info *machine__resolve_mem(struct machine *machine,
-				      struct thread *thr,
-				      struct perf_sample *sample,
-				      u8 cpumode)
+struct mem_info *sample__resolve_mem(struct perf_sample *sample,
+				     struct addr_location *al)
 {
 	struct mem_info *mi = zalloc(sizeof(*mi));
 
 	if (!mi)
 		return NULL;
 
-	ip__resolve_ams(machine, thr, &mi->iaddr, sample->ip);
-	ip__resolve_data(machine, thr, cpumode, &mi->daddr, sample->addr);
+	ip__resolve_ams(al->machine, al->thread, &mi->iaddr, sample->ip);
+	ip__resolve_data(al->machine, al->thread, al->cpumode,
+			 &mi->daddr, sample->addr);
 	mi->data_src.val = sample->data_src;
 
 	return mi;
 }
 
-struct branch_info *machine__resolve_bstack(struct machine *machine,
-					    struct thread *thr,
-					    struct branch_stack *bs)
+struct branch_info *sample__resolve_bstack(struct perf_sample *sample,
+					   struct addr_location *al)
 {
-	struct branch_info *bi;
 	unsigned int i;
+	const struct branch_stack *bs = sample->branch_stack;
+	struct branch_info *bi = calloc(bs->nr, sizeof(struct branch_info));
 
-	bi = calloc(bs->nr, sizeof(struct branch_info));
 	if (!bi)
 		return NULL;
 
 	for (i = 0; i < bs->nr; i++) {
-		ip__resolve_ams(machine, thr, &bi[i].to, bs->entries[i].to);
-		ip__resolve_ams(machine, thr, &bi[i].from, bs->entries[i].from);
+		ip__resolve_ams(al->machine, al->thread, &bi[i].to, bs->entries[i].to);
+		ip__resolve_ams(al->machine, al->thread, &bi[i].from, bs->entries[i].from);
 		bi[i].flags = bs->entries[i].flags;
 	}
 	return bi;
@@ -1326,7 +1323,7 @@ static int machine__resolve_callchain_sample(struct machine *machine,
 			continue;
 		}
 
-		al.filtered = false;
+		al.filtered = 0;
 		thread__find_addr_location(thread, machine, cpumode,
 					   MAP__FUNCTION, ip, &al);
 		if (al.sym != NULL) {
@@ -1385,8 +1382,7 @@ int machine__resolve_callchain(struct machine *machine,
 		return 0;
 
 	return unwind__get_entries(unwind_entry, &callchain_cursor, machine,
-				   thread, evsel->attr.sample_regs_user,
-				   sample, max_stack);
+				   thread, sample, max_stack);
 
 }
 

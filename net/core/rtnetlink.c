@@ -798,8 +798,8 @@ static inline int rtnl_vfinfo_size(const struct net_device *dev,
 		size += num_vfs *
 			(nla_total_size(sizeof(struct ifla_vf_mac)) +
 			 nla_total_size(sizeof(struct ifla_vf_vlan)) +
-			 nla_total_size(sizeof(struct ifla_vf_tx_rate)) +
-			 nla_total_size(sizeof(struct ifla_vf_spoofchk)));
+			 nla_total_size(sizeof(struct ifla_vf_spoofchk)) +
+			 nla_total_size(sizeof(struct ifla_vf_rate)));
 		return size;
 	} else
 		return 0;
@@ -855,6 +855,7 @@ static noinline size_t if_nlmsg_size(const struct net_device *dev,
 	       + nla_total_size(4) /* IFLA_NUM_RX_QUEUES */
 	       + nla_total_size(1) /* IFLA_OPERSTATE */
 	       + nla_total_size(1) /* IFLA_LINKMODE */
+	       + nla_total_size(4) /* IFLA_CARRIER_CHANGES */
 	       + nla_total_size(ext_filter_mask
 			        & RTEXT_FILTER_VF ? 4 : 0) /* IFLA_NUM_VF */
 	       + rtnl_vfinfo_size(dev, ext_filter_mask) /* IFLA_VFINFO_LIST */
@@ -1005,7 +1006,9 @@ static int rtnl_fill_ifinfo(struct sk_buff *skb, struct net_device *dev,
 	    (dev->qdisc &&
 	     nla_put_string(skb, IFLA_QDISC, dev->qdisc->ops->id)) ||
 	    (dev->ifalias &&
-	     nla_put_string(skb, IFLA_IFALIAS, dev->ifalias)))
+	     nla_put_string(skb, IFLA_IFALIAS, dev->ifalias)) ||
+	    nla_put_u32(skb, IFLA_CARRIER_CHANGES,
+			atomic_read(&dev->carrier_changes)))
 		goto nla_put_failure;
 
 	if (1) {
@@ -1062,6 +1065,7 @@ static int rtnl_fill_ifinfo(struct sk_buff *skb, struct net_device *dev,
 			struct ifla_vf_info ivi;
 			struct ifla_vf_mac vf_mac;
 			struct ifla_vf_vlan vf_vlan;
+			struct ifla_vf_rate vf_rate;
 			struct ifla_vf_tx_rate vf_tx_rate;
 			struct ifla_vf_spoofchk vf_spoofchk;
 			struct ifla_vf_link_state vf_linkstate;
@@ -1082,6 +1086,7 @@ static int rtnl_fill_ifinfo(struct sk_buff *skb, struct net_device *dev,
 				break;
 			vf_mac.vf =
 				vf_vlan.vf =
+				vf_rate.vf =
 				vf_tx_rate.vf =
 				vf_spoofchk.vf =
 				vf_linkstate.vf = ivi.vf;
@@ -1089,7 +1094,9 @@ static int rtnl_fill_ifinfo(struct sk_buff *skb, struct net_device *dev,
 			memcpy(vf_mac.mac, ivi.mac, sizeof(ivi.mac));
 			vf_vlan.vlan = ivi.vlan;
 			vf_vlan.qos = ivi.qos;
-			vf_tx_rate.rate = ivi.tx_rate;
+			vf_tx_rate.rate = ivi.max_tx_rate;
+			vf_rate.min_tx_rate = ivi.min_tx_rate;
+			vf_rate.max_tx_rate = ivi.max_tx_rate;
 			vf_spoofchk.setting = ivi.spoofchk;
 			vf_linkstate.link_state = ivi.linkstate;
 			vf = nla_nest_start(skb, IFLA_VF_INFO);
@@ -1099,6 +1106,8 @@ static int rtnl_fill_ifinfo(struct sk_buff *skb, struct net_device *dev,
 			}
 			if (nla_put(skb, IFLA_VF_MAC, sizeof(vf_mac), &vf_mac) ||
 			    nla_put(skb, IFLA_VF_VLAN, sizeof(vf_vlan), &vf_vlan) ||
+			    nla_put(skb, IFLA_VF_RATE, sizeof(vf_rate),
+				    &vf_rate) ||
 			    nla_put(skb, IFLA_VF_TX_RATE, sizeof(vf_tx_rate),
 				    &vf_tx_rate) ||
 			    nla_put(skb, IFLA_VF_SPOOFCHK, sizeof(vf_spoofchk),
@@ -1155,6 +1164,75 @@ nla_put_failure:
 	nlmsg_cancel(skb, nlh);
 	return -EMSGSIZE;
 }
+
+static const struct nla_policy ifla_policy[IFLA_MAX+1] = {
+	[IFLA_IFNAME]		= { .type = NLA_STRING, .len = IFNAMSIZ-1 },
+	[IFLA_ADDRESS]		= { .type = NLA_BINARY, .len = MAX_ADDR_LEN },
+	[IFLA_BROADCAST]	= { .type = NLA_BINARY, .len = MAX_ADDR_LEN },
+	[IFLA_MAP]		= { .len = sizeof(struct rtnl_link_ifmap) },
+	[IFLA_MTU]		= { .type = NLA_U32 },
+	[IFLA_LINK]		= { .type = NLA_U32 },
+	[IFLA_MASTER]		= { .type = NLA_U32 },
+	[IFLA_CARRIER]		= { .type = NLA_U8 },
+	[IFLA_TXQLEN]		= { .type = NLA_U32 },
+	[IFLA_WEIGHT]		= { .type = NLA_U32 },
+	[IFLA_OPERSTATE]	= { .type = NLA_U8 },
+	[IFLA_LINKMODE]		= { .type = NLA_U8 },
+	[IFLA_LINKINFO]		= { .type = NLA_NESTED },
+	[IFLA_NET_NS_PID]	= { .type = NLA_U32 },
+	[IFLA_NET_NS_FD]	= { .type = NLA_U32 },
+	[IFLA_IFALIAS]	        = { .type = NLA_STRING, .len = IFALIASZ-1 },
+	[IFLA_VFINFO_LIST]	= {. type = NLA_NESTED },
+	[IFLA_VF_PORTS]		= { .type = NLA_NESTED },
+	[IFLA_PORT_SELF]	= { .type = NLA_NESTED },
+	[IFLA_AF_SPEC]		= { .type = NLA_NESTED },
+	[IFLA_EXT_MASK]		= { .type = NLA_U32 },
+	[IFLA_PROMISCUITY]	= { .type = NLA_U32 },
+	[IFLA_NUM_TX_QUEUES]	= { .type = NLA_U32 },
+	[IFLA_NUM_RX_QUEUES]	= { .type = NLA_U32 },
+	[IFLA_PHYS_PORT_ID]	= { .type = NLA_BINARY, .len = MAX_PHYS_PORT_ID_LEN },
+	[IFLA_CARRIER_CHANGES]	= { .type = NLA_U32 },  /* ignored */
+};
+
+static const struct nla_policy ifla_info_policy[IFLA_INFO_MAX+1] = {
+	[IFLA_INFO_KIND]	= { .type = NLA_STRING },
+	[IFLA_INFO_DATA]	= { .type = NLA_NESTED },
+	[IFLA_INFO_SLAVE_KIND]	= { .type = NLA_STRING },
+	[IFLA_INFO_SLAVE_DATA]	= { .type = NLA_NESTED },
+};
+
+static const struct nla_policy ifla_vfinfo_policy[IFLA_VF_INFO_MAX+1] = {
+	[IFLA_VF_INFO]		= { .type = NLA_NESTED },
+};
+
+static const struct nla_policy ifla_vf_policy[IFLA_VF_MAX+1] = {
+	[IFLA_VF_MAC]		= { .type = NLA_BINARY,
+				    .len = sizeof(struct ifla_vf_mac) },
+	[IFLA_VF_VLAN]		= { .type = NLA_BINARY,
+				    .len = sizeof(struct ifla_vf_vlan) },
+	[IFLA_VF_TX_RATE]	= { .type = NLA_BINARY,
+				    .len = sizeof(struct ifla_vf_tx_rate) },
+	[IFLA_VF_SPOOFCHK]	= { .type = NLA_BINARY,
+				    .len = sizeof(struct ifla_vf_spoofchk) },
+	[IFLA_VF_RATE]		= { .type = NLA_BINARY,
+				    .len = sizeof(struct ifla_vf_rate) },
+	[IFLA_VF_LINK_STATE]	= { .type = NLA_BINARY,
+				    .len = sizeof(struct ifla_vf_link_state) },
+};
+
+static const struct nla_policy ifla_port_policy[IFLA_PORT_MAX+1] = {
+	[IFLA_PORT_VF]		= { .type = NLA_U32 },
+	[IFLA_PORT_PROFILE]	= { .type = NLA_STRING,
+				    .len = PORT_PROFILE_MAX },
+	[IFLA_PORT_VSI_TYPE]	= { .type = NLA_BINARY,
+				    .len = sizeof(struct ifla_port_vsi)},
+	[IFLA_PORT_INSTANCE_UUID] = { .type = NLA_BINARY,
+				      .len = PORT_UUID_MAX },
+	[IFLA_PORT_HOST_UUID]	= { .type = NLA_STRING,
+				    .len = PORT_UUID_MAX },
+	[IFLA_PORT_REQUEST]	= { .type = NLA_U8, },
+	[IFLA_PORT_RESPONSE]	= { .type = NLA_U16, },
+};
 
 static int rtnl_dump_ifinfo(struct sk_buff *skb, struct netlink_callback *cb)
 {
@@ -1222,70 +1300,11 @@ out:
 	return skb->len;
 }
 
-const struct nla_policy ifla_policy[IFLA_MAX+1] = {
-	[IFLA_IFNAME]		= { .type = NLA_STRING, .len = IFNAMSIZ-1 },
-	[IFLA_ADDRESS]		= { .type = NLA_BINARY, .len = MAX_ADDR_LEN },
-	[IFLA_BROADCAST]	= { .type = NLA_BINARY, .len = MAX_ADDR_LEN },
-	[IFLA_MAP]		= { .len = sizeof(struct rtnl_link_ifmap) },
-	[IFLA_MTU]		= { .type = NLA_U32 },
-	[IFLA_LINK]		= { .type = NLA_U32 },
-	[IFLA_MASTER]		= { .type = NLA_U32 },
-	[IFLA_CARRIER]		= { .type = NLA_U8 },
-	[IFLA_TXQLEN]		= { .type = NLA_U32 },
-	[IFLA_WEIGHT]		= { .type = NLA_U32 },
-	[IFLA_OPERSTATE]	= { .type = NLA_U8 },
-	[IFLA_LINKMODE]		= { .type = NLA_U8 },
-	[IFLA_LINKINFO]		= { .type = NLA_NESTED },
-	[IFLA_NET_NS_PID]	= { .type = NLA_U32 },
-	[IFLA_NET_NS_FD]	= { .type = NLA_U32 },
-	[IFLA_IFALIAS]	        = { .type = NLA_STRING, .len = IFALIASZ-1 },
-	[IFLA_VFINFO_LIST]	= {. type = NLA_NESTED },
-	[IFLA_VF_PORTS]		= { .type = NLA_NESTED },
-	[IFLA_PORT_SELF]	= { .type = NLA_NESTED },
-	[IFLA_AF_SPEC]		= { .type = NLA_NESTED },
-	[IFLA_EXT_MASK]		= { .type = NLA_U32 },
-	[IFLA_PROMISCUITY]	= { .type = NLA_U32 },
-	[IFLA_NUM_TX_QUEUES]	= { .type = NLA_U32 },
-	[IFLA_NUM_RX_QUEUES]	= { .type = NLA_U32 },
-	[IFLA_PHYS_PORT_ID]	= { .type = NLA_BINARY, .len = MAX_PHYS_PORT_ID_LEN },
-};
-EXPORT_SYMBOL(ifla_policy);
-
-static const struct nla_policy ifla_info_policy[IFLA_INFO_MAX+1] = {
-	[IFLA_INFO_KIND]	= { .type = NLA_STRING },
-	[IFLA_INFO_DATA]	= { .type = NLA_NESTED },
-	[IFLA_INFO_SLAVE_KIND]	= { .type = NLA_STRING },
-	[IFLA_INFO_SLAVE_DATA]	= { .type = NLA_NESTED },
-};
-
-static const struct nla_policy ifla_vfinfo_policy[IFLA_VF_INFO_MAX+1] = {
-	[IFLA_VF_INFO]		= { .type = NLA_NESTED },
-};
-
-static const struct nla_policy ifla_vf_policy[IFLA_VF_MAX+1] = {
-	[IFLA_VF_MAC]		= { .type = NLA_BINARY,
-				    .len = sizeof(struct ifla_vf_mac) },
-	[IFLA_VF_VLAN]		= { .type = NLA_BINARY,
-				    .len = sizeof(struct ifla_vf_vlan) },
-	[IFLA_VF_TX_RATE]	= { .type = NLA_BINARY,
-				    .len = sizeof(struct ifla_vf_tx_rate) },
-	[IFLA_VF_SPOOFCHK]	= { .type = NLA_BINARY,
-				    .len = sizeof(struct ifla_vf_spoofchk) },
-};
-
-static const struct nla_policy ifla_port_policy[IFLA_PORT_MAX+1] = {
-	[IFLA_PORT_VF]		= { .type = NLA_U32 },
-	[IFLA_PORT_PROFILE]	= { .type = NLA_STRING,
-				    .len = PORT_PROFILE_MAX },
-	[IFLA_PORT_VSI_TYPE]	= { .type = NLA_BINARY,
-				    .len = sizeof(struct ifla_port_vsi)},
-	[IFLA_PORT_INSTANCE_UUID] = { .type = NLA_BINARY,
-				      .len = PORT_UUID_MAX },
-	[IFLA_PORT_HOST_UUID]	= { .type = NLA_STRING,
-				    .len = PORT_UUID_MAX },
-	[IFLA_PORT_REQUEST]	= { .type = NLA_U8, },
-	[IFLA_PORT_RESPONSE]	= { .type = NLA_U16, },
-};
+int rtnl_nla_parse_ifla(struct nlattr **tb, const struct nlattr *head, int len)
+{
+	return nla_parse(tb, IFLA_MAX, head, len, ifla_policy);
+}
+EXPORT_SYMBOL(rtnl_nla_parse_ifla);
 
 struct net *rtnl_link_get_net(struct net *src_net, struct nlattr *tb[])
 {
@@ -1368,11 +1387,29 @@ static int do_setvfinfo(struct net_device *dev, struct nlattr *attr)
 		}
 		case IFLA_VF_TX_RATE: {
 			struct ifla_vf_tx_rate *ivt;
+			struct ifla_vf_info ivf;
 			ivt = nla_data(vf);
 			err = -EOPNOTSUPP;
-			if (ops->ndo_set_vf_tx_rate)
-				err = ops->ndo_set_vf_tx_rate(dev, ivt->vf,
-							      ivt->rate);
+			if (ops->ndo_get_vf_config)
+				err = ops->ndo_get_vf_config(dev, ivt->vf,
+							     &ivf);
+			if (err)
+				break;
+			err = -EOPNOTSUPP;
+			if (ops->ndo_set_vf_rate)
+				err = ops->ndo_set_vf_rate(dev, ivt->vf,
+							   ivf.min_tx_rate,
+							   ivt->rate);
+			break;
+		}
+		case IFLA_VF_RATE: {
+			struct ifla_vf_rate *ivt;
+			ivt = nla_data(vf);
+			err = -EOPNOTSUPP;
+			if (ops->ndo_set_vf_rate)
+				err = ops->ndo_set_vf_rate(dev, ivt->vf,
+							   ivt->min_tx_rate,
+							   ivt->max_tx_rate);
 			break;
 		}
 		case IFLA_VF_SPOOFCHK: {
@@ -2019,11 +2056,15 @@ replay:
 		if (ops->newlink) {
 			err = ops->newlink(net, dev, tb, data);
 			/* Drivers should call free_netdev() in ->destructor
-			 * and unregister it on failure so that device could be
-			 * finally freed in rtnl_unlock.
+			 * and unregister it on failure after registration
+			 * so that device could be finally freed in rtnl_unlock.
 			 */
-			if (err < 0)
+			if (err < 0) {
+				/* If device is not registered at all, free it now */
+				if (dev->reg_state == NETREG_UNINITIALIZED)
+					free_netdev(dev);
 				goto out;
+			}
 		} else {
 			err = register_netdevice(dev);
 			if (err < 0) {

@@ -77,7 +77,6 @@ typedef	struct xfs_bmap_free
  * from written to unwritten, otherwise convert from unwritten to written.
  */
 #define XFS_BMAPI_CONVERT	0x040
-#define XFS_BMAPI_STACK_SWITCH	0x080
 
 #define XFS_BMAPI_FLAGS \
 	{ XFS_BMAPI_ENTIRE,	"ENTIRE" }, \
@@ -86,8 +85,7 @@ typedef	struct xfs_bmap_free
 	{ XFS_BMAPI_PREALLOC,	"PREALLOC" }, \
 	{ XFS_BMAPI_IGSTATE,	"IGSTATE" }, \
 	{ XFS_BMAPI_CONTIG,	"CONTIG" }, \
-	{ XFS_BMAPI_CONVERT,	"CONVERT" }, \
-	{ XFS_BMAPI_STACK_SWITCH, "STACK_SWITCH" }
+	{ XFS_BMAPI_CONVERT,	"CONVERT" }
 
 
 static inline int xfs_bmapi_aflag(int w)
@@ -127,6 +125,16 @@ static inline void xfs_bmap_init(xfs_bmap_free_t *flp, xfs_fsblock_t *fbp)
 	{ BMAP_RIGHT_FILLING,	"RF" }, \
 	{ BMAP_ATTRFORK,	"ATTR" }
 
+
+/*
+ * This macro is used to determine how many extents will be shifted
+ * in one write transaction. We could require two splits,
+ * an extent move on the first and an extent merge on the second,
+ * So it is proper that one extent is shifted inside write transaction
+ * at a time.
+ */
+#define XFS_BMAP_MAX_SHIFT_EXTENTS	1
+
 #ifdef DEBUG
 void	xfs_bmap_trace_exlist(struct xfs_inode *ip, xfs_extnum_t cnt,
 		int whichfork, unsigned long caller_ip);
@@ -146,8 +154,8 @@ int	xfs_bmap_first_unused(struct xfs_trans *tp, struct xfs_inode *ip,
 		xfs_extlen_t len, xfs_fileoff_t *unused, int whichfork);
 int	xfs_bmap_last_before(struct xfs_trans *tp, struct xfs_inode *ip,
 		xfs_fileoff_t *last_block, int whichfork);
-int	xfs_bmap_last_offset(struct xfs_trans *tp, struct xfs_inode *ip,
-		xfs_fileoff_t *unused, int whichfork);
+int	xfs_bmap_last_offset(struct xfs_inode *ip, xfs_fileoff_t *unused,
+		int whichfork);
 int	xfs_bmap_one_block(struct xfs_inode *ip, int whichfork);
 int	xfs_bmap_read_extents(struct xfs_trans *tp, struct xfs_inode *ip,
 		int whichfork);
@@ -169,5 +177,10 @@ int	xfs_bunmapi(struct xfs_trans *tp, struct xfs_inode *ip,
 int	xfs_check_nostate_extents(struct xfs_ifork *ifp, xfs_extnum_t idx,
 		xfs_extnum_t num);
 uint	xfs_default_attroffset(struct xfs_inode *ip);
+int	xfs_bmap_shift_extents(struct xfs_trans *tp, struct xfs_inode *ip,
+		int *done, xfs_fileoff_t start_fsb,
+		xfs_fileoff_t offset_shift_fsb, xfs_extnum_t *current_ext,
+		xfs_fsblock_t *firstblock, struct xfs_bmap_free	*flist,
+		int num_exts);
 
 #endif	/* __XFS_BMAP_H__ */

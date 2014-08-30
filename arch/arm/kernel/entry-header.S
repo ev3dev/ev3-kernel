@@ -37,9 +37,9 @@
 #endif
 	.endm
 
-	.macro	alignment_trap, rtemp
+	.macro	alignment_trap, rtemp, label
 #ifdef CONFIG_ALIGNMENT_TRAP
-	ldr	\rtemp, .LCcralign
+	ldr	\rtemp, \label
 	ldr	\rtemp, [\rtemp]
 	mcr	p15, 0, \rtemp, c1, c0
 #endif
@@ -240,11 +240,6 @@
 	movs	pc, lr				@ return & move spsr_svc into cpsr
 	.endm
 
-	.macro	get_thread_info, rd
-	mov	\rd, sp, lsr #13
-	mov	\rd, \rd, lsl #13
-	.endm
-
 	@
 	@ 32-bit wide "mov pc, reg"
 	@
@@ -309,12 +304,6 @@
 	movs	pc, lr				@ return & move spsr_svc into cpsr
 	.endm
 #endif	/* ifdef CONFIG_CPU_V7M / else */
-
-	.macro	get_thread_info, rd
-	mov	\rd, sp
-	lsr	\rd, \rd, #13
-	mov	\rd, \rd, lsl #13
-	.endm
 
 	@
 	@ 32-bit wide "mov pc, reg"

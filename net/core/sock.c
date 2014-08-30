@@ -477,7 +477,7 @@ int sock_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 	spin_unlock_irqrestore(&list->lock, flags);
 
 	if (!sock_flag(sk, SOCK_DEAD))
-		sk->sk_data_ready(sk, skb_len);
+		sk->sk_data_ready(sk);
 	return 0;
 }
 EXPORT_SYMBOL(sock_queue_rcv_skb);
@@ -784,7 +784,7 @@ set_rcvbuf:
 		break;
 
 	case SO_NO_CHECK:
-		sk->sk_no_check = valbool;
+		sk->sk_no_check_tx = valbool;
 		break;
 
 	case SO_PRIORITY:
@@ -1064,7 +1064,7 @@ int sock_getsockopt(struct socket *sock, int level, int optname,
 		break;
 
 	case SO_NO_CHECK:
-		v.val = sk->sk_no_check;
+		v.val = sk->sk_no_check_tx;
 		break;
 
 	case SO_PRIORITY:
@@ -2245,7 +2245,7 @@ static void sock_def_error_report(struct sock *sk)
 	rcu_read_unlock();
 }
 
-static void sock_def_readable(struct sock *sk, int len)
+static void sock_def_readable(struct sock *sk)
 {
 	struct socket_wq *wq;
 

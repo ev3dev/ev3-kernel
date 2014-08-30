@@ -533,16 +533,6 @@ static u8 dm646x_default_priorities[DAVINCI_N_AINTC_IRQ] = {
 
 /* Four Transfer Controllers on DM646x */
 static s8
-dm646x_queue_tc_mapping[][2] = {
-	/* {event queue no, TC no} */
-	{0, 0},
-	{1, 1},
-	{2, 2},
-	{3, 3},
-	{-1, -1},
-};
-
-static s8
 dm646x_queue_priority_mapping[][2] = {
 	/* {event queue no, Priority} */
 	{0, 4},
@@ -553,12 +543,6 @@ dm646x_queue_priority_mapping[][2] = {
 };
 
 static struct edma_soc_info edma_cc0_info = {
-	.n_channel		= 64,
-	.n_region		= 6,	/* 0-1, 4-7 */
-	.n_slot			= 512,
-	.n_tc			= 4,
-	.n_cc			= 1,
-	.queue_tc_mapping	= dm646x_queue_tc_mapping,
 	.queue_priority_mapping	= dm646x_queue_priority_mapping,
 	.default_queue		= EVENTQ_1,
 };
@@ -898,7 +882,7 @@ static struct davinci_soc_info davinci_soc_info_dm646x = {
 	.intc_irq_num		= DAVINCI_N_AINTC_IRQ,
 	.timer_info		= &dm646x_timer_info,
 	.emac_pdata		= &dm646x_emac_pdata,
-	.sram_phys		= 0x10010000,
+	.sram_dma		= 0x10010000,
 	.sram_len		= SZ_32K,
 };
 
@@ -955,12 +939,18 @@ void __init dm646x_init(void)
 
 static int __init dm646x_init_devices(void)
 {
+	int ret = 0;
+
 	if (!cpu_is_davinci_dm646x())
 		return 0;
 
 	platform_device_register(&dm646x_mdio_device);
 	platform_device_register(&dm646x_emac_device);
 
-	return 0;
+	ret = davinci_init_wdt();
+	if (ret)
+		pr_warn("%s: watchdog init failed: %d\n", __func__, ret);
+
+	return ret;
 }
 postcore_initcall(dm646x_init_devices);

@@ -22,7 +22,7 @@
  * Authors: Ben Skeggs
  */
 
-#include <engine/disp.h>
+#include "priv.h"
 
 #include <core/event.h>
 #include <core/class.h>
@@ -86,13 +86,13 @@ nv04_disp_sclass[] = {
  ******************************************************************************/
 
 static void
-nv04_disp_vblank_enable(struct nouveau_event *event, int head)
+nv04_disp_vblank_enable(struct nouveau_event *event, int type, int head)
 {
 	nv_wr32(event->priv, 0x600140 + (head * 0x2000) , 0x00000001);
 }
 
 static void
-nv04_disp_vblank_disable(struct nouveau_event *event, int head)
+nv04_disp_vblank_disable(struct nouveau_event *event, int type, int head)
 {
 	nv_wr32(event->priv, 0x600140 + (head * 0x2000) , 0x00000000);
 }
@@ -106,12 +106,12 @@ nv04_disp_intr(struct nouveau_subdev *subdev)
 	u32 pvideo;
 
 	if (crtc0 & 0x00000001) {
-		nouveau_event_trigger(priv->base.vblank, 0);
+		nouveau_event_trigger(priv->base.vblank, 1, 0);
 		nv_wr32(priv, 0x600100, 0x00000001);
 	}
 
 	if (crtc1 & 0x00000001) {
-		nouveau_event_trigger(priv->base.vblank, 1);
+		nouveau_event_trigger(priv->base.vblank, 1, 1);
 		nv_wr32(priv, 0x602100, 0x00000001);
 	}
 
@@ -146,13 +146,13 @@ nv04_disp_ctor(struct nouveau_object *parent, struct nouveau_object *engine,
 	return 0;
 }
 
-struct nouveau_oclass
-nv04_disp_oclass = {
-	.handle = NV_ENGINE(DISP, 0x04),
-	.ofuncs = &(struct nouveau_ofuncs) {
+struct nouveau_oclass *
+nv04_disp_oclass = &(struct nouveau_disp_impl) {
+	.base.handle = NV_ENGINE(DISP, 0x04),
+	.base.ofuncs = &(struct nouveau_ofuncs) {
 		.ctor = nv04_disp_ctor,
 		.dtor = _nouveau_disp_dtor,
 		.init = _nouveau_disp_init,
 		.fini = _nouveau_disp_fini,
 	},
-};
+}.base;

@@ -122,7 +122,7 @@ static struct omap3isp_prev_csc flr_prev_csc = {
 #define PREV_MAX_OUT_WIDTH_REV_15	4096
 
 /*
- * Coeficient Tables for the submodules in Preview.
+ * Coefficient Tables for the submodules in Preview.
  * Array is initialised with the values from.the tables text file.
  */
 
@@ -971,7 +971,8 @@ static void preview_setup_hw(struct isp_prev_device *prev, u32 update,
 
 /*
  * preview_config_ycpos - Configure byte layout of YUV image.
- * @mode: Indicates the required byte layout.
+ * @prev: pointer to previewer private structure
+ * @pixelcode: pixel code
  */
 static void
 preview_config_ycpos(struct isp_prev_device *prev,
@@ -1372,8 +1373,8 @@ static void preview_init_params(struct isp_prev_device *prev)
 }
 
 /*
- * preview_max_out_width - Handle previewer hardware ouput limitations
- * @isp_revision : ISP revision
+ * preview_max_out_width - Handle previewer hardware output limitations
+ * @prev: pointer to previewer private structure
  * returns maximum width output for current isp revision
  */
 static unsigned int preview_max_out_width(struct isp_prev_device *prev)
@@ -1498,14 +1499,14 @@ static void preview_isr_buffer(struct isp_prev_device *prev)
 	if (prev->input == PREVIEW_INPUT_MEMORY) {
 		buffer = omap3isp_video_buffer_next(&prev->video_in);
 		if (buffer != NULL)
-			preview_set_inaddr(prev, buffer->isp_addr);
+			preview_set_inaddr(prev, buffer->dma);
 		pipe->state |= ISP_PIPELINE_IDLE_INPUT;
 	}
 
 	if (prev->output & PREVIEW_OUTPUT_MEMORY) {
 		buffer = omap3isp_video_buffer_next(&prev->video_out);
 		if (buffer != NULL) {
-			preview_set_outaddr(prev, buffer->isp_addr);
+			preview_set_outaddr(prev, buffer->dma);
 			restart = 1;
 		}
 		pipe->state |= ISP_PIPELINE_IDLE_OUTPUT;
@@ -1576,10 +1577,10 @@ static int preview_video_queue(struct isp_video *video,
 	struct isp_prev_device *prev = &video->isp->isp_prev;
 
 	if (video->type == V4L2_BUF_TYPE_VIDEO_OUTPUT)
-		preview_set_inaddr(prev, buffer->isp_addr);
+		preview_set_inaddr(prev, buffer->dma);
 
 	if (video->type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
-		preview_set_outaddr(prev, buffer->isp_addr);
+		preview_set_outaddr(prev, buffer->dma);
 
 	return 0;
 }
@@ -1619,7 +1620,7 @@ static const struct v4l2_ctrl_ops preview_ctrl_ops = {
 
 /*
  * preview_ioctl - Handle preview module private ioctl's
- * @prev: pointer to preview context structure
+ * @sd: pointer to v4l2 subdev structure
  * @cmd: configuration command
  * @arg: configuration argument
  * return -EINVAL or zero on success
@@ -2350,7 +2351,7 @@ error_video_in:
 
 /*
  * omap3isp_preview_init - Previewer initialization.
- * @dev : Pointer to ISP device
+ * @isp : Pointer to ISP device
  * return -ENOMEM or zero on success
  */
 int omap3isp_preview_init(struct isp_device *isp)

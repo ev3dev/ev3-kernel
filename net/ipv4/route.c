@@ -140,11 +140,6 @@ static void		 ip_do_redirect(struct dst_entry *dst, struct sock *sk,
 					struct sk_buff *skb);
 static void		ipv4_dst_destroy(struct dst_entry *dst);
 
-static void ipv4_dst_ifdown(struct dst_entry *dst, struct net_device *dev,
-			    int how)
-{
-}
-
 static u32 *ipv4_cow_metrics(struct dst_entry *dst, unsigned long old)
 {
 	WARN_ON(1);
@@ -163,7 +158,6 @@ static struct dst_ops ipv4_dst_ops = {
 	.mtu =			ipv4_mtu,
 	.cow_metrics =		ipv4_cow_metrics,
 	.destroy =		ipv4_dst_destroy,
-	.ifdown =		ipv4_dst_ifdown,
 	.negative_advice =	ipv4_negative_advice,
 	.link_failure =		ipv4_link_failure,
 	.update_pmtu =		ip_rt_update_pmtu,
@@ -195,7 +189,7 @@ const __u8 ip_tos2prio[16] = {
 EXPORT_SYMBOL(ip_tos2prio);
 
 static DEFINE_PER_CPU(struct rt_cache_stat, rt_cache_stat);
-#define RT_CACHE_STAT_INC(field) __this_cpu_inc(rt_cache_stat.field)
+#define RT_CACHE_STAT_INC(field) raw_cpu_inc(rt_cache_stat.field)
 
 #ifdef CONFIG_PROC_FS
 static void *rt_cache_seq_start(struct seq_file *seq, loff_t *pos)
@@ -704,7 +698,6 @@ static void update_or_create_fnhe(struct fib_nh *nh, __be32 daddr, __be32 gw,
 
 out_unlock:
 	spin_unlock_bh(&fnhe_lock);
-	return;
 }
 
 static void __ip_do_redirect(struct rtable *rt, struct sk_buff *skb, struct flowi4 *fl4,
@@ -1007,6 +1000,9 @@ void ipv4_update_pmtu(struct sk_buff *skb, struct net *net, u32 mtu,
 	struct flowi4 fl4;
 	struct rtable *rt;
 
+	if (!mark)
+		mark = IP4_REPLY_MARK(net, skb->mark);
+
 	__build_flow_key(&fl4, NULL, iph, oif,
 			 RT_TOS(iph->tos), protocol, mark, flow_flags);
 	rt = __ip_route_output_key(net, &fl4);
@@ -1024,6 +1020,10 @@ static void __ipv4_sk_update_pmtu(struct sk_buff *skb, struct sock *sk, u32 mtu)
 	struct rtable *rt;
 
 	__build_flow_key(&fl4, sk, iph, 0, 0, 0, 0, 0);
+
+	if (!fl4.flowi4_mark)
+		fl4.flowi4_mark = IP4_REPLY_MARK(sock_net(sk), skb->mark);
+
 	rt = __ip_route_output_key(sock_net(sk), &fl4);
 	if (!IS_ERR(rt)) {
 		__ip_rt_update_pmtu(rt, &fl4, mtu);
@@ -1144,7 +1144,7 @@ static void ipv4_link_failure(struct sk_buff *skb)
 		dst_set_expires(&rt->dst, 0);
 }
 
-static int ip_rt_bug(struct sk_buff *skb)
+static int ip_rt_bug(struct sock *sk, struct sk_buff *skb)
 {
 	pr_debug("%s: %pI4 -> %pI4, %s\n",
 		 __func__, &ip_hdr(skb)->saddr, &ip_hdr(skb)->daddr,
@@ -1715,8 +1715,7 @@ static int ip_route_input_slow(struct sk_buff *skb, __be32 daddr, __be32 saddr,
 
 	if (res.type == RTN_LOCAL) {
 		err = fib_validate_source(skb, saddr, daddr, tos,
-					  LOOPBACK_IFINDEX,
-					  dev, in_dev, &itag);
+					  0, dev, in_dev, &itag);
 		if (err < 0)
 			goto martian_source_keep_err;
 		goto local_input;
@@ -2233,7 +2232,7 @@ struct dst_entry *ipv4_blackhole_route(struct net *net, struct dst_entry *dst_or
 
 		new->__use = 1;
 		new->input = dst_discard;
-		new->output = dst_discard;
+		new->output = dst_discard_sk;
 
 		new->dev = ort->dst.dev;
 		if (new->dev)
@@ -2481,11 +2480,6 @@ errout:
 errout_free:
 	kfree_skb(skb);
 	goto errout;
-}
-
-int ip_rt_dump(struct sk_buff *skb,  struct netlink_callback *cb)
-{
-	return skb->len;
 }
 
 void ip_rt_multicast_event(struct in_device *in_dev)

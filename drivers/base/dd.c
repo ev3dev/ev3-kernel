@@ -200,8 +200,8 @@ static void driver_bound(struct device *dev)
 		return;
 	}
 
-	pr_debug("driver: '%s': %s: bound to device '%s'\n", dev_name(dev),
-		 __func__, dev->driver->name);
+	pr_debug("driver: '%s': %s: bound to device '%s'\n", dev->driver->name,
+		 __func__, dev_name(dev));
 
 	klist_add_tail(&dev->p->knode_driver, &dev->driver->p->klist_devices);
 
@@ -587,29 +587,3 @@ void driver_detach(struct device_driver *drv)
 		put_device(dev);
 	}
 }
-
-/*
- * These exports can't be _GPL due to .h files using this within them, and it
- * might break something that was previously working...
- */
-void *dev_get_drvdata(const struct device *dev)
-{
-	if (dev && dev->p)
-		return dev->p->driver_data;
-	return NULL;
-}
-EXPORT_SYMBOL(dev_get_drvdata);
-
-int dev_set_drvdata(struct device *dev, void *data)
-{
-	int error;
-
-	if (!dev->p) {
-		error = device_private_init(dev);
-		if (error)
-			return error;
-	}
-	dev->p->driver_data = data;
-	return 0;
-}
-EXPORT_SYMBOL(dev_set_drvdata);
