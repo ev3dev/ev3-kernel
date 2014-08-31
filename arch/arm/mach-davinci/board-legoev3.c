@@ -818,15 +818,17 @@ static struct platform_device legoev3_battery_device = {
  * ========================
  * PWM outputs are used by sound, bluetooth and motors. This just provides a
  * lookup table so that the respective drivers can find the right pwm devices.
+ * The period is always set by the driver, but it is important to set correct
+ * polarity here.
  */
 
 static struct pwm_lookup legoev3_pwm_lookup[] = {
-	PWM_LOOKUP("ecap.0", 0, "outC", NULL),
-	PWM_LOOKUP("ecap.1", 0, "outD", NULL),
-	PWM_LOOKUP("ecap.2", 0, "legoev3-bluetooth", NULL),
-	PWM_LOOKUP("ehrpwm.0", 1, "snd-legoev3", NULL),
-	PWM_LOOKUP("ehrpwm.1", 0, "outB", NULL),
-	PWM_LOOKUP("ehrpwm.1", 1, "outA", NULL),
+	PWM_LOOKUP("ecap.0", 0, "outC", NULL, 0, PWM_POLARITY_INVERSED),
+	PWM_LOOKUP("ecap.1", 0, "outD", NULL, 0, PWM_POLARITY_INVERSED),
+	PWM_LOOKUP("ecap.2", 0, "legoev3-bluetooth", NULL, 0, PWM_POLARITY_INVERSED),
+	PWM_LOOKUP("ehrpwm.0", 1, "snd-legoev3", NULL, 0, PWM_POLARITY_INVERSED),
+	PWM_LOOKUP("ehrpwm.1", 0, "outB", NULL, 0, PWM_POLARITY_INVERSED),
+	PWM_LOOKUP("ehrpwm.1", 1, "outA", NULL, 0, PWM_POLARITY_INVERSED),
 };
 
 

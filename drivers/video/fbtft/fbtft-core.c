@@ -214,7 +214,6 @@ static void fbtft_backlight_pwm_work (struct work_struct *work)
 {
 	struct fbtft_par *par = container_of(work, struct fbtft_par,
 					     backlight_pwm_work);
-	struct backlight_device *bd = par->info->bl_dev;
 	int value = gpio_get_value(par->gpio.led[0]);
 
 	gpio_direction_output(par->gpio.led[0], !value);
