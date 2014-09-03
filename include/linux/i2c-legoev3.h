@@ -27,7 +27,7 @@ struct i2c_legoev3_platform_data {
 	unsigned int	sda_pin;
 	unsigned int	scl_pin;
 	enum ev3_input_port_id port_id;
-	struct legoev3_port_device *in_port;
+	struct legoev3_port *in_port;
 };
 
 #endif /* _LINUX_I2C_LEGOEV3_H */

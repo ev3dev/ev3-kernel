@@ -40,20 +40,20 @@ struct ev3_input_port_platform_data {
 };
 
 struct ev3_sensor_platform_data {
-	struct legoev3_port_device *in_port;
+	struct legoev3_port *in_port;
 };
 
-extern int ev3_input_port_get_pin1_mv(struct legoev3_port_device *);
-extern int ev3_input_port_get_pin6_mv(struct legoev3_port_device *);
-extern void ev3_input_port_set_pin1_gpio(struct legoev3_port_device *,
+extern int ev3_input_port_get_pin1_mv(struct legoev3_port *);
+extern int ev3_input_port_get_pin6_mv(struct legoev3_port *);
+extern void ev3_input_port_set_pin1_gpio(struct legoev3_port *,
 					 enum ev3_input_port_gpio_state);
-extern void ev3_input_port_set_pin5_gpio(struct legoev3_port_device *,
+extern void ev3_input_port_set_pin5_gpio(struct legoev3_port *,
 					 enum ev3_input_port_gpio_state);
-extern void ev3_input_port_register_analog_cb(struct legoev3_port_device *,
+extern void ev3_input_port_register_analog_cb(struct legoev3_port *,
 					      legoev3_analog_cb_func_t, void *);
-extern int ev3_input_port_register_i2c(struct legoev3_port_device *, struct device *);
-extern void ev3_input_port_unregister_i2c(struct legoev3_port_device *);
-extern int ev3_input_port_enable_uart(struct legoev3_port_device *in_port);
-extern void ev3_input_port_disable_uart(struct legoev3_port_device *in_port);
+extern int ev3_input_port_register_i2c(struct legoev3_port *, struct device *);
+extern void ev3_input_port_unregister_i2c(struct legoev3_port *);
+extern int ev3_input_port_enable_uart(struct legoev3_port *in_port);
+extern void ev3_input_port_disable_uart(struct legoev3_port *in_port);
 
 #endif /* __LINUX_LEGOEV3_EV3_INPUT_PORT_H */

@@ -31,12 +31,24 @@ struct legoev3_ports_platform_data {
 	struct ev3_output_port_platform_data output_port_data[NUM_EV3_PORT_OUT];
 };
 
+struct legoev3_port {
+	char name[LEGOEV3_PORT_NAME_SIZE + 1];
+	int id;
+	struct device dev;
+};
+
 struct legoev3_port_device {
 	char name[LEGOEV3_PORT_NAME_SIZE + 1];
+	char port_name[LEGOEV3_PORT_NAME_SIZE + 1];
 	int id;
 	int type_id;
 	struct device dev;
 };
+
+static inline struct legoev3_port *to_legoev3_port(struct device *dev)
+{
+	return dev ? container_of(dev, struct legoev3_port, dev) : NULL;
+}
 
 static inline struct legoev3_port_device
 *to_legoev3_port_device(struct device *dev)
@@ -44,10 +56,14 @@ static inline struct legoev3_port_device
 	return dev ? container_of(dev, struct legoev3_port_device, dev) : NULL;
 }
 
+extern int legoev3_port_device_uevent(struct device *dev,
+				      struct kobj_uevent_env *env);
 extern struct legoev3_port_device
-*legoev3_port_device_register(const char *, int, struct device_type *, int,
-			      void *, size_t, struct device *);
-extern void legoev3_port_device_unregister(struct legoev3_port_device *);
+*legoev3_port_device_register(const char *name, struct device_type *type,
+			      int type_id, void *platform_data,
+			      size_t platform_data_size,
+			      struct legoev3_port *port);
+extern void legoev3_port_device_unregister(struct legoev3_port_device *pdev);
 
 #define NXT_TOUCH_SENSOR_TYPE_ID	1
 #define NXT_LIGHT_SENSOR_TYPE_ID	2
@@ -68,11 +84,10 @@ struct legoev3_port_device_id {
 	}
 
 struct legoev3_port_driver {
-	int (*probe)(struct legoev3_port_device *);
-	int (*remove)(struct legoev3_port_device *);
-	void (*shutdown)(struct legoev3_port_device *);
+	int (*probe)(struct legoev3_port *);
+	int (*remove)(struct legoev3_port *);
+	void (*shutdown)(struct legoev3_port *);
 	struct device_driver driver;
-	const struct legoev3_port_device_id *id_table;
 };
 
 static inline struct legoev3_port_driver
@@ -85,6 +100,25 @@ extern int legoev3_register_port_driver(struct legoev3_port_driver *);
 extern void legoev3_unregister_port_driver(struct legoev3_port_driver *);
 #define legoev3_port_driver(driver) \
 module_driver(driver, legoev3_register_port_driver, legoev3_unregister_port_driver);
+
+struct legoev3_port_device_driver {
+	int (*probe)(struct legoev3_port_device *);
+	int (*remove)(struct legoev3_port_device *);
+	void (*shutdown)(struct legoev3_port_device *);
+	struct device_driver driver;
+	const struct legoev3_port_device_id *id_table;
+};
+
+static inline struct legoev3_port_device_driver
+*to_legoev3_port_device_driver(struct device_driver *drv)
+{
+	return drv ? container_of(drv, struct legoev3_port_device_driver, driver) : NULL;
+}
+
+extern int legoev3_register_port_device_driver(struct legoev3_port_device_driver *);
+extern void legoev3_unregister_port_device_driver(struct legoev3_port_device_driver *);
+#define legoev3_port_device_driver(driver) \
+module_driver(driver, legoev3_register_port_device_driver, legoev3_unregister_port_device_driver);
 
 extern struct attribute_group legoev3_port_device_type_attr_grp;
 extern struct bus_type legoev3_bus_type;

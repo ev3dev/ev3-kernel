@@ -24,7 +24,7 @@ enum motor_type {
 	MOTOR_NEWTACHO,
 	MOTOR_MINITACHO,
 	MOTOR_TACHO,
- 	MOTOR_ERR,
+	MOTOR_ERR,
 	NUM_MOTOR
 };
 
@@ -38,13 +38,13 @@ struct ev3_output_port_platform_data {
 };
 
 struct ev3_motor_platform_data {
-	struct legoev3_port_device *out_port;
+	struct legoev3_port *out_port;
 	struct pwm_device *pwm;
 	unsigned motor_dir0_gpio;
 	unsigned motor_dir1_gpio;
 	unsigned tacho_int_gpio;
-        unsigned tacho_dir_gpio;
- 	enum motor_type motor_type;
+	unsigned tacho_dir_gpio;
+	enum motor_type motor_type;
 };
 
 /* resistor ids for EV3 output devices */
@@ -67,8 +67,8 @@ enum ev3_out_dev_id {
 	EV3_OUT_DEV_ID_ERR = -1
 };
 
-extern int ev3_output_port_float_pin56(struct legoev3_port_device *out_port);
+extern int ev3_output_port_float_pin56(struct legoev3_port *out_port);
 
-extern unsigned long davinci_read_clocksource_cycles( void );
+extern unsigned long davinci_read_clocksource_cycles(void);
 
 #endif /* __LINUX_LEGOEV3_EV3_OUTPUT_PORT_H */
