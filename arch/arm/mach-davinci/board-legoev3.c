@@ -24,6 +24,7 @@
 #include <linux/gpio_keys.h>
 #include <linux/input.h>
 #include <linux/leds.h>
+#include <linux/leds_pwm.h>
 #include <linux/legoev3/legoev3_analog.h>
 #include <linux/legoev3/legoev3_bluetooth.h>
 #include <linux/legoev3/legoev3_ports.h>
@@ -33,6 +34,7 @@
 #include <linux/mtd/partitions.h>
 #include <linux/mtd/physmap.h>
 #include <linux/platform_data/fbtft.h>
+#include <linux/platform_data/pwm-gpio.h>
 #include <linux/regulator/machine.h>
 #include <linux/spi/spi.h>
 #include <linux/spi/flash.h>
@@ -125,9 +127,9 @@ static struct spi_board_info legoev3_st7735r_spi1_board_info[] = {
 /*
  * LED configuration:
  * ==================
- * The LEDs are connected via GPIOs and use the leds-gpio driver.
- * The default triggers are set so that during boot, the left LED will flash
- * amber to indicate CPU activity and the right LED will flash amber to
+ * The LEDs are connected via GPIOs. We are using pwm-gpio so the LEDs can be
+ * dimmed. The default triggers are set so that during boot, the left LED will
+ * flash amber to indicate CPU activity and the right LED will flash amber to
  * indicate disk (SD card) activity.
  */
 
@@ -136,39 +138,75 @@ static const short legoev3_led_pins[] __initconst = {
 	-1
 };
 
-static struct gpio_led ev3_gpio_leds[] = {
+static struct pwm_gpio ev3_led_pwms[] = {
 	{
-		.name = "ev3:red:left",
-		.default_trigger = "heartbeat",
+		.name = "left-red-led",
 		.gpio = EV3_LED_0_PIN,
 	},
 	{
-		.name = "ev3:green:left",
-		.default_trigger = "heartbeat",
+		.name = "left-green-led",
 		.gpio = EV3_LED_1_PIN,
 	},
 	{
-		.name = "ev3:green:right",
-		.default_trigger = "mmc0",
+		.name = "right-green-led",
 		.gpio = EV3_LED_2_PIN,
 	},
 	{
-		.name = "ev3:red:right",
-		.default_trigger = "mmc0",
+		.name = "right-red-led",
 		.gpio = EV3_LED_3_PIN,
 	},
 };
 
-static struct gpio_led_platform_data ev3_gpio_led_data = {
-	.num_leds	= ARRAY_SIZE(ev3_gpio_leds),
-	.leds		= ev3_gpio_leds
+static struct pwm_gpio_platform_data ev3_led_pwms_data = {
+	.num_pwms = ARRAY_SIZE(ev3_led_pwms),
+	.pwms = ev3_led_pwms,
 };
 
-static struct platform_device ev3_device_gpio_leds = {
-	.name	= "leds-gpio",
+static struct platform_device ev3_led_pwms_device = {
+	.name	= "pwm-gpio",
 	.id	= -1,
 	.dev	= {
-		.platform_data  = &ev3_gpio_led_data,
+		.platform_data  = &ev3_led_pwms_data,
+	},
+};
+
+static struct led_pwm ev3_leds[] = {
+	{
+		.name = "ev3:red:left",
+		.default_trigger = "heartbeat",
+		.max_brightness = LED_FULL,
+		.pwm_period_ns = NSEC_PER_SEC / 100,
+	},
+	{
+		.name = "ev3:green:left",
+		.default_trigger = "heartbeat",
+		.max_brightness = LED_FULL,
+		.pwm_period_ns = NSEC_PER_SEC / 100,
+	},
+	{
+		.name = "ev3:green:right",
+		.default_trigger = "mmc0",
+		.max_brightness = LED_FULL,
+		.pwm_period_ns = NSEC_PER_SEC / 100,
+	},
+	{
+		.name = "ev3:red:right",
+		.default_trigger = "mmc0",
+		.max_brightness = LED_FULL,
+		.pwm_period_ns = NSEC_PER_SEC / 100,
+	},
+};
+
+static struct led_pwm_platform_data ev3_leds_data = {
+	.num_leds	= ARRAY_SIZE(ev3_leds),
+	.leds		= ev3_leds
+};
+
+static struct platform_device ev3_leds_device = {
+	.name	= "leds_pwm",
+	.id	= -1,
+	.dev	= {
+		.platform_data  = &ev3_leds_data,
 	},
 };
 
@@ -816,13 +854,17 @@ static struct platform_device legoev3_battery_device = {
 /*
  * EV3 PWM configuration:
  * ========================
- * PWM outputs are used by sound, bluetooth and motors. This just provides a
- * lookup table so that the respective drivers can find the right pwm devices.
+ * PWM outputs are used by LEDs, sound, bluetooth and motors. This just provides
+ * a lookup table so that the respective drivers can find the right pwm devices.
  * The period is always set by the driver, but it is important to set correct
  * polarity here.
  */
 
 static struct pwm_lookup legoev3_pwm_lookup[] = {
+	PWM_LOOKUP("pwm-gpio", 0, NULL, "ev3:red:left", 0, PWM_POLARITY_NORMAL),
+	PWM_LOOKUP("pwm-gpio", 1, NULL, "ev3:green:left", 0, PWM_POLARITY_NORMAL),
+	PWM_LOOKUP("pwm-gpio", 2, NULL, "ev3:green:right", 0, PWM_POLARITY_NORMAL),
+	PWM_LOOKUP("pwm-gpio", 3, NULL, "ev3:red:right", 0, PWM_POLARITY_NORMAL),
 	PWM_LOOKUP("ecap.0", 0, "outC", NULL, 0, PWM_POLARITY_INVERSED),
 	PWM_LOOKUP("ecap.1", 0, "outD", NULL, 0, PWM_POLARITY_INVERSED),
 	PWM_LOOKUP("ecap.2", 0, "legoev3-bluetooth", NULL, 0, PWM_POLARITY_INVERSED),
@@ -898,7 +940,11 @@ static __init void legoev3_init(void)
 	if (ret)
 		pr_warn("legoev3_init: LED mux setup failed:"
 			" %d\n", ret);
-	ret = platform_device_register(&ev3_device_gpio_leds);
+	ret = platform_device_register(&ev3_led_pwms_device);
+	if (ret)
+		pr_warn("legoev3_init: LED gpio-pwm registration failed:"
+			" %d\n", ret);
+	ret = platform_device_register(&ev3_leds_device);
 	if (ret)
 		pr_warn("legoev3_init: LED registration failed:"
 			" %d\n", ret);
