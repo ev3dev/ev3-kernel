@@ -48,6 +48,8 @@ enum tacho_motor_run_mode {
 
 enum tacho_motor_polarity_mode {
 	POLARITY_POSITIVE,
+	POLARITY_NEGATIVE_POSITION,
+	POLARITY_NEGATIVE_DUTY_CYCLE,
 	POLARITY_NEGATIVE,
 	NUM_POLARITY_MODES,
 };
