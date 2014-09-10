@@ -47,11 +47,15 @@ enum tacho_motor_run_mode {
 };
 
 enum tacho_motor_polarity_mode {
-	POLARITY_POSITIVE,
-	POLARITY_NEGATIVE_POSITION,
-	POLARITY_NEGATIVE_DUTY_CYCLE,
-	POLARITY_NEGATIVE,
+	POLARITY_NORMAL,
+	POLARITY_INVERTED,
 	NUM_POLARITY_MODES,
+};
+
+enum tacho_motor_encoder_mode {
+	ENCODER_NORMAL,
+	ENCODER_INVERTED,
+	NUM_ENCODER_MODES,
 };
 
 enum tacho_motor_type {
@@ -124,6 +128,9 @@ struct function_pointers {
 
  	int  (*get_polarity_mode)(struct tacho_motor_device *tm);
  	void (*set_polarity_mode)(struct tacho_motor_device *tm, long polarity_mode);
+
+ 	int  (*get_encoder_mode)(struct tacho_motor_device *tm);
+ 	void (*set_encoder_mode)(struct tacho_motor_device *tm, long encoder_mode);
 
  	int  (*get_speed_regulation_P)(struct tacho_motor_device *tm);
  	void (*set_speed_regulation_P)(struct tacho_motor_device *tm, long speed_regulation_P);
