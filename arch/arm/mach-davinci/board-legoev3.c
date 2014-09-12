@@ -486,10 +486,8 @@ static struct davinci_i2c_platform_data legoev3_i2c_board_pdata = {
 /*
  * EV3 EDMA configuration:
  * =======================
- */
-
-#warning "Are these EDMA initializers really needed? Yes, but needs review."
-/*
+ * NOTE: These comments from from the the evm board file and may not be accurate.
+ *
  * The following EDMA channels/slots are not being used by drivers (for
  * example: Timer, GPIO, UART events etc) on da850/omap-l138 EVM, hence
  * they are being reserved for codecs on the DSP side.
@@ -1086,19 +1084,16 @@ static __init void legoev3_init(void)
 	if (ret)
 		pr_warn("legoev3_init: rtc setup failed: %d\n", ret);
 
-#warning "Is legoev3_init_cpufreq needed?"
 	ret = legoev3_init_cpufreq();
 	if (ret)
 		pr_warn("legoev3_init: cpufreq registration failed: %d\n",
 				ret);
 
-#warning "Is da8xx_register_cpuidle needed?"
 	ret = da8xx_register_cpuidle();
 	if (ret)
 		pr_warn("legoev3_init: cpuidle registration failed: %d\n",
 				ret);
 
-#warning "Is da850_pm_device needed?"
 	ret = da850_register_pm(&da850_pm_device);
 	if (ret)
 		pr_warn("legoev3_init: suspend registration failed: %d\n",
