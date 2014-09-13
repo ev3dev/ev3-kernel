@@ -37,12 +37,14 @@ struct legoev3_port {
 	struct device dev;
 };
 
+struct legoev3_port_device_id;
+
 struct legoev3_port_device {
-	char name[LEGOEV3_PORT_NAME_SIZE + 1];
-	char port_name[LEGOEV3_PORT_NAME_SIZE + 1];
-	int id;
-	int type_id;
 	struct device dev;
+	char name[LEGOEV3_PORT_NAME_SIZE + 1];
+	int id;
+	struct legoev3_port *port;
+	const struct legoev3_port_device_id *entry_id;
 };
 
 static inline struct legoev3_port *to_legoev3_port(struct device *dev)
@@ -60,27 +62,20 @@ extern int legoev3_port_device_uevent(struct device *dev,
 				      struct kobj_uevent_env *env);
 extern struct legoev3_port_device
 *legoev3_port_device_register(const char *name, struct device_type *type,
-			      int type_id, void *platform_data,
+			      void *platform_data,
 			      size_t platform_data_size,
 			      struct legoev3_port *port);
 extern void legoev3_port_device_unregister(struct legoev3_port_device *pdev);
 
-#define NXT_TOUCH_SENSOR_TYPE_ID	1
-#define NXT_LIGHT_SENSOR_TYPE_ID	2
-#define NXT_ANALOG_SENSOR_TYPE_ID	3
-#define NXT_COLOR_SENSOR_TYPE_ID	4
-#define EV3_TOUCH_SENSOR_TYPE_ID	16
-#define LEGOEV3_TYPE_ID_UNKNOWN		125
-
 struct legoev3_port_device_id {
 	char name[LEGOEV3_PORT_NAME_SIZE];
-	int type_id __attribute__((aligned(sizeof(int))));
+	kernel_ulong_t driver_data;
 };
 
-#define LEGOEV3_PORT_DEVICE_ID(_type_name, _type_id)	\
-	{						\
-		.name = _type_name,			\
-		.type_id = _type_id,			\
+#define LEGOEV3_PORT_DEVICE_ID(_type_name, _driver_data)	\
+	{							\
+		.name = _type_name,				\
+		.type_id = _driver_data,			\
 	}
 
 struct legoev3_port_driver {
@@ -106,7 +101,7 @@ struct legoev3_port_device_driver {
 	int (*remove)(struct legoev3_port_device *);
 	void (*shutdown)(struct legoev3_port_device *);
 	struct device_driver driver;
-	const struct legoev3_port_device_id *id_table;
+	struct legoev3_port_device_id *id_table;
 };
 
 static inline struct legoev3_port_device_driver

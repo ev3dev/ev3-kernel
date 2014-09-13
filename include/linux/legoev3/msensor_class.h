@@ -19,7 +19,7 @@
 #include <linux/device.h>
 #include <linux/types.h>
 
-#define MSENSOR_PORT_NAME_SIZE	30
+#define MSENSOR_NAME_SIZE	30
 #define MSENSOR_FW_VERSION_SIZE	8
 #define MSENSOR_MODE_NAME_SIZE	11
 /* Do not change these 3 values without replacing them in legoev3_uart.c first */
@@ -79,7 +79,7 @@ struct msensor_mode_info {
 
 /**
  * struct msensor_device
- * @type_id: The type id of the sensor.
+ * @name: Name of the sensor (same as device/driver name, e.g. nxt-touch)
  * @port_name: The name of the port that this sensor is connected to.
  * @num_modes: The number of valid modes.
  * @num_view_modes: The number of valid modes for data logging.
@@ -95,8 +95,8 @@ struct msensor_mode_info {
  * @dev: The device data structure.
  */
 struct msensor_device {
-	u8 type_id;
-	char port_name[MSENSOR_PORT_NAME_SIZE + 1];
+	char name[MSENSOR_NAME_SIZE + 1];
+	char port_name[MSENSOR_NAME_SIZE + 1];
 	u8 num_modes;
 	u8 num_view_modes;
 	struct msensor_mode_info *mode_info;
@@ -107,7 +107,7 @@ struct msensor_device {
 	int (* set_poll_ms)(void *context, unsigned value);
 	void *context;
 	char fw_version[MSENSOR_FW_VERSION_SIZE + 1];
-	unsigned i2c_addr;
+	unsigned address;
 	/* private */
 	struct device dev;
 };

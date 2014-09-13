@@ -39,9 +39,15 @@ struct ev3_input_port_platform_data {
 	const char *uart_tty;
 };
 
-struct ev3_sensor_platform_data {
-	struct legoev3_port *in_port;
+/**
+ * ev3_host_platform_data - platform data used by analog host drivers
+ * @inital_sensor: Name of sensor device to load during driver probe.
+ */
+struct ev3_analog_host_platform_data {
+	const char *inital_sensor;
 };
+
+struct legoev3_port;
 
 extern int ev3_input_port_get_pin1_mv(struct legoev3_port *);
 extern int ev3_input_port_get_pin6_mv(struct legoev3_port *);
@@ -55,5 +61,7 @@ extern int ev3_input_port_register_i2c(struct legoev3_port *, struct device *);
 extern void ev3_input_port_unregister_i2c(struct legoev3_port *);
 extern int ev3_input_port_enable_uart(struct legoev3_port *in_port);
 extern void ev3_input_port_disable_uart(struct legoev3_port *in_port);
+
+#include <linux/legoev3/legoev3_ports.h>
 
 #endif /* __LINUX_LEGOEV3_EV3_INPUT_PORT_H */
