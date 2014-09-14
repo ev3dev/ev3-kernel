@@ -31,10 +31,26 @@ struct legoev3_ports_platform_data {
 	struct ev3_output_port_platform_data output_port_data[NUM_EV3_PORT_OUT];
 };
 
+struct legoev3_port_in_ops {
+	int (*get_pin1_mv)(struct legoev3_port *);
+	int (*get_pin6_mv)(struct legoev3_port *);
+	void (*set_pin1_gpio)(struct legoev3_port *, enum ev3_input_port_gpio_state);
+	void (*set_pin5_gpio)(struct legoev3_port *, enum ev3_input_port_gpio_state);
+	void (*register_analog_cb)(struct legoev3_port *, legoev3_analog_cb_func_t, void *);
+};
+
+/**
+ * struct legoev3_port
+ * @name: The sysfs name of the port (e.g. "in").
+ * @id: The sysfs id of the port.
+ * @dev: The sysfs device structure for the port.
+ * @in_ops: Operations for input ports. (To be assigned by the driver).
+ */
 struct legoev3_port {
 	char name[LEGOEV3_PORT_NAME_SIZE + 1];
 	int id;
 	struct device dev;
+	struct legoev3_port_in_ops in_ops;
 };
 
 struct legoev3_port_device_id;
