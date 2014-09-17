@@ -21,7 +21,7 @@
 
 #define MSENSOR_NAME_SIZE	30
 #define MSENSOR_FW_VERSION_SIZE	8
-#define MSENSOR_MODE_NAME_SIZE	11
+#define MSENSOR_MODE_NAME_SIZE	15
 /* Do not change these 3 values without replacing them in legoev3_uart.c first */
 #define MSENSOR_UNITS_SIZE	4
 #define MSENSOR_MODE_MAX	7

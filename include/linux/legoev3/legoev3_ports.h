@@ -53,6 +53,12 @@ struct legoev3_port {
 	struct legoev3_port_in_ops in_ops;
 };
 
+extern struct legoev3_port
+*legoev3_port_register(const char *name, int id, const struct device_type *type,
+		       struct device *parent, void *platform_data,
+		       size_t platform_data_size);
+extern void legoev3_port_unregister(struct legoev3_port *pdev);
+
 struct legoev3_port_device_id;
 
 struct legoev3_port_device {
@@ -78,7 +84,7 @@ extern int legoev3_port_device_uevent(struct device *dev,
 				      struct kobj_uevent_env *env);
 extern struct legoev3_port_device
 *legoev3_port_device_register(const char *name, struct device_type *type,
-			      void *platform_data,
+			      struct device *parent, void *platform_data,
 			      size_t platform_data_size,
 			      struct legoev3_port *port);
 extern void legoev3_port_device_unregister(struct legoev3_port_device *pdev);
