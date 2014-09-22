@@ -25,7 +25,7 @@
 /* Do not change these 3 values without replacing them in legoev3_uart.c first */
 #define MSENSOR_UNITS_SIZE	4
 #define MSENSOR_MODE_MAX	7
-#define MSENSOR_RAW_DATA_SIZE	32
+#define MSENSOR_RAW_DATA_SIZE	128
 
 /*
  * Be sure to add the size to msensor_data_size[] when adding values
