@@ -122,4 +122,4 @@ extern void unregister_msensor(struct msensor_device *);
 
 extern struct class msensor_class;
 
-#endif /* _LINUX_LEGOEV3_MEASURE_SENSOR_CLASS_H */
+#endif /* _LINUX_LEGOEV3_MSENSOR_CLASS_H */
