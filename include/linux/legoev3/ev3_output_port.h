@@ -17,6 +17,8 @@
 #define __LINUX_LEGOEV3_EV3_OUTPUT_PORT_H
 
 #include <linux/interrupt.h>
+#include <linux/legoev3/dc_motor_class.h>
+
 #include <mach/legoev3.h>
 
 /*
@@ -43,9 +45,7 @@ struct ev3_output_port_platform_data {
 
 struct ev3_motor_platform_data {
 	struct legoev3_port *out_port;
-	struct pwm_device *pwm;
-	unsigned motor_dir0_gpio;
-	unsigned motor_dir1_gpio;
+	struct dc_motor_ops motor_ops;
 	unsigned tacho_int_gpio;
 	unsigned tacho_dir_gpio;
 	enum motor_type motor_type;
