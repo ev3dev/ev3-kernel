@@ -19,6 +19,10 @@
 #include <linux/interrupt.h>
 #include <mach/legoev3.h>
 
+/*
+ * TODO: This should be moved to ev3_output_port.c and ev3_tacho_motor.c should
+ * use an id lookup table like sensors do for the various motor types.
+ */
 enum motor_type {
 	MOTOR_NONE,
 	MOTOR_NEWTACHO,
