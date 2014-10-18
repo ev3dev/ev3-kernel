@@ -21,12 +21,24 @@
 
 #define SERVO_MOTOR_NAME_SIZE	30
 
+enum servo_motor_command {
+	SERVO_MOTOR_COMMAND_RUN,
+	SERVO_MOTOR_COMMAND_FLOAT,
+	NUM_SERVO_MOTOR_COMMAND
+};
+
+enum servo_motor_polarity {
+	SERVO_MOTOR_POLARITY_NORMAL,
+	SERVO_MOTOR_POLARITY_INVERTED,
+	NUM_SERVO_MOTOR_POLARITY
+};
+
 /**
- * @get_position: Return position between 0 and 1800 or INT_MAX if motor is
- * 	floating or negative error.
- * @set_position: Sets the motor to position. Valid values are 0 to 1800 or
- * 	INT_MAX to indicate that the motor should float. Returns 0 on success
- * 	or negative error.
+ * @get_position: Return position in milliseconds or 0 to indicate the motor
+ * 	is floating or negative error.
+ * @set_position: Sets the motor to position. Values is the pulse width in
+ * 	milliseconds or 0 to float the output. Returns 0 on success or
+ * 	negative error.
  * @get_rate: Returns the rate in msec or negative error.
  * @set_rate: Sets the rate to the specified value. Returns 0 on success or
  * 	negative error.
@@ -47,6 +59,9 @@ struct servo_motor_ops {
  * @min_pulse_ms: The size of the pulse to drive the motor to 0 degrees.
  * @mid_pulse_ms: The size of the pulse to drive the motor to 90 degrees.
  * @max_pulse_ms: The size of the pulse to drive the motor to 180 degrees.
+ * @command: The current command for the motor.
+ * @polarity: The polarity of the motor.
+ * @position: The current position of the motor.
  */
 struct servo_motor_device {
 	char name[SERVO_MOTOR_NAME_SIZE + 1];
@@ -58,6 +73,9 @@ struct servo_motor_device {
 	unsigned min_pulse_ms;
 	unsigned mid_pulse_ms;
 	unsigned max_pulse_ms;
+	enum servo_motor_command command;
+	enum servo_motor_polarity polarity;
+	int position;
 };
 
 #define to_servo_motor_device(_dev) container_of(_dev, struct servo_motor_device, dev)
