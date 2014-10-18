@@ -22,17 +22,29 @@
 #define DC_MOTOR_NAME_SIZE	30
 
 enum dc_motor_command {
-	DC_MOTOR_COMMAND_FORWARD,
-	DC_MOTOR_COMMAND_REVERSE,
+	DC_MOTOR_COMMAND_RUN,
 	DC_MOTOR_COMMAND_COAST,
 	DC_MOTOR_COMMAND_BRAKE,
 	NUM_DC_MOTOR_COMMANDS
 };
 
+extern const char* dc_motor_command_names[];
+
+enum dc_motor_polarity {
+	DC_MOTOR_POLARITY_NORMAL,
+	DC_MOTOR_POLARITY_INVERTED,
+	NUM_DC_MOTOR_POLARITY
+};
+
+extern const char* dc_motor_polarity_values[];
+
 /**
  * @get_supported_commands: Return the supported commands as bit flags.
  * @get_command: Return the current command or negative error.
  * @set_command: Set the command for the motor. Returns 0 on success or
+ * 	negative error;
+ * @get_polarity: Return the current polarity.
+ * @set_polarity: Set the polarity for the motor. Returns 0 on success or
  * 	negative error;
  * @get_duty_cycle: Returns the current duty cycle in percent * 10 (0 to 1000).
  * @set_duty_cycle: Sets the duty cycle. Returns 0 on success or negative error.
@@ -42,6 +54,8 @@ struct dc_motor_ops {
 	unsigned (*get_supported_commands)(void* context);
 	int (*get_command)(void* context);
 	int (*set_command)(void* context, unsigned command);
+	unsigned (*get_polarity)(void *context);
+	int (*set_polarity)(void *context, unsigned polarity);
 	unsigned (*get_duty_cycle)(void *context);
 	int (*set_duty_cycle)(void *context, unsigned duty);
 	void *context;
@@ -61,6 +75,7 @@ struct dc_motor_device {
 	char port_name[DC_MOTOR_NAME_SIZE + 1];
 	struct dc_motor_ops ops;
 	struct device dev;
+	enum dc_motor_polarity polarity;
 	unsigned ramp_up_ms;
 	unsigned ramp_down_ms;
 };

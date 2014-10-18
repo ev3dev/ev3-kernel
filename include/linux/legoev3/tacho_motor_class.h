@@ -46,18 +46,6 @@ enum tacho_motor_run_mode {
 	TM_NUM_RUN_MODES,
 };
 
-enum tacho_motor_polarity_mode {
-	TM_POLARITY_NORMAL,
-	TM_POLARITY_INVERTED,
-	TM_NUM_POLARITY_MODES,
-};
-
-enum tacho_motor_encoder_mode {
-	TM_ENCODER_NORMAL,
-	TM_ENCODER_INVERTED,
-	TM_NUM_ENCODER_MODES,
-};
-
 enum tacho_motor_type {
 	TM_TYPE_TACHO,
 	TM_TYPE_MINITACHO,
