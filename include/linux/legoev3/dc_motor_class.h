@@ -17,6 +17,7 @@
 #define _LINUX_LEGOEV3_DC_MOTOR_CLASS_H
 
 #include <linux/device.h>
+#include <linux/hrtimer.h>
 #include <linux/types.h>
 
 #define DC_MOTOR_NAME_SIZE	30
@@ -69,6 +70,9 @@ struct dc_motor_ops {
  * @dev: The device struct used by the class.
  * @ramp_up_ms: The time to ramp up from 0 to 100% in milliseconds.
  * @ramp_up_ms: The time to ramp down from 100 to 0% in milliseconds.
+ * @ramp_timer: Timer used for ramping.
+ * @current_duty_cycle: The current duty cycle.
+ * @target_duty_cycle: The requested duty cycle.
  */
 struct dc_motor_device {
 	char name[DC_MOTOR_NAME_SIZE + 1];
@@ -78,6 +82,9 @@ struct dc_motor_device {
 	enum dc_motor_polarity polarity;
 	unsigned ramp_up_ms;
 	unsigned ramp_down_ms;
+	struct hrtimer ramp_timer;
+	int current_duty_cycle;
+	int target_duty_cycle;
 };
 
 #define to_dc_motor_device(_dev) container_of(_dev, struct dc_motor_device, dev)
