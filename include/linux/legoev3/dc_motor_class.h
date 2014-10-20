@@ -47,7 +47,7 @@ extern const char* dc_motor_polarity_values[];
  * @get_polarity: Return the current polarity.
  * @set_polarity: Set the polarity for the motor. Returns 0 on success or
  * 	negative error;
- * @get_duty_cycle: Returns the current duty cycle in percent * 10 (0 to 1000).
+ * @get_duty_cycle: Returns the current duty cycle in percent (0 to 100).
  * @set_duty_cycle: Sets the duty cycle. Returns 0 on success or negative error.
  * @context: Pointer to data structure passed back to the functions.
  */
