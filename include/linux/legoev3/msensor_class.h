@@ -1,5 +1,5 @@
 /*
- * Mindstorms sensor device class for LEGO Mindstorms EV3
+ * Mindstorms sensor device class for LEGO MINDSTORMS EV3
  *
  * Copyright (C) 2014 David Lechner <david@lechnology.com>
  *
@@ -78,14 +78,25 @@ struct msensor_mode_info {
 };
 
 /**
+ * struct msensor_cmd_info
+ * @name: The name of the command
+ */
+struct msensor_cmd_info {
+	char name[MSENSOR_MODE_NAME_SIZE + 1];
+};
+
+/**
  * struct msensor_device
  * @name: Name of the sensor (same as device/driver name, e.g. nxt-touch)
  * @port_name: The name of the port that this sensor is connected to.
  * @num_modes: The number of valid modes.
  * @num_view_modes: The number of valid modes for data logging.
  * @mode_info: Array of mode information for the sensor.
+ * @num_commands: The number of commands.
+ * @cmd_info: Array of command information for the sensor.
  * @get_mode: Callback to get the current sensor mode.
  * @set_mode: Callback to set the sensor mode.
+ * @send_command: Callback to send a command to the sensor.
  * @write_data: Write data to sensor (optional).
  * @get_poll_ms: Get the polling period in milliseconds (optional).
  * @set_poll_ms: Set the polling period in milliseconds (optional).
@@ -100,8 +111,11 @@ struct msensor_device {
 	u8 num_modes;
 	u8 num_view_modes;
 	struct msensor_mode_info *mode_info;
+	u8 num_commands;
+	struct msensor_cmd_info *cmd_info;
 	u8 (* get_mode)(void *context);
 	int (* set_mode)(void *context, u8 mode);
+	int (* send_command)(void *context, u8 command);
 	ssize_t (* write_data)(void *context, char *data, loff_t off, size_t count);
 	int (* get_poll_ms)(void *context);
 	int (* set_poll_ms)(void *context, unsigned value);
