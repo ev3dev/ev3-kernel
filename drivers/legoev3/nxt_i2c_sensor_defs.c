@@ -2,6 +2,7 @@
  * NXT I2C sensor device driver for LEGO MINDSTORMS EV3
  *
  * Copyright (C) 2013-2014 David Lechner <david@lechnology.com>
+ * Copyright (C) 2014 Bartosz Meglicki <meglickib@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -301,6 +302,68 @@ static void ms_imu_poll_cb(struct nxt_i2c_sensor_data *sensor)
 	}
 }
 
+/*
+ * 	Microinfinity CruizCore XG1300L gyroscope and accelerometer related functions
+ */
+static void mi_cruizcore_xg1300l_poll_cb(struct nxt_i2c_sensor_data *sensor)
+{
+	u8 *scaling_factor = sensor->info.callback_data;
+	
+	struct nxt_i2c_sensor_mode_info *i2c_mode_info =
+		&sensor->info.i2c_mode_info[sensor->mode];
+	struct msensor_mode_info *ms_mode_info =
+			&sensor->info.ms_mode_info[sensor->mode];
+
+	s16 *raw_as_s16 = (s16*) ms_mode_info->raw_data;
+	
+	/*
+	 * Perform normal i2c read (just like nxt_i2c_sensor_poll_work).
+	 */
+	i2c_smbus_read_i2c_block_data(sensor->client,
+		i2c_mode_info->read_data_reg, ms_mode_info->data_sets
+		* msensor_data_size[ms_mode_info->data_type],
+		ms_mode_info->raw_data);
+
+	/* scale values for acceleration */
+
+	if(sensor->mode < 2)  /* "ANG-ACC", "ANG-SPEED" - no acceleration info */
+		return;
+	
+	if(sensor->mode == 3) /* "ALL", accelerometer data starting from fourth byte */
+		raw_as_s16 += 2;
+	
+	raw_as_s16[0] *= *scaling_factor;
+	raw_as_s16[1] *= *scaling_factor;
+	raw_as_s16[2] *= *scaling_factor;
+}
+
+static void mi_cruizcore_xg1300l_send_command_post_cb(struct nxt_i2c_sensor_data *data, u8 command)
+{
+	u8 *scaling_factor = data->info.callback_data;
+
+	if (command==0 || command==1) *scaling_factor=1;	/* "RESET", "ACCEL-2G"	*/
+	else if (command==2) *scaling_factor=2;  			/* "ACCEL-4G" 			*/
+	else if (command==3) *scaling_factor=4; 			/* "ACCEL-8G"				*/
+}
+
+static void mi_cruizcore_xg1300l_probe_cb(struct nxt_i2c_sensor_data *data)
+{		
+	u8 *scaling_factor = kzalloc(sizeof(u8), GFP_KERNEL);
+	*scaling_factor = 1;
+	data->info.callback_data = scaling_factor;
+}
+
+static void mi_cruizcore_xg1300l_remove_cb(struct nxt_i2c_sensor_data *data)
+{
+	u8 *scaling_factor = data->info.callback_data;
+
+	if(scaling_factor)
+	{
+		data->info.callback_data = NULL;
+		kfree(scaling_factor);
+	}
+}
+
 /**
  * nxt_i2c_sensor_defs - Sensor definitions
  *
@@ -316,6 +379,7 @@ static void ms_imu_poll_cb(struct nxt_i2c_sensor_data *sensor)
  * - num_read_only_modes (default num_modes)
  * - ops.set_mode_pre_cb
  * - ops.set_mode_post_cb
+ * - ops.send_command_post_cb
  * - ops.poll_cb
  * - ops.probe_cb
  * - ops.remove_cb
@@ -2127,6 +2191,161 @@ const struct nxt_i2c_sensor_info nxt_i2c_sensor_defs[] = {
 			[6] = {
 				.cmd_reg	= 0x41,
 				.cmd_data	= 'U',
+			},
+		},
+	},
+	[MI_CRUIZCORE_XG1300L] = {
+		/**	
+		 * [^usage]: Sample usage:
+		 *
+		 * CruizCore XG1300L doesn't follow LEGO guidelines and it can't be autodected.
+		 * Until we find other way to identify the sensor the driver has to be loaded manually.
+		 * 
+		 * Register I2C device:
+		 *
+		 * <pre><code>echo mi-cruizcore-xg1300 0x01 > /sys/bus/i2c/devices/i2c-<port+2>/new_device
+		 * </code></pre>
+		 *
+		 * @vendor_name: Microinfinity
+		 * @vendor_part_number: CruizCore XG 1300L
+		 * @vendor_part_name: Digital Gyroscope And Accelerometer
+		 * @vendor_website: http://www.minfinity.com/eng/page.php?Main=1&sub=1&tab=5
+		 * @default_address: 0x01
+		 * @default_address_footnote: [^usage]
+		 */
+		.name							= "mi-xg1300l",
+		.vendor_id						= "mnfinity", /* The sensor doesn't return vendor_id, it can't be autodetected this way */
+		.product_id					= "XG1300L",  /* The sensor doesn't return product_id, it can't be autodetected this way */
+		.num_modes						= 4,
+		.num_read_only_modes			= 4,
+		.ops.poll_cb					= mi_cruizcore_xg1300l_poll_cb,
+		.ops.send_command_post_cb 	= mi_cruizcore_xg1300l_send_command_post_cb,
+		.ops.probe_cb					= mi_cruizcore_xg1300l_probe_cb,
+		.ops.remove_cb				= mi_cruizcore_xg1300l_remove_cb,
+		.ms_mode_info	= {
+			[0] = {
+				/**
+				 * @description: Accumulated angle
+				 * @value0: Z-axis accumulated angle (-180 to 180)
+				 * @units_description: degrees
+				 */
+				.name		= "ANG-ACC",
+				.data_sets	= 1,
+				.data_type	= MSENSOR_DATA_S16,
+				.units		= "deg",
+				.decimals	= 2,
+			},
+			[1] = {
+				/**
+				 *
+				 * @description: Rotational speed
+				 * @value0: Z-axis rotational speed
+				 * @units_description: degrees per second
+				 */
+				.name		= "ANG-SPEED",
+				.data_sets	= 1,
+				.data_type	= MSENSOR_DATA_S16,
+				.decimals	= 2,
+				.units		= "d/s",
+			},
+			[2] = {
+				/**
+				 *
+				 * @description: Acceleration in X, Y, Z axis
+				 * @value0: Acceleration in X axis
+				 * @value1: Acceleration in Y axis
+				 * @value2: Acceleration in Z axis
+				 * @units_description: g (1g ~ 9.81 m/s2)
+				 */
+				.name		= "ACCEL-XYZ",
+				.data_sets	= 3,
+				.units		= "g",
+				.data_type	= MSENSOR_DATA_S16,
+				.decimals	= 3,
+			},
+			[3] = {
+				/**
+				 * [^acceleration-description]: three decimal places, range as was set by last command
+				 * [^accumulated-angle-description]: two decimal places, (-180 to 180)
+				 * [^rotational-speed-description]: two decimal places
+				 *
+				 * @description: All values
+				 * @value0: Z-axis accumulated angle
+				 * @value0_footnote: [^accumulated-angle-description]
+				 * @value1: Z-axis rotational speed
+				 * @value1_footnote: [^rotational-speed-description]
+				 * @value2: X-axis acceleration
+				 * @value2_footnote: [^acceleration-description]
+				 * @value3: Y-axis acceleration
+				 * @value3_footnote: [^acceleration-description]
+				 * @value4: Z-axis acceleration
+				 * @value4_footnote: [^acceleration-description]
+				 *
+				 */
+				.name		= "ALL",
+				.data_sets	= 5,
+				.data_type	= MSENSOR_DATA_S16,
+			},
+		},
+		.i2c_mode_info	= {
+			[0] = {
+				.read_data_reg	= 0x42,
+			},
+			[1] = {
+				.read_data_reg	= 0x44,
+			},
+			[2] = {
+				.read_data_reg	= 0x46,
+			},
+			[3] = {
+				.read_data_reg	= 0x42,
+			},
+		},
+		.num_commands	= 4,
+		.ms_cmd_info	= {
+			[0] = {
+				/**
+				 * [^reset-description]: recalculate bias drift, reset accumulated angle,
+				 * set accelerometer scaling factor to 2G,
+				 * this has to be done with sensor not moving
+				 * and is strongly recommended to be called manually before work
+				 *
+				 * @description: Reset device
+				 * @description_footnote: [^reset-description]
+				 */
+				.name		= "RESET",
+			},
+			[1] = {
+				/**
+				 * @description: Acceleration scaling 2G
+				 */
+				.name		= "ACCEL-2G",
+			},
+			[2] = {
+				/**
+				 * @description: Acceleration scaling 4G
+				 */
+				.name		= "ACCEL-4G",
+			},
+			[3] = {
+				/**
+				 * @description: Acceleration scaling 8G
+				 */
+				.name		= "ACCEL-8G",
+			},
+		},
+		.i2c_cmd_info	= {
+			[0] = {
+				.cmd_reg	= 0x60,
+			},
+			[1] = {
+				.cmd_reg	= 0x61,
+			},
+			[2] = {
+				.cmd_reg	= 0x62,
+			},
+			[3] = {
+				.cmd_reg	= 0x63,
 			},
 		},
 	},
