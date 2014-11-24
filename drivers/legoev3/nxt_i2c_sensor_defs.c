@@ -2265,9 +2265,9 @@ const struct nxt_i2c_sensor_info nxt_i2c_sensor_defs[] = {
 			},
 			[3] = {
 				/**
-				 * [^acceleration-description]: 3 decimal places, range as was set by last command
-				 * [^accumulated-angle-description]: 2 decimal places, (-180 to 180)
-				 * [^rotational-speed-description]: 2 decimal places
+				 * [^acceleration-description]: three decimal places, range as was set by last command
+				 * [^accumulated-angle-description]: two decimal places, (-180 to 180)
+				 * [^rotational-speed-description]: two decimal places
 				 *
 				 * @description: All values
 				 * @value0: Z-axis accumulated angle
