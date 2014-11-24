@@ -2211,7 +2211,7 @@ const struct nxt_i2c_sensor_info nxt_i2c_sensor_defs[] = {
 		 * @vendor_part_name: Digital Gyroscope And Accelerometer
 		 * @vendor_website: http://www.minfinity.com/eng/page.php?Main=1&sub=1&tab=5
 		 * @default_address: 0x01
-		 * @default_address_footnote [^usage]
+		 * @default_address_footnote: [^usage]
 		 */
 		.name							= "mi-xg1300l",
 		.vendor_id						= "mnfinity", /* The sensor doesn't return vendor_id, it can't be autodetected this way */
