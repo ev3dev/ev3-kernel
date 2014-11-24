@@ -2211,8 +2211,7 @@ const struct nxt_i2c_sensor_info nxt_i2c_sensor_defs[] = {
 		 *
 		 * <pre><code>echo mi-cruizcore-xg1300 0x01 > /sys/bus/i2c/devices/i2c-<port+2>/new_device
 		 * </code></pre>
-		 *
-		 * Finding device class node:
+		 *		 
 		 * 
 		 * 		 
 		 * @vendor_name: Microinfinity
