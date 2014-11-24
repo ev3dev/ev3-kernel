@@ -2207,7 +2207,8 @@ const struct nxt_i2c_sensor_info nxt_i2c_sensor_defs[] = {
 		 * </code></pre>
 		 *
 		 * @vendor_name: Microinfinity
-		 * @vendor_part_name: CruizCore XG 1300L Digital Gyroscope And Accelerometer
+		 * @vendor_part_number: CruizCore XG 1300L
+		 * @vendor_part_name: Digital Gyroscope And Accelerometer
 		 * @vendor_website: http://www.minfinity.com/eng/page.php?Main=1&sub=1&tab=5
 		 * @default_address: 0x01
 		 * @default_address_footnote [^usage]
