@@ -314,7 +314,7 @@ static void mi_cruizcore_xg1300l_poll_cb(struct nxt_i2c_sensor_data *sensor)
 	struct msensor_mode_info *ms_mode_info =
 			&sensor->info.ms_mode_info[sensor->mode];
 
-	s16 *raw_as_s16=(s16*) ms_mode_info->raw_data;
+	s16 *raw_as_s16 = (s16*) ms_mode_info->raw_data;
 	
 	/*
 	 * Perform normal i2c read (just like nxt_i2c_sensor_poll_work).
