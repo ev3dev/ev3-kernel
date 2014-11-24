@@ -2213,7 +2213,7 @@ const struct nxt_i2c_sensor_info nxt_i2c_sensor_defs[] = {
 		 * @default_address_footnote [^usage]
 		 */
 		.name							= "mi-xg1300l",
-		.vendor_id						= "mnfinity",  	/* The sensor doesn't return vendor_id, it can't be autodetected this way */
+		.vendor_id						= "mnfinity", /* The sensor doesn't return vendor_id, it can't be autodetected this way */
 		.product_id					= "XG1300L",  /* The sensor doesn't return product_id, it can't be autodetected this way */
 		.num_modes						= 4,
 		.num_read_only_modes			= 4,
@@ -2304,7 +2304,10 @@ const struct nxt_i2c_sensor_info nxt_i2c_sensor_defs[] = {
 		.ms_cmd_info	= {
 			[0] = {
 				/**
-				 * [^reset-description]: recalculate bias drift, reset accumulated angle, set accelerometer scaling factor to 2G, this *has* to be done with sensor not moving and is strongly recommended to be called manually before work
+				 * [^reset-description]: recalculate bias drift, reset accumulated angle,
+				 * set accelerometer scaling factor to 2G,
+				 * this has to be done with sensor not moving
+				 * and is strongly recommended to be called manually before work
 				 *
 				 * @description: Reset device
 				 * @description_footnote: [^reset-description]

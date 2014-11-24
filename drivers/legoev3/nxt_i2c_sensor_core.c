@@ -131,10 +131,13 @@ static int nxt_i2c_sensor_send_command(void *context, u8 command)
 	struct nxt_i2c_sensor_data *sensor = context;
 	int err;
 
-	err=i2c_smbus_write_byte_data(sensor->client,
+	err = i2c_smbus_write_byte_data(sensor->client,
 		sensor->info.i2c_cmd_info[command].cmd_reg,
 		sensor->info.i2c_cmd_info[command].cmd_data);
 		
+	if (err)
+		return err;
+
 	if (sensor->info.ops.send_command_post_cb)
 		sensor->info.ops.send_command_post_cb(sensor, command);
 
