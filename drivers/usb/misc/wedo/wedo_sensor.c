@@ -185,6 +185,8 @@ const struct wedo_sensor_info wedo_sensor_defs[] = {
 				 * @value0_footnote: [^tilt-values]
 				 */
 				.name = "TILT",
+				.raw_max = 5,
+				.si_max = 5,
 				.data_sets = 1,
 				.data_type = MSENSOR_DATA_U8,
 			},
@@ -210,6 +212,10 @@ const struct wedo_sensor_info wedo_sensor_defs[] = {
 				 * @value2_footnote: [^axis-values]
 				 */
 				.name = "TILT-AXIS",
+				.raw_min = -1,
+				.raw_max = 1,
+				.si_min = -1,
+				.si_max = 1,
 				.data_sets = 3,
 				.data_type = MSENSOR_DATA_S8,
 			},
