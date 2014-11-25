@@ -2,6 +2,7 @@
  * DC motor device class for LEGO MINDSTORMS EV3
  *
  * Copyright (C) 2014 David Lechner <david@lechnology.com>
+ * Copyright (C) 2014 Ralph Hempel <rhempel@hempeldesigngroup.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -39,13 +40,20 @@ enum dc_motor_polarity {
 
 extern const char* dc_motor_polarity_values[];
 
+enum dc_motor_direction {
+	DC_MOTOR_DIRECTION_FORWARD,
+	DC_MOTOR_DIRECTION_REVERSE,
+	NUM_DC_MOTOR_DIRECTION
+};
+
+
 /**
  * @get_supported_commands: Return the supported commands as bit flags.
  * @get_command: Return the current command or negative error.
  * @set_command: Set the command for the motor. Returns 0 on success or
  * 	negative error;
- * @get_polarity: Return the current polarity.
- * @set_polarity: Set the polarity for the motor. Returns 0 on success or
+ * @get_direction: Return the current direction.
+ * @set_direction: Set the direction for the motor. Returns 0 on success or
  * 	negative error;
  * @get_duty_cycle: Returns the current duty cycle in percent (0 to 100).
  * @set_duty_cycle: Sets the duty cycle. Returns 0 on success or negative error.
@@ -53,12 +61,12 @@ extern const char* dc_motor_polarity_values[];
  */
 struct dc_motor_ops {
 	unsigned (*get_supported_commands)(void* context);
-	int (*get_command)(void* context);
-	int (*set_command)(void* context, unsigned command);
-	unsigned (*get_polarity)(void *context);
-	int (*set_polarity)(void *context, unsigned polarity);
+	enum dc_motor_command (*get_command)(void* context);
+	int (*set_command)(void* context, enum dc_motor_command);
+	enum dc_motor_direction (*get_direction)(void *context);
+	int (*set_direction)(void *context, enum dc_motor_direction direction);
 	unsigned (*get_duty_cycle)(void *context);
-	int (*set_duty_cycle)(void *context, unsigned duty);
+	int (*set_duty_cycle)(void *context, unsigned duty_cycle);
 	void *context;
 };
 

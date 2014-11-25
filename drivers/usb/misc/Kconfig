@@ -158,6 +158,8 @@ config USB_APPLEDISPLAY
 
 source "drivers/usb/misc/sisusbvga/Kconfig"
 
+source "drivers/usb/misc/wedo/Kconfig"
+
 config USB_LD
 	tristate "USB LD driver"
 	help
