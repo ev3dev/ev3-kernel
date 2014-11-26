@@ -13,6 +13,7 @@
  * GNU General Public License for more details.
  */
 
+#include <linux/leds.h>
 #include <linux/device.h>
 #include <linux/slab.h>
 
@@ -189,6 +190,83 @@ static void unregister_wedo_motor (struct wedo_port_device *wpd)
 }
 
 /*
+ * These functions handle registering led devices on WeDo ports
+ */
+
+struct wedo_lightbrick_data {
+	struct wedo_port_device *wpd;
+	struct led_classdev cdev;
+};
+
+static void wedo_lightbrick_set (struct led_classdev *cdev, enum led_brightness b)
+{
+	struct wedo_lightbrick_data *wld = container_of(cdev, struct wedo_lightbrick_data, cdev);
+	struct wedo_port_device *wpd = wld->wpd;
+	struct wedo_hub_device *whd = to_wedo_hub_device (wpd->dev.parent);
+
+	wpd->duty_cycle = b;
+
+	whd->event_callback (whd);
+}
+
+static enum led_brightness wedo_lightbrick_get (struct led_classdev *cdev)
+{
+	struct wedo_lightbrick_data *wld = container_of(cdev, struct wedo_lightbrick_data, cdev);
+	struct wedo_port_device *wpd = wld->wpd;
+
+	return wpd->duty_cycle;
+}
+
+static int register_wedo_lightbrick (struct wedo_port_device *wpd)
+{
+	struct wedo_lightbrick_data *wld = dev_get_drvdata(&wpd->dev);
+	int err;
+
+	if (wld)
+		return -EINVAL;
+
+	wld = kzalloc(sizeof(struct wedo_lightbrick_data), GFP_KERNEL);
+	if (!wld)
+		return -ENOMEM;
+
+	wld->wpd = wpd;
+
+	wld->cdev.name = wpd->port_name;
+	wld->cdev.brightness_set = wedo_lightbrick_set;
+	wld->cdev.brightness_get = wedo_lightbrick_get;
+	wld->cdev.default_trigger = NULL;
+
+	err = led_classdev_register (&wpd->dev, &wld->cdev);
+	if (err)
+		goto err_register_lightbrick;
+
+	dev_info(&wpd->dev, "Bound wedo lightbrick as led %s\n",
+				dev_name (wld->cdev.dev));
+
+	dev_set_drvdata (&wpd->dev, wld);
+
+	return 0;
+
+err_register_lightbrick:
+	kfree(wld);
+
+	return err;
+}
+
+static void unregister_wedo_lightbrick (struct wedo_port_device *wpd)
+{
+	struct wedo_lightbrick_data *wld = dev_get_drvdata(&wpd->dev);
+
+	if (!wld)
+		return;
+
+	led_classdev_unregister (&wld->cdev);
+
+	dev_set_drvdata(&wpd->dev, NULL);
+	kfree(wld);
+}
+
+/*
  * These functions handle registering devices on WeDo ports.
  *
  * There are only two generic types if devices that we handle:
@@ -216,6 +294,9 @@ static int register_wedo_device (struct wedo_port_device *wpd, enum wedo_type_id
 	case WEDO_TYPE_MOTOR:
 		err = register_wedo_motor (wpd);
 		break;
+	case WEDO_TYPE_LIGHTBRICK:
+		err = register_wedo_lightbrick (wpd);
+		break;
 	default:
 		break;
 	}
@@ -233,6 +314,9 @@ static void unregister_wedo_device (struct wedo_port_device *wpd)
 		break;
 	case WEDO_TYPE_MOTOR:
 		unregister_wedo_motor (wpd);
+		break;
+	case WEDO_TYPE_LIGHTBRICK:
+		unregister_wedo_lightbrick (wpd);
 		break;
 	default:
 		break;
