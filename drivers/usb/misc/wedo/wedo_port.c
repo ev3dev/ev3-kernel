@@ -232,7 +232,7 @@ static int register_wedo_lightbrick (struct wedo_port_device *wpd)
 	wld->wpd = wpd;
 
 	wld->cdev.name = wpd->port_name;
-	wld->cdev.max_brightness = 127;
+	wld->cdev.max_brightness = 100;
 	wld->cdev.brightness_set = wedo_lightbrick_set;
 	wld->cdev.brightness_get = wedo_lightbrick_get;
 	wld->cdev.default_trigger = NULL;
