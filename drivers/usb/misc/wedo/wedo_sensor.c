@@ -20,7 +20,7 @@ static void wedo_raw_cb(void *context)
 {
 	struct wedo_sensor_data *wsd = context;
 
-	wsd->ms.mode_info[wsd->mode].raw_data[0] = wsd->wpd->input;
+	wsd->ms.mode_info[wsd->ms.mode].raw_data[0] = wsd->wpd->input;
 }
 
 enum wedo_tilt_status_id {
@@ -85,40 +85,40 @@ static void wedo_tilt_axis_cb(void *context)
 	switch (wedo_update_tilt_status (wsd))
 	{
 	case WEDO_TILT_STATUS_BACK:
-		wsd->ms.mode_info[wsd->mode].raw_data[0] = 0;
-		wsd->ms.mode_info[wsd->mode].raw_data[1] = -1;
-		wsd->ms.mode_info[wsd->mode].raw_data[2] = 1;
+		wsd->ms.mode_info[wsd->ms.mode].raw_data[0] = 0;
+		wsd->ms.mode_info[wsd->ms.mode].raw_data[1] = -1;
+		wsd->ms.mode_info[wsd->ms.mode].raw_data[2] = 1;
 		break;
 
 	case WEDO_TILT_STATUS_RIGHT:
-		wsd->ms.mode_info[wsd->mode].raw_data[0] = 1;
-		wsd->ms.mode_info[wsd->mode].raw_data[1] = 0;
-		wsd->ms.mode_info[wsd->mode].raw_data[2] = 1;
+		wsd->ms.mode_info[wsd->ms.mode].raw_data[0] = 1;
+		wsd->ms.mode_info[wsd->ms.mode].raw_data[1] = 0;
+		wsd->ms.mode_info[wsd->ms.mode].raw_data[2] = 1;
 		break;
 
 	case WEDO_TILT_STATUS_FRONT:
-		wsd->ms.mode_info[wsd->mode].raw_data[0] = 0;
-		wsd->ms.mode_info[wsd->mode].raw_data[1] = 1;
-		wsd->ms.mode_info[wsd->mode].raw_data[2] = 1;
+		wsd->ms.mode_info[wsd->ms.mode].raw_data[0] = 0;
+		wsd->ms.mode_info[wsd->ms.mode].raw_data[1] = 1;
+		wsd->ms.mode_info[wsd->ms.mode].raw_data[2] = 1;
 		break;
 
 	case WEDO_TILT_STATUS_LEFT:
-		wsd->ms.mode_info[wsd->mode].raw_data[0] = -1;
-		wsd->ms.mode_info[wsd->mode].raw_data[1] = 0;
-		wsd->ms.mode_info[wsd->mode].raw_data[2] = 1;
+		wsd->ms.mode_info[wsd->ms.mode].raw_data[0] = -1;
+		wsd->ms.mode_info[wsd->ms.mode].raw_data[1] = 0;
+		wsd->ms.mode_info[wsd->ms.mode].raw_data[2] = 1;
 		break;
 
 	case WEDO_TILT_STATUS_LEVEL:
-		wsd->ms.mode_info[wsd->mode].raw_data[0] = 0;
-		wsd->ms.mode_info[wsd->mode].raw_data[1] = 0;
-		wsd->ms.mode_info[wsd->mode].raw_data[2] = 1;
+		wsd->ms.mode_info[wsd->ms.mode].raw_data[0] = 0;
+		wsd->ms.mode_info[wsd->ms.mode].raw_data[1] = 0;
+		wsd->ms.mode_info[wsd->ms.mode].raw_data[2] = 1;
 		break;
 
 	case WEDO_TILT_STATUS_UNKNOWN:
 	default:
-		wsd->ms.mode_info[wsd->mode].raw_data[0] = 0;
-		wsd->ms.mode_info[wsd->mode].raw_data[1] = 0;
-		wsd->ms.mode_info[wsd->mode].raw_data[2] = 0;
+		wsd->ms.mode_info[wsd->ms.mode].raw_data[0] = 0;
+		wsd->ms.mode_info[wsd->ms.mode].raw_data[1] = 0;
+		wsd->ms.mode_info[wsd->ms.mode].raw_data[2] = 0;
 		break;
 	}
 }
@@ -130,28 +130,28 @@ static void wedo_tilt_status_cb(void *context)
 	switch (wedo_update_tilt_status (wsd))
 	{
 	case WEDO_TILT_STATUS_BACK:
-		wsd->ms.mode_info[wsd->mode].raw_data[0] = 2;
+		wsd->ms.mode_info[wsd->ms.mode].raw_data[0] = 2;
 		break;
 
 	case WEDO_TILT_STATUS_RIGHT:
-		wsd->ms.mode_info[wsd->mode].raw_data[0] = 4;
+		wsd->ms.mode_info[wsd->ms.mode].raw_data[0] = 4;
 		break;
 
 	case WEDO_TILT_STATUS_FRONT:
-		wsd->ms.mode_info[wsd->mode].raw_data[0] = 1;
+		wsd->ms.mode_info[wsd->ms.mode].raw_data[0] = 1;
 		break;
 
 	case WEDO_TILT_STATUS_LEFT:
-		wsd->ms.mode_info[wsd->mode].raw_data[0] = 3;
+		wsd->ms.mode_info[wsd->ms.mode].raw_data[0] = 3;
 		break;
 
 	case WEDO_TILT_STATUS_LEVEL:
-		wsd->ms.mode_info[wsd->mode].raw_data[0] = 0;
+		wsd->ms.mode_info[wsd->ms.mode].raw_data[0] = 0;
 		break;
 
 	case WEDO_TILT_STATUS_UNKNOWN:
 	default:
-		wsd->ms.mode_info[wsd->mode].raw_data[0] = 5;
+		wsd->ms.mode_info[wsd->ms.mode].raw_data[0] = 5;
 		break;
 	}
 }

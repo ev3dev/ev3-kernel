@@ -53,6 +53,4 @@ struct wedo_sensor_data {
 	int debounce_count;
 	int debounce_status;
 	int status;
-
-	u8 mode;
 };

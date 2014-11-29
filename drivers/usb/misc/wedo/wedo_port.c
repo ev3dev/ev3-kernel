@@ -63,21 +63,12 @@ const struct wedo_id_info wedo_id_infos[] = {
  * as well as the mode callbacks
  */
 
-static u8 wedo_sensor_get_mode(void *context)
-{
-	struct wedo_sensor_data *wsd = context;
-
-	return wsd->mode;
-}
-
 static int wedo_sensor_set_mode(void *context, u8 mode)
 {
 	struct wedo_sensor_data *wsd = context;
 
 	if (mode >= wsd->info.num_modes)
 		return -EINVAL;
-
-	wsd->mode = mode;
 
 	return 0;
 }
@@ -105,7 +96,6 @@ static int register_wedo_sensor (struct wedo_port_device *wpd, enum wedo_sensor_
 
 	wsd->ms.num_modes	= wsd->info.num_modes;
 	wsd->ms.mode_info	= wsd->info.ms_mode_info;
-	wsd->ms.get_mode	= wedo_sensor_get_mode;
 	wsd->ms.set_mode	= wedo_sensor_set_mode;
 
 	wsd->ms.context		= wsd;
@@ -400,13 +390,8 @@ void wedo_port_update_status(struct wedo_port_device *wpd)
 	case WEDO_TYPE_TILT:
 	case WEDO_TYPE_MOTION:
 		wsd = dev_get_drvdata(&wpd->dev);
-
-		if (wsd) {
-			if (wsd->info.wedo_mode_info[wsd->mode].analog_cb) {
-				wsd->info.wedo_mode_info[wsd->mode].analog_cb (wsd);
-			}
-		}
-
+		if (wsd && wsd->info.wedo_mode_info[wsd->ms.mode].analog_cb)
+			wsd->info.wedo_mode_info[wsd->ms.mode].analog_cb (wsd);
 		break;
 	case WEDO_TYPE_MOTOR:
 		wmd = dev_get_drvdata(&wpd->dev);
