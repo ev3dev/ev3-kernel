@@ -1,5 +1,5 @@
 /*
- * Mindstorms port device class for LEGO MINDSTORMS EV3
+ * LEGO port class driver
  *
  * Copyright (C) 2014 David Lechner <david@lechnology.com>
  *
@@ -13,25 +13,40 @@
  * GNU General Public License for more details.
  */
 
-#ifndef _LINUX_LEGOEV3_MPORT_CLASS_H
-#define _LINUX_LEGOEV3_MPORT_CLASS_H
+#ifndef _LEGO_PORT_CLASS_H_
+#define _LEGO_PORT_CLASS_H_
 
 #include <linux/device.h>
 #include <linux/types.h>
 
-#define MPORT_NAME_SIZE	30
+#define LEGO_PORT_NAME_SIZE	30
 
 /**
- * struct mport_mode_info
- * @name: The name of this mode.
+ * struct lego_port_type
+ *
+ * A static lego_port_type should be declared by each driver that registers
+ * a port. This info is used by other driver to get information from the port.
+ *
+ * @name: The name of the type.
+ * @ops: Pointer to type-defined callback operations.
  */
-struct mport_mode_info {
-	char name[MPORT_NAME_SIZE + 1];
+struct lego_port_type {
+	const char *name;
+	const void *ops;
 };
 
 /**
- * struct mport_device
+ * struct lego_port_mode_info
+ * @name: The name of this mode.
+ */
+struct lego_port_mode_info {
+	char name[LEGO_PORT_NAME_SIZE + 1];
+};
+
+/**
+ * struct lego_port_device
  * @port_name: Name of the port.
+ * @port_type: The type of the port.
  * @num_modes: The number of valid modes.
  * @mode: The current mode.
  * @mode_info: Array of mode information.
@@ -41,11 +56,12 @@ struct mport_mode_info {
  * @context: Pointer to pass back to callback functions.
  * @dev: The device data structure.
  */
-struct mport_device {
-	char port_name[MPORT_NAME_SIZE + 1];
+struct lego_port_device {
+	char port_name[LEGO_PORT_NAME_SIZE + 1];
+	const struct lego_port_type *type;
 	u8 num_modes;
 	u8 mode;
-	const struct mport_mode_info *mode_info;
+	const struct lego_port_mode_info *mode_info;
 	int (*set_mode)(void *context, u8 mode);
 	int (*set_device)(void *context, const char *device_name);
 	const char *(*get_status)(void *context);
@@ -54,11 +70,12 @@ struct mport_device {
 	struct device dev;
 };
 
-#define to_mport_device(_dev) container_of(_dev, struct mport_device, dev)
+#define to_lego_port_device(_dev) container_of(_dev, struct lego_port_device, dev)
 
-extern int register_mport(struct mport_device *mport, struct device *parent);
-extern void unregister_mport(struct mport_device *mport);
+extern int lego_port_register(struct lego_port_device *lego_port,
+			      struct device *parent);
+extern void lego_port_unregister(struct lego_port_device *lego_port);
 
-extern struct class mport_class;
+extern struct class lego_port_class;
 
-#endif /* _LINUX_LEGOEV3_MPORT_CLASS_H */
+#endif /* _LEGO_PORT_CLASS_H_ */
