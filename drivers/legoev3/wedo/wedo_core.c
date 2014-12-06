@@ -20,8 +20,8 @@
 #include <linux/slab.h>
 #include <linux/module.h>
 
-#include <linux/wedo/wedo_port.h>
-#include <linux/wedo/wedo_hub.h>
+#include "wedo_port.h"
+#include "wedo_hub.h"
 
 /*
  * Version Information

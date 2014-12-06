@@ -17,10 +17,10 @@
 #include <linux/device.h>
 #include <linux/slab.h>
 
-#include <linux/wedo/wedo_hub.h>
-#include <linux/wedo/wedo_port.h>
-#include <linux/wedo/wedo_sensor.h>
-#include <linux/wedo/wedo_motor.h>
+#include "wedo_hub.h"
+#include "wedo_port.h"
+#include "wedo_sensor.h"
+#include "wedo_motor.h"
 
 /*
  * -----------------------------------------------------------------------------
@@ -59,7 +59,7 @@ const struct wedo_id_info wedo_id_infos[] = {
 };
 
 /*
- * These functions handle registering msensor devices on WeDo ports
+ * These functions handle registering lego-sensor devices on WeDo ports
  * as well as the mode callbacks
  */
 
@@ -89,20 +89,20 @@ static int register_wedo_sensor (struct wedo_port_device *wpd, enum wedo_sensor_
 
 	memcpy (&wsd->info, &wedo_sensor_defs[type], sizeof(struct wedo_sensor_info));
 
-	strncpy (wsd->ms.name, wsd->info.name, MSENSOR_NAME_SIZE);
-	strncpy (wsd->ms.port_name, wpd->port_name, MSENSOR_NAME_SIZE);
+	strncpy (wsd->sensor.name, wsd->info.name, LEGO_SENSOR_NAME_SIZE);
+	strncpy (wsd->sensor.port_name, wpd->port_name, LEGO_SENSOR_NAME_SIZE);
 
-	dev_info(&wpd->dev, "name %s port_name %s\n", wsd->ms.name, wsd->ms.port_name );
+	dev_info(&wpd->dev, "name %s port_name %s\n", wsd->sensor.name, wsd->sensor.port_name );
 
-	wsd->ms.num_modes	= wsd->info.num_modes;
-	wsd->ms.mode_info	= wsd->info.ms_mode_info;
-	wsd->ms.set_mode	= wedo_sensor_set_mode;
+	wsd->sensor.num_modes	= wsd->info.num_modes;
+	wsd->sensor.mode_info	= wsd->info.mode_info;
+	wsd->sensor.set_mode	= wedo_sensor_set_mode;
 
-	wsd->ms.context		= wsd;
+	wsd->sensor.context		= wsd;
 
-	err = register_msensor(&wsd->ms, &wpd->dev);
+	err = register_lego_sensor(&wsd->sensor, &wpd->dev);
 	if (err)
-		goto err_register_msensor;
+		goto err_register_lego_sensor;
 
 	dev_set_drvdata(&wpd->dev, wsd);
 
@@ -110,7 +110,7 @@ static int register_wedo_sensor (struct wedo_port_device *wpd, enum wedo_sensor_
 
 	return 0;
 
-err_register_msensor:
+err_register_lego_sensor:
 	kfree(wsd);
 
 	return err;
@@ -123,7 +123,7 @@ static void unregister_wedo_sensor (struct wedo_port_device *wpd)
 	if (!wsd)
 		return;
 
-	unregister_msensor(&wsd->ms);
+	unregister_lego_sensor(&wsd->sensor);
 	dev_set_drvdata(&wpd->dev, NULL);
 	kfree(wsd);
 }
@@ -262,8 +262,8 @@ static void unregister_wedo_lightbrick (struct wedo_port_device *wpd)
  *
  * There are only two generic types if devices that we handle:
  *
- * Input device ids get registered as msensor class devices
- * Output device ids get registered as dc_motor class devices
+ * Input device ids get registered as lego-sensor class devices
+ * Output device ids get registered as dc-motor or leds class devices
  *
  * Currently we only have the tilt and motion sensors for testing
  */
@@ -390,8 +390,8 @@ void wedo_port_update_status(struct wedo_port_device *wpd)
 	case WEDO_TYPE_TILT:
 	case WEDO_TYPE_MOTION:
 		wsd = dev_get_drvdata(&wpd->dev);
-		if (wsd && wsd->info.wedo_mode_info[wsd->ms.mode].analog_cb)
-			wsd->info.wedo_mode_info[wsd->ms.mode].analog_cb (wsd);
+		if (wsd && wsd->info.wedo_mode_info[wsd->sensor.mode].analog_cb)
+			wsd->info.wedo_mode_info[wsd->sensor.mode].analog_cb (wsd);
 		break;
 	case WEDO_TYPE_MOTOR:
 		wmd = dev_get_drvdata(&wpd->dev);

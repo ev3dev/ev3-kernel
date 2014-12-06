@@ -18,10 +18,11 @@
 
 #include <linux/device.h>
 #include <linux/types.h>
-
-#include <linux/wedo/wedo_port.h>
-#include <linux/legoev3/msensor_class.h>
 #include <linux/legoev3/dc_motor_class.h>
+
+#include <lego_sensor_class.h>
+
+#include "wedo_port.h"
 
 #define WEDO_HUB_NAME_SIZE	30
 

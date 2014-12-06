@@ -13,9 +13,9 @@
  * GNU General Public License for more details.
  */
 
-#include <linux/wedo/wedo_hub.h>
-#include <linux/wedo/wedo_port.h>
-#include <linux/wedo/wedo_motor.h>
+#include "wedo_hub.h"
+#include "wedo_port.h"
+#include "wedo_motor.h"
 
 unsigned wedo_get_supported_commands (void* context)
 {

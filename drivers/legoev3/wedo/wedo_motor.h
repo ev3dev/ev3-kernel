@@ -15,7 +15,7 @@
 
 #include <linux/legoev3/dc_motor_class.h>
 
-#include <linux/wedo/wedo_port.h>
+#include "wedo_port.h"
 
 extern const struct dc_motor_ops wedo_motor_ops;
 

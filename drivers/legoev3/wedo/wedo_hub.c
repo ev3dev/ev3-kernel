@@ -74,8 +74,8 @@
 
 #include <linux/device.h>
 
-#include <linux/wedo/wedo_hub.h>
-#include <linux/wedo/wedo_port.h>
+#include "wedo_hub.h"
+#include "wedo_port.h"
 
 static ssize_t clear_error_store(struct device *dev,
 				 struct device_attribute *attr,
