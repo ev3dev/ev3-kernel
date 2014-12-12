@@ -5,6 +5,8 @@
 # Rewritten to use lists instead of if-statements.
 #
 
+obj-$(CONFIG_LEGO_DRIVERS)	+= lego/
+
 obj-y				+= irqchip/
 obj-y				+= bus/
 
@@ -158,4 +160,3 @@ obj-$(CONFIG_NTB)		+= ntb/
 obj-$(CONFIG_FMC)		+= fmc/
 obj-$(CONFIG_POWERCAP)		+= powercap/
 obj-$(CONFIG_MCB)		+= mcb/
-obj-$(CONFIG_LEGOEV3_DRIVERS)	+= legoev3/
