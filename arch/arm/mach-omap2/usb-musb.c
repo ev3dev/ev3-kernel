@@ -38,7 +38,7 @@ static struct musb_hdrc_config musb_config = {
 };
 
 static struct musb_hdrc_platform_data musb_plat = {
-	.mode		= MUSB_PERIPHERAL,
+	.mode		= MUSB_OTG,
 
 	/* .clock is set dynamically */
 	.config		= &musb_config,
