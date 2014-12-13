@@ -1,5 +1,5 @@
 /*
- * Output Port driver for LEGO Mindstorms EV3
+ * Output Port driver for LEGO MINDSTORMS EV3
  *
  * Copyright (C) 2013-2014 David Lechner <david@lechnology.com>
  *
@@ -17,10 +17,10 @@
 #define __LINUX_LEGOEV3_EV3_OUTPUT_PORT_H
 
 #include <linux/interrupt.h>
-#include <linux/legoev3/dc_motor_class.h>
 
 #include <mach/legoev3.h>
 
+#include <dc_motor_class.h>
 /*
  * TODO: This should be moved to ev3_output_port.c and ev3_tacho_motor.c should
  * use an id lookup table like sensors do for the various motor types.
@@ -32,15 +32,6 @@ enum motor_type {
 	MOTOR_TACHO,
 	MOTOR_ERR,
 	NUM_MOTOR
-};
-
-struct ev3_output_port_platform_data {
-	enum ev3_output_port_id id;
-	unsigned pin1_gpio;
-	unsigned pin2_gpio;
-	unsigned pin5_gpio;
-	unsigned pin5_int_gpio;
-	unsigned pin6_dir_gpio;
 };
 
 struct ev3_motor_platform_data {

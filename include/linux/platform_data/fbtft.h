@@ -19,6 +19,9 @@
 #ifndef __LINUX_PLATFORM_DATA_FBTFT_H
 #define __LINUX_PLATFORM_DATA_FBTFT_H
 
+#include <linux/fb.h>
+#include <linux/hrtimer.h>
+
 #define FBTFT_GPIO_NAME_SIZE	32
 
 /**

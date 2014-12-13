@@ -19,17 +19,11 @@
 #include <linux/device.h>
 #include <linux/hrtimer.h>
 #include <linux/platform_device.h>
-#include <linux/legoev3/ev3_input_port.h>
-#include <linux/legoev3/ev3_output_port.h>
 
-#include <mach/legoev3.h>
+#include "ev3_input_port.h"
+#include "ev3_output_port.h"
 
 #define LEGOEV3_PORT_NAME_SIZE 30
-
-struct legoev3_ports_platform_data {
-	struct ev3_input_port_platform_data  input_port_data[NUM_EV3_PORT_IN];
-	struct ev3_output_port_platform_data output_port_data[NUM_EV3_PORT_OUT];
-};
 
 struct legoev3_port_in_ops {
 	int (*get_pin1_mv)(struct legoev3_port *);

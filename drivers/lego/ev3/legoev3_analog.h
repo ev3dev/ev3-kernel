@@ -17,17 +17,10 @@
 #define __LINUX_LEGOEV3_ANALOG_H
 
 #include <linux/spi/spi.h>
+
 #include <mach/legoev3.h>
 
 #define to_legoev3_analog_device(x) container_of((x), struct legoev3_analog_device, dev)
-
-struct legoev3_analog_platform_data {
-	u8 in_pin1_ch[NUM_EV3_PORT_IN];
-	u8 in_pin6_ch[NUM_EV3_PORT_IN];
-	u8 out_pin5_ch[NUM_EV3_PORT_OUT];
-	u8 batt_volt_ch;
-	u8 batt_curr_ch;
-};
 
 typedef void (*legoev3_analog_cb_func_t)(void *context);
 

@@ -25,10 +25,7 @@
 #include <linux/input.h>
 #include <linux/leds.h>
 #include <linux/leds_pwm.h>
-#include <linux/legoev3/legoev3_analog.h>
-#include <linux/legoev3/legoev3_bluetooth.h>
-#include <linux/legoev3/legoev3_ports.h>
-#include <linux/power/legoev3_battery.h>
+#include <linux/platform_data/legoev3.h>
 #include <linux/platform_device.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/partitions.h>

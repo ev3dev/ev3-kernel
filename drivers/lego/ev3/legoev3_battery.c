@@ -1,5 +1,5 @@
 /*
- * Battery driver for the LEGO Mindstorms EV3
+ * Battery driver for the LEGO MINDSTORMS EV3
  *
  * Copyright (c) 2013 David Lechner <david@lechnology.com>
  *
@@ -14,8 +14,7 @@
 #include <linux/err.h>
 #include <linux/platform_device.h>
 #include <linux/power_supply.h>
-#include <linux/power/legoev3_battery.h>
-#include <linux/legoev3/legoev3_analog.h>
+#include <linux/platform_data/legoev3.h>
 #include <linux/delay.h>
 #include <linux/spinlock.h>
 #include <linux/interrupt.h>
@@ -23,6 +22,8 @@
 #include <linux/hrtimer.h>
 
 #include <mach/legoev3.h>
+
+#include "legoev3_analog.h"
 
 #define LEGOEV3_BATTERY_CHARGE_TIME (NSEC_PER_SEC / 10)
 

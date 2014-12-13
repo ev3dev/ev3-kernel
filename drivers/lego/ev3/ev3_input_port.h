@@ -1,5 +1,5 @@
 /*
- * Input Port driver for LEGO Mindstorms EV3
+ * Input Port driver for LEGO MINDSTORMS EV3
  *
  * Copyright (C) 2013-2014 David Lechner <david@lechnology.com>
  *
@@ -16,27 +16,14 @@
 #ifndef __LINUX_LEGOEV3_EV3_INPUT_PORT_H
 #define __LINUX_LEGOEV3_EV3_INPUT_PORT_H
 
-#include <linux/legoev3/legoev3_analog.h>
 #include <mach/legoev3.h>
+
+#include "legoev3_analog.h"
 
 enum ev3_input_port_gpio_state {
 	EV3_INPUT_PORT_GPIO_FLOAT,
 	EV3_INPUT_PORT_GPIO_LOW,
 	EV3_INPUT_PORT_GPIO_HIGH,
-};
-
-struct ev3_input_port_platform_data {
-	enum ev3_input_port_id id;
-	unsigned pin1_gpio;
-	unsigned pin2_gpio;
-	unsigned pin5_gpio;
-	unsigned pin6_gpio;
-	unsigned buf_ena_gpio;
-	unsigned i2c_clk_gpio;
-	unsigned i2c_dev_id;
-	unsigned i2c_pin_mux;
-	unsigned uart_pin_mux;
-	const char *uart_tty;
 };
 
 /**
@@ -54,6 +41,6 @@ extern void ev3_input_port_unregister_i2c(struct legoev3_port *);
 extern int ev3_input_port_enable_uart(struct legoev3_port *in_port);
 extern void ev3_input_port_disable_uart(struct legoev3_port *in_port);
 
-#include <linux/legoev3/legoev3_ports.h>
+#include "legoev3_ports.h"
 
 #endif /* __LINUX_LEGOEV3_EV3_INPUT_PORT_H */
