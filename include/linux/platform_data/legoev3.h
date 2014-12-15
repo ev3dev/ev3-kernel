@@ -56,7 +56,7 @@ struct legoev3_bluetooth_platform_data {
 };
 
 struct ev3_input_port_platform_data {
-	enum ev3_input_port_id id;
+	enum legoev3_input_port_id id;
 	unsigned pin1_gpio;
 	unsigned pin2_gpio;
 	unsigned pin5_gpio;
@@ -70,7 +70,7 @@ struct ev3_input_port_platform_data {
 };
 
 struct ev3_output_port_platform_data {
-	enum ev3_output_port_id id;
+	enum legoev3_output_port_id id;
 	unsigned pin1_gpio;
 	unsigned pin2_gpio;
 	unsigned pin5_gpio;
@@ -81,6 +81,21 @@ struct ev3_output_port_platform_data {
 struct legoev3_ports_platform_data {
 	struct ev3_input_port_platform_data  input_port_data[NUM_EV3_PORT_IN];
 	struct ev3_output_port_platform_data output_port_data[NUM_EV3_PORT_OUT];
+};
+
+enum motor_type {
+	MOTOR_NONE,
+	MOTOR_NEWTACHO,
+	MOTOR_MINITACHO,
+	MOTOR_TACHO,
+	MOTOR_ERR,
+	NUM_MOTOR
+};
+
+struct ev3_motor_platform_data {
+	unsigned tacho_int_gpio;
+	unsigned tacho_dir_gpio;
+	enum motor_type motor_type;
 };
 
 #endif /* _PLATFORM_DATA_LEGOEV3_H */

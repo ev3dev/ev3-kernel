@@ -564,7 +564,7 @@ static irqreturn_t legoev3_fiq_gpio_irq_i2c_port_callback(int irq, void *port_da
  *
  * Returns 0 if the port is available or -EBUSY if it has already be requested.
  */
-int legoev3_fiq_request_port(enum ev3_input_port_id port_id, int sda_pin,
+int legoev3_fiq_request_port(enum legoev3_input_port_id port_id, int sda_pin,
 			     int scl_pin)
 {
 	struct legoev3_fiq_port_i2c_data *data;
@@ -603,7 +603,7 @@ EXPORT_SYMBOL_GPL(legoev3_fiq_request_port);
  *	specified port.
  * @port_id: The port identifier.
  */
-void legoev3_fiq_release_port(enum ev3_input_port_id port_id)
+void legoev3_fiq_release_port(enum legoev3_input_port_id port_id)
 {
 	struct legoev3_fiq_port_i2c_data *data = &legoev3_fiq_data->port_data[port_id];
 
@@ -627,7 +627,7 @@ EXPORT_SYMBOL_GPL(legoev3_fiq_release_port);
  * You should only call this for a port that returned successfully from
  * legoev3_fiq_request_port.
  */
-int legoev3_fiq_start_xfer(enum ev3_input_port_id port_id,
+int legoev3_fiq_start_xfer(enum legoev3_input_port_id port_id,
 			   struct i2c_msg msgs[], int num_msg,
 			   void (*complete)(int, void *), void *context)
 {

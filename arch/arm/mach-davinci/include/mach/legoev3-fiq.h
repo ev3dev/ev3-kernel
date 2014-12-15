@@ -43,10 +43,10 @@ struct legoev3_fiq_platform_data {
 	int status_gpio;
 };
 
-extern int legoev3_fiq_request_port(enum ev3_input_port_id port_id,
+extern int legoev3_fiq_request_port(enum legoev3_input_port_id port_id,
 				    int sda_pin, int scl_pin);
-extern void legoev3_fiq_release_port(enum ev3_input_port_id port_id);
-extern int legoev3_fiq_start_xfer(enum ev3_input_port_id port_id,
+extern void legoev3_fiq_release_port(enum legoev3_input_port_id port_id);
+extern int legoev3_fiq_start_xfer(enum legoev3_input_port_id port_id,
 				  struct i2c_msg msgs[], int num_msg,
 				  void (*complete)(int, void *), void *context);
 extern int legoev3_fiq_ehrpwm_request(void);

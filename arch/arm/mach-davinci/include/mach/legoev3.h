@@ -12,7 +12,7 @@
 #ifndef __ASM_ARCH_DAVINCI_LEGOEV3_H
 #define __ASM_ARCH_DAVINCI_LEGOEV3_H
 
-enum ev3_input_port_id {
+enum legoev3_input_port_id {
 	EV3_PORT_IN1,
 	EV3_PORT_IN2,
 	EV3_PORT_IN3,
@@ -20,7 +20,7 @@ enum ev3_input_port_id {
 	NUM_EV3_PORT_IN,
 };
 
-enum ev3_output_port_id {
+enum legoev3_output_port_id {
 	EV3_PORT_OUT1,
 	EV3_PORT_OUT2,
 	EV3_PORT_OUT3,
