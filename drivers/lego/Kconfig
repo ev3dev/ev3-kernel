@@ -90,6 +90,13 @@ config EV3_UART_SENSORS
 	help
 	  Select Y to enable support for EV3 UART sensors.
 
+config LEGO_LEDS
+	tristate "LEGO LED support"
+	default y
+	depends on LEDS_CLASS
+	help
+	  Select Y to enable support for LEGO LED devices.
+
 config LEGOEV3_MOTORS
 	tristate "EV3 motor support"
 	default y
