@@ -1838,6 +1838,8 @@ out:
 
 int btrfs_release_file(struct inode *inode, struct file *filp)
 {
+	if (filp->private_data)
+		btrfs_ioctl_trans_end(filp);
 	/*
 	 * ordered_data_close is set by settattr when we are about to truncate
 	 * a file from a non-zero size to a zero size.  This tries to
@@ -1845,26 +1847,8 @@ int btrfs_release_file(struct inode *inode, struct file *filp)
 	 * application were using truncate to replace a file in place.
 	 */
 	if (test_and_clear_bit(BTRFS_INODE_ORDERED_DATA_CLOSE,
-			       &BTRFS_I(inode)->runtime_flags)) {
-		struct btrfs_trans_handle *trans;
-		struct btrfs_root *root = BTRFS_I(inode)->root;
-
-		/*
-		 * We need to block on a committing transaction to keep us from
-		 * throwing a ordered operation on to the list and causing
-		 * something like sync to deadlock trying to flush out this
-		 * inode.
-		 */
-		trans = btrfs_start_transaction(root, 0);
-		if (IS_ERR(trans))
-			return PTR_ERR(trans);
-		btrfs_add_ordered_operation(trans, BTRFS_I(inode)->root, inode);
-		btrfs_end_transaction(trans, root);
-		if (inode->i_size > BTRFS_ORDERED_OPERATIONS_FLUSH_LIMIT)
+			       &BTRFS_I(inode)->runtime_flags))
 			filemap_flush(inode->i_mapping);
-	}
-	if (filp->private_data)
-		btrfs_ioctl_trans_end(filp);
 	return 0;
 }
 
@@ -2638,22 +2622,27 @@ static int find_desired_extent(struct inode *inode, loff_t *offset, int whence)
 	struct btrfs_root *root = BTRFS_I(inode)->root;
 	struct extent_map *em = NULL;
 	struct extent_state *cached_state = NULL;
-	u64 lockstart = *offset;
-	u64 lockend = i_size_read(inode);
-	u64 start = *offset;
-	u64 len = i_size_read(inode);
+	u64 lockstart;
+	u64 lockend;
+	u64 start;
+	u64 len;
 	int ret = 0;
 
-	lockend = max_t(u64, root->sectorsize, lockend);
-	if (lockend <= lockstart)
-		lockend = lockstart + root->sectorsize;
-
-	lockend--;
-	len = lockend - lockstart + 1;
-
-	len = max_t(u64, len, root->sectorsize);
 	if (inode->i_size == 0)
 		return -ENXIO;
+
+	/*
+	 * *offset can be negative, in this case we start finding DATA/HOLE from
+	 * the very start of the file.
+	 */
+	start = max_t(loff_t, 0, *offset);
+
+	lockstart = round_down(start, root->sectorsize);
+	lockend = round_up(i_size_read(inode), root->sectorsize);
+	if (lockend <= lockstart)
+		lockend = lockstart + root->sectorsize;
+	lockend--;
+	len = lockend - lockstart + 1;
 
 	lock_extent_bits(&BTRFS_I(inode)->io_tree, lockstart, lockend, 0,
 			 &cached_state);

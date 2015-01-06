@@ -2166,6 +2166,13 @@ intel_dp_dpcd_read_wake(struct drm_dp_aux *aux, unsigned int offset,
 	ssize_t ret;
 	int i;
 
+	/*
+	 * Sometime we just get the same incorrect byte repeated
+	 * over the entire buffer. Doing just one throw away read
+	 * initially seems to "solve" it.
+	 */
+	drm_dp_dpcd_read(aux, DP_DPCD_REV, buffer, 1);
+
 	for (i = 0; i < 3; i++) {
 		ret = drm_dp_dpcd_read(aux, offset, buffer, size);
 		if (ret == size)
@@ -3311,6 +3318,9 @@ intel_dp_check_link_status(struct intel_dp *intel_dp)
 		return;
 
 	if (WARN_ON(!intel_encoder->base.crtc))
+		return;
+
+	if (!to_intel_crtc(intel_encoder->base.crtc)->active)
 		return;
 
 	/* Try to read receiver status if the link appears to be up */
