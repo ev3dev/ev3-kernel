@@ -83,19 +83,20 @@ struct legoev3_ports_platform_data {
 	struct ev3_output_port_platform_data output_port_data[NUM_EV3_PORT_OUT];
 };
 
-enum motor_type {
-	MOTOR_NONE,
-	MOTOR_NEWTACHO,
-	MOTOR_MINITACHO,
-	MOTOR_TACHO,
-	MOTOR_ERR,
-	NUM_MOTOR
+/*
+ * TODO: These motor type ids should actually become driver device_id type
+ * identifiers like sensors and other drivers.
+ */
+enum tacho_motor_type_id {
+	TACHO_MOTOR_EV3_LARGE,
+	TACHO_MOTOR_EV3_MEDIUM,
+	TACHO_MOTOR_EV3_NEW,
 };
 
 struct ev3_motor_platform_data {
 	unsigned tacho_int_gpio;
 	unsigned tacho_dir_gpio;
-	enum motor_type motor_type;
+	enum tacho_motor_type_id motor_type_id;
 };
 
 #endif /* _PLATFORM_DATA_LEGOEV3_H */
