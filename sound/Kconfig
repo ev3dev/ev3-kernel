@@ -86,8 +86,6 @@ source "sound/atmel/Kconfig"
 
 source "sound/spi/Kconfig"
 
-source "sound/pwm/Kconfig"
-
 source "sound/mips/Kconfig"
 
 source "sound/sh/Kconfig"
