@@ -2,7 +2,7 @@
  * LEGO MINDSTORMS EV3 - TI DA850/OMAP-L138
  *
  * Copyright (C) 2013 Ralph Hempel
- * Copyright (C) 2013-2014 David Lechner <david@lechnology.com>
+ * Copyright (C) 2013-2015 David Lechner <david@lechnology.com>
  *
  * Derived from: arch/arm/mach-davinci/board-da850-evm.c
  * Original Copyrights follow:
@@ -355,14 +355,12 @@ static __init void legoev3_usb_init(void)
 	 */
 	ret = da8xx_register_usb20(1000, 3);
 	if (ret)
-		pr_warn("%s: USB 2.0 registration failed: %d\n",
-			   __func__, ret);
+		pr_warn("%s: USB 2.0 registration failed: %d\n", __func__, ret);
 
 	/* initilaize usb module */
 	ret = da8xx_register_usb11(&legoev3_usb11_pdata);
 	if (ret)
-			pr_warn("%s: USB 1.1 registration failed: %d\n",
-				   __func__, ret);
+		pr_warn("%s: USB 1.1 registration failed: %d\n", __func__, ret);
 }
 
 /*
@@ -1097,6 +1095,10 @@ static __init void legoev3_init(void)
 				ret);
 
 	/* USB support */
+	ret = davinci_cfg_reg_list(legoev3_usb11_pins);
+	if (ret)
+		pr_warn("legoev3_init: USB mux setup failed: %d\n", ret);
+
 	legoev3_usb_init();
 
 	/* Bluetooth support */
