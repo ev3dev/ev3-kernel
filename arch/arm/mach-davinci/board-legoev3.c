@@ -232,6 +232,7 @@ static struct gpio_keys_button ev3_gpio_keys_table[] = {
 static struct gpio_keys_platform_data ev3_gpio_keys_data = {
 	.buttons = ev3_gpio_keys_table,
 	.nbuttons = ARRAY_SIZE(ev3_gpio_keys_table),
+	.name = "EV3 buttons",
 };
 
 static struct platform_device ev3_device_gpiokeys = {
