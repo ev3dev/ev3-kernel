@@ -49,6 +49,7 @@ extern void legoev3_fiq_release_port(enum legoev3_input_port_id port_id);
 extern int legoev3_fiq_start_xfer(enum legoev3_input_port_id port_id,
 				  struct i2c_msg msgs[], int num_msg,
 				  void (*complete)(int, void *), void *context);
+extern void legoev3_fiq_cancel_xfer(enum legoev3_input_port_id port_id);
 extern int legoev3_fiq_ehrpwm_request(void);
 extern void legoev3_fiq_ehrpwm_release(void);
 extern int legoev3_fiq_ehrpwm_prepare(struct snd_pcm_substream *substream,

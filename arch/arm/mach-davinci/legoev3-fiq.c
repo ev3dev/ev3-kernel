@@ -1,9 +1,9 @@
 /*
- * FIQ backend for I2C bus driver for LEGO Mindstorms EV3
- * Copyright (C) 2013-2014 David Lechner <david@lechnology.com>
+ * FIQ backend for I2C bus driver for LEGO MINDSTORMS EV3
+ * Copyright (C) 2013-2015 David Lechner <david@lechnology.com>
  *
  * Based on davinci_iic.c from lms2012
- * The file does not contain a copyright, but comes from the LEGO Group
+ * That file does not contain a copyright, but comes from the LEGO Group
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -104,7 +104,6 @@ struct legoev3_fiq_ehrpwm_data {
 struct legoev3_fiq_data {
 	struct legoev3_fiq_port_i2c_data port_data[NUM_EV3_PORT_IN];
 	struct legoev3_fiq_ehrpwm_data ehrpwm_data;
-	struct irq_chip *irq_chip;
 	struct platform_device *pdev;
 	struct fiq_handler fiq_handler;
 	struct legoev3_fiq_gpio status_gpio;
@@ -123,7 +122,7 @@ static struct legoev3_fiq_data legoev3_fiq_init_data = {
 	},
 };
 
-struct legoev3_fiq_data *legoev3_fiq_data;
+static struct legoev3_fiq_data *legoev3_fiq_data;
 
 /*
  * IMPORTANT: The following functions called from an fiq (fast interrupt).
@@ -280,12 +279,14 @@ legoev3_fiq_timer_callback(struct legoev3_fiq_port_i2c_data *data)
 		if (msg->flags & I2C_M_RD)
 			data->data_byte |= 1;
 		data->buf_offset = 0;
+		/* no break */
 
 	case TRANSFER_WRITE:
 		if (data->transfer_state == TRANSFER_WRITE)
 			data->data_byte = msg->buf[data->buf_offset++];
 		data->transfer_state = TRANSFER_WBIT;
 		data->bit_mask  = 0x80;
+		/* no break */
 
 	case TRANSFER_WBIT:
 		if (!data->clock_state) {
@@ -304,6 +305,7 @@ legoev3_fiq_timer_callback(struct legoev3_fiq_port_i2c_data *data)
 		data->transfer_state = TRANSFER_RBIT;
 		data->bit_mask  = 0x80;
 		data->data_byte = 0;
+		/* no break */
 
 	case TRANSFER_RBIT:
 		if (data->clock_state) {
@@ -414,6 +416,7 @@ legoev3_fiq_timer_callback(struct legoev3_fiq_port_i2c_data *data)
 		 */
 		fiq_gpio_dir_in(&data->gpio[FIQ_I2C_PIN_SDA]);
 		data->transfer_state = TRANSFER_COMPLETE;
+		/* no break */
 
 	case TRANSFER_COMPLETE:
 		/*
@@ -605,12 +608,13 @@ EXPORT_SYMBOL_GPL(legoev3_fiq_request_port);
  */
 void legoev3_fiq_release_port(enum legoev3_input_port_id port_id)
 {
-	struct legoev3_fiq_port_i2c_data *data = &legoev3_fiq_data->port_data[port_id];
+	struct legoev3_fiq_port_i2c_data *data;
 
 	if (!legoev3_fiq_data)
 		return;
 
-	while (data->transfer_state != TRANSFER_IDLE);
+	data =  &legoev3_fiq_data->port_data[port_id];
+	data->transfer_state = TRANSFER_IDLE;
 	legoev3_fiq_data->port_req_flags &= ~BIT(port_id);
 	free_irq(legoev3_fiq_data->status_gpio_irq, data);
 }
@@ -664,6 +668,20 @@ int legoev3_fiq_start_xfer(enum legoev3_input_port_id port_id,
 	return 0;
 }
 EXPORT_SYMBOL_GPL(legoev3_fiq_start_xfer);
+
+void legoev3_fiq_cancel_xfer(enum legoev3_input_port_id port_id)
+{
+	struct legoev3_fiq_port_i2c_data *data;
+
+	if (!legoev3_fiq_data)
+		return;
+	if (port_id >= NUM_EV3_PORT_IN)
+		return;
+
+	data = &legoev3_fiq_data->port_data[port_id];
+	data->transfer_state = TRANSFER_IDLE;
+}
+EXPORT_SYMBOL_GPL(legoev3_fiq_cancel_xfer);
 
 static irqreturn_t
 legoev3_fiq_gpio_irq_period_elapsed_callback(int irq, void *ehrpwm_data)
