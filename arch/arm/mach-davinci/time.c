@@ -3,7 +3,7 @@
  *
  * Author: Kevin Hilman, MontaVista Software, Inc. <source@mvista.com>
  *
- * FIQ Timer changes coppied from LEGO lsm2012 source code
+ * FIQ Timer changes copied from LEGO lsm2012 source code
  * by David Lechner <david@lechnology.com>
  *
  * 2007 (c) MontaVista Software, Inc. This file is licensed under
@@ -219,7 +219,7 @@ static struct timer_s timers[] = {
 		.period     = 50*24, /* 10kHz - clock is 24MHz */
 		.opts       = TIMER_OPTS_PERIODIC,
 		.irqaction = {
-			.flags   = IRQF_DISABLED | IRQF_TIMER,
+			.flags   = IRQF_TIMER,
 			.handler = fiqsource_interrupt,
 		}
 	},
