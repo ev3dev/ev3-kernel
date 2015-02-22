@@ -869,7 +869,7 @@ static void acpi_free_power_resources_lists(struct acpi_device *device)
 	if (device->wakeup.flags.valid)
 		acpi_power_resources_list_free(&device->wakeup.resources);
 
-	if (!device->flags.power_manageable)
+	if (!device->power.flags.power_resources)
 		return;
 
 	for (i = ACPI_STATE_D0; i <= ACPI_STATE_D3_HOT; i++) {
@@ -1428,14 +1428,13 @@ static int acpi_bus_extract_wakeup_device_power_package(acpi_handle handle,
 			wakeup->sleep_state = sleep_state;
 		}
 	}
-	acpi_setup_gpe_for_wake(handle, wakeup->gpe_device, wakeup->gpe_number);
 
  out:
 	kfree(buffer.pointer);
 	return err;
 }
 
-static void acpi_bus_set_run_wake_flags(struct acpi_device *device)
+static void acpi_wakeup_gpe_init(struct acpi_device *device)
 {
 	struct acpi_device_id button_device_ids[] = {
 		{"PNP0C0C", 0},
@@ -1443,29 +1442,33 @@ static void acpi_bus_set_run_wake_flags(struct acpi_device *device)
 		{"PNP0C0E", 0},
 		{"", 0},
 	};
+	struct acpi_device_wakeup *wakeup = &device->wakeup;
 	acpi_status status;
 	acpi_event_status event_status;
 
-	device->wakeup.flags.notifier_present = 0;
+	wakeup->flags.notifier_present = 0;
 
 	/* Power button, Lid switch always enable wakeup */
 	if (!acpi_match_device_ids(device, button_device_ids)) {
-		device->wakeup.flags.run_wake = 1;
+		wakeup->flags.run_wake = 1;
 		if (!acpi_match_device_ids(device, &button_device_ids[1])) {
 			/* Do not use Lid/sleep button for S5 wakeup */
-			if (device->wakeup.sleep_state == ACPI_STATE_S5)
-				device->wakeup.sleep_state = ACPI_STATE_S4;
+			if (wakeup->sleep_state == ACPI_STATE_S5)
+				wakeup->sleep_state = ACPI_STATE_S4;
 		}
+		acpi_mark_gpe_for_wake(wakeup->gpe_device, wakeup->gpe_number);
 		device_set_wakeup_capable(&device->dev, true);
 		return;
 	}
 
-	status = acpi_get_gpe_status(device->wakeup.gpe_device,
-					device->wakeup.gpe_number,
-						&event_status);
-	if (status == AE_OK)
-		device->wakeup.flags.run_wake =
-				!!(event_status & ACPI_EVENT_FLAG_HANDLE);
+	acpi_setup_gpe_for_wake(device->handle, wakeup->gpe_device,
+				wakeup->gpe_number);
+	status = acpi_get_gpe_status(wakeup->gpe_device, wakeup->gpe_number,
+				     &event_status);
+	if (ACPI_FAILURE(status))
+		return;
+
+	wakeup->flags.run_wake = !!(event_status & ACPI_EVENT_FLAG_HANDLE);
 }
 
 static void acpi_bus_get_wakeup_device_flags(struct acpi_device *device)
@@ -1485,7 +1488,7 @@ static void acpi_bus_get_wakeup_device_flags(struct acpi_device *device)
 
 	device->wakeup.flags.valid = 1;
 	device->wakeup.prepare_count = 0;
-	acpi_bus_set_run_wake_flags(device);
+	acpi_wakeup_gpe_init(device);
 	/* Call _PSW/_DSW object to disable its ability to wake the sleeping
 	 * system for the ACPI device with the _PRW object.
 	 * The _PSW object is depreciated in ACPI 3.0 and is replaced by _DSW.
@@ -1588,10 +1591,8 @@ static void acpi_bus_get_power_flags(struct acpi_device *device)
 			device->power.flags.power_resources)
 		device->power.states[ACPI_STATE_D3_COLD].flags.os_accessible = 1;
 
-	if (acpi_bus_init_power(device)) {
-		acpi_free_power_resources_lists(device);
+	if (acpi_bus_init_power(device))
 		device->flags.power_manageable = 0;
-	}
 }
 
 static void acpi_bus_get_flags(struct acpi_device *device)
@@ -2159,13 +2160,18 @@ static void acpi_bus_attach(struct acpi_device *device)
 	/* Skip devices that are not present. */
 	if (!acpi_device_is_present(device)) {
 		device->flags.visited = false;
+		device->flags.power_manageable = 0;
 		return;
 	}
 	if (device->handler)
 		goto ok;
 
 	if (!device->flags.initialized) {
-		acpi_bus_update_power(device, NULL);
+		device->flags.power_manageable =
+			device->power.states[ACPI_STATE_D0].flags.valid;
+		if (acpi_bus_init_power(device))
+			device->flags.power_manageable = 0;
+
 		device->flags.initialized = true;
 	}
 	device->flags.visited = false;
