@@ -887,9 +887,6 @@ static ssize_t sock_splice_read(struct file *file, loff_t *ppos,
 static struct sock_iocb *alloc_sock_iocb(struct kiocb *iocb,
 					 struct sock_iocb *siocb)
 {
-	if (!is_sync_kiocb(iocb))
-		BUG();
-
 	siocb->kiocb = iocb;
 	iocb->private = siocb;
 	return siocb;
@@ -1987,6 +1984,9 @@ static int copy_msghdr_from_user(struct msghdr *kmsg,
 {
 	if (copy_from_user(kmsg, umsg, sizeof(struct msghdr)))
 		return -EFAULT;
+
+	if (kmsg->msg_name == NULL)
+		kmsg->msg_namelen = 0;
 
 	if (kmsg->msg_namelen < 0)
 		return -EINVAL;
