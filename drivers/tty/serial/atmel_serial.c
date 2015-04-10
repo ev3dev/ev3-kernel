@@ -2576,7 +2576,7 @@ static int atmel_serial_probe(struct platform_device *pdev)
 
 	ret = atmel_init_port(port, pdev);
 	if (ret)
-		goto err;
+		goto err_clear_bit;
 
 	if (!atmel_use_pdc_rx(&port->uart)) {
 		ret = -ENOMEM;
@@ -2605,6 +2605,12 @@ static int atmel_serial_probe(struct platform_device *pdev)
 	device_init_wakeup(&pdev->dev, 1);
 	platform_set_drvdata(pdev, port);
 
+	/*
+	 * The peripheral clock has been disabled by atmel_init_port():
+	 * enable it before accessing I/O registers
+	 */
+	clk_prepare_enable(port->clk);
+
 	if (port->rs485.flags & SER_RS485_ENABLED) {
 		UART_PUT_MR(&port->uart, ATMEL_US_USMODE_NORMAL);
 		UART_PUT_CR(&port->uart, ATMEL_US_RTSEN);
@@ -2614,6 +2620,12 @@ static int atmel_serial_probe(struct platform_device *pdev)
 	 * Get port name of usart or uart
 	 */
 	atmel_get_ip_name(&port->uart);
+
+	/*
+	 * The peripheral clock can now safely be disabled till the port
+	 * is used
+	 */
+	clk_disable_unprepare(port->clk);
 
 	return 0;
 
@@ -2625,6 +2637,8 @@ err_alloc_ring:
 		clk_put(port->clk);
 		port->clk = NULL;
 	}
+err_clear_bit:
+	clear_bit(port->uart.line, atmel_ports_in_use);
 err:
 	return ret;
 }

@@ -1978,7 +1978,7 @@ static int em28xx_v4l2_fini(struct em28xx *dev)
 	if (v4l2 == NULL)
 		return 0;
 
-	em28xx_info("Closing video extension");
+	em28xx_info("Closing video extension\n");
 
 	mutex_lock(&dev->lock);
 
@@ -2027,7 +2027,7 @@ static int em28xx_v4l2_suspend(struct em28xx *dev)
 	if (!dev->has_video)
 		return 0;
 
-	em28xx_info("Suspending video extension");
+	em28xx_info("Suspending video extension\n");
 	em28xx_stop_urbs(dev);
 	return 0;
 }
@@ -2040,7 +2040,7 @@ static int em28xx_v4l2_resume(struct em28xx *dev)
 	if (!dev->has_video)
 		return 0;
 
-	em28xx_info("Resuming video extension");
+	em28xx_info("Resuming video extension\n");
 	/* what do we do here */
 	return 0;
 }

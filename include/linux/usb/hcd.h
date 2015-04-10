@@ -144,6 +144,8 @@ struct usb_hcd {
 	unsigned		has_tt:1;	/* Integrated TT in root hub */
 	unsigned		amd_resume_bug:1; /* AMD remote wakeup quirk */
 	unsigned		can_do_streams:1; /* HC supports streams */
+	unsigned		cant_recv_wakeups:1;
+			/* wakeup requests from downstream aren't received */
 
 	unsigned int		irq;		/* irq allocated */
 	void __iomem		*regs;		/* device memory/io */
@@ -448,6 +450,7 @@ extern const struct dev_pm_ops usb_hcd_pci_pm_ops;
 #endif /* CONFIG_PCI */
 
 /* pci-ish (pdev null is ok) buffer alloc/mapping support */
+void usb_init_pool_max(void);
 int hcd_buffer_create(struct usb_hcd *hcd);
 void hcd_buffer_destroy(struct usb_hcd *hcd);
 
