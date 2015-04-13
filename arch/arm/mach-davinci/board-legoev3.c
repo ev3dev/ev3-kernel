@@ -1035,8 +1035,6 @@ static __init void legoev3_init(void)
 		pr_warn("legoev3_init: "
 			"input/output port registration failed: %d\n", ret);
 
-	legoev3_hires_timer_init();
-
 	ret = platform_device_register(&legoev3_in_port_i2c_fiq);
 	if (ret)
 		pr_warn("legoev3_init: "
