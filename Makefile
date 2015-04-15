@@ -1,7 +1,7 @@
 VERSION = 3
 PATCHLEVEL = 16
 SUBLEVEL = 7
-EXTRAVERSION =-ckt9-ev3dev1-rc1
+EXTRAVERSION =-ckt9-ev3dev1
 NAME = Museum of Fishiegoodies
 
 # *DOCUMENTATION*
