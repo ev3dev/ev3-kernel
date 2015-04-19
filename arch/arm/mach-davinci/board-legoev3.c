@@ -171,25 +171,25 @@ static struct led_pwm ev3_leds[] = {
 	{
 		.name = "ev3:red:left",
 		.default_trigger = "heartbeat",
-		.max_brightness = LED_FULL,
+		.max_brightness = LED_HALF,
 		.pwm_period_ns = NSEC_PER_SEC / 100,
 	},
 	{
 		.name = "ev3:green:left",
 		.default_trigger = "heartbeat",
-		.max_brightness = LED_FULL,
+		.max_brightness = LED_OFF,
 		.pwm_period_ns = NSEC_PER_SEC / 100,
 	},
 	{
 		.name = "ev3:green:right",
 		.default_trigger = "mmc0",
-		.max_brightness = LED_FULL,
+		.max_brightness = LED_HALF,
 		.pwm_period_ns = NSEC_PER_SEC / 100,
 	},
 	{
 		.name = "ev3:red:right",
 		.default_trigger = "mmc0",
-		.max_brightness = LED_FULL,
+		.max_brightness = LED_OFF,
 		.pwm_period_ns = NSEC_PER_SEC / 100,
 	},
 };
