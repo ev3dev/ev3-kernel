@@ -137,19 +137,19 @@ static const short legoev3_led_pins[] __initconst = {
 
 static struct pwm_gpio ev3_led_pwms[] = {
 	{
-		.name = "left-red-led",
+		.name = "ev3-left0-led", /* red */
 		.gpio = EV3_LED_0_PIN,
 	},
 	{
-		.name = "left-green-led",
+		.name = "ev3-left1-led", /* green */
 		.gpio = EV3_LED_1_PIN,
 	},
 	{
-		.name = "right-green-led",
+		.name = "ev3-right1-led", /* green */
 		.gpio = EV3_LED_2_PIN,
 	},
 	{
-		.name = "right-red-led",
+		.name = "ev3-right0-led", /* red */
 		.gpio = EV3_LED_3_PIN,
 	},
 };
@@ -169,25 +169,25 @@ static struct platform_device ev3_led_pwms_device = {
 
 static struct led_pwm ev3_leds[] = {
 	{
-		.name = "ev3:red:left",
+		.name = "ev3-left0:red:ev3dev",
 		.default_trigger = "heartbeat",
 		.max_brightness = LED_FULL,
 		.pwm_period_ns = NSEC_PER_SEC / 100,
 	},
 	{
-		.name = "ev3:green:left",
+		.name = "ev3-left1:green:ev3dev",
 		.default_trigger = "heartbeat",
 		.max_brightness = LED_FULL,
 		.pwm_period_ns = NSEC_PER_SEC / 100,
 	},
 	{
-		.name = "ev3:green:right",
+		.name = "ev3-right1:green:ev3dev",
 		.default_trigger = "mmc0",
 		.max_brightness = LED_FULL,
 		.pwm_period_ns = NSEC_PER_SEC / 100,
 	},
 	{
-		.name = "ev3:red:right",
+		.name = "ev3-right0:red:ev3dev",
 		.default_trigger = "mmc0",
 		.max_brightness = LED_FULL,
 		.pwm_period_ns = NSEC_PER_SEC / 100,
@@ -855,10 +855,10 @@ static struct platform_device legoev3_battery_device = {
  */
 
 static struct pwm_lookup legoev3_pwm_lookup[] = {
-	PWM_LOOKUP("pwm-gpio", 0, NULL, "ev3:red:left",      0, PWM_POLARITY_NORMAL  ),
-	PWM_LOOKUP("pwm-gpio", 1, NULL, "ev3:green:left",    0, PWM_POLARITY_NORMAL  ),
-	PWM_LOOKUP("pwm-gpio", 2, NULL, "ev3:green:right",   0, PWM_POLARITY_NORMAL  ),
-	PWM_LOOKUP("pwm-gpio", 3, NULL, "ev3:red:right",     0, PWM_POLARITY_NORMAL  ),
+	PWM_LOOKUP("pwm-gpio", 0, NULL, "ev3-left0:red:ev3dev",    0, PWM_POLARITY_NORMAL),
+	PWM_LOOKUP("pwm-gpio", 1, NULL, "ev3-left1:green:ev3dev",  0, PWM_POLARITY_NORMAL),
+	PWM_LOOKUP("pwm-gpio", 2, NULL, "ev3-right1:green:ev3dev", 0, PWM_POLARITY_NORMAL),
+	PWM_LOOKUP("pwm-gpio", 3, NULL, "ev3-right0:red:ev3dev",   0, PWM_POLARITY_NORMAL),
 	PWM_LOOKUP("ecap.0",   0, NULL, "outC",              0, PWM_POLARITY_INVERSED),
 	PWM_LOOKUP("ecap.1",   0, NULL, "outD",              0, PWM_POLARITY_INVERSED),
 	PWM_LOOKUP("ecap.2",   0, "legoev3-bluetooth", NULL, 0, PWM_POLARITY_INVERSED),
