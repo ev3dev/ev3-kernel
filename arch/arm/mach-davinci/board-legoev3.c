@@ -170,13 +170,13 @@ static struct platform_device ev3_led_pwms_device = {
 static struct led_pwm ev3_leds[] = {
 	{
 		.name = "ev3-left0:red:ev3dev",
-		.default_trigger = "heartbeat",
+		.default_trigger = "mmc0",
 		.max_brightness = LED_FULL,
 		.pwm_period_ns = NSEC_PER_SEC / 100,
 	},
 	{
 		.name = "ev3-left1:green:ev3dev",
-		.default_trigger = "heartbeat",
+		.default_trigger = "mmc0",
 		.max_brightness = LED_FULL,
 		.pwm_period_ns = NSEC_PER_SEC / 100,
 	},
