@@ -30,4 +30,6 @@ struct i2c_legoev3_platform_data {
 	struct lego_port_device *in_port;
 };
 
+extern const struct i2c_algorithm i2c_legoev3_algo;
+
 #endif /* _LINUX_I2C_LEGOEV3_H */
