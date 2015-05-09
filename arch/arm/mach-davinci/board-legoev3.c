@@ -859,12 +859,12 @@ static struct pwm_lookup legoev3_pwm_lookup[] = {
 	PWM_LOOKUP("pwm-gpio", 1, NULL, "ev3-left1:green:ev3dev",  0, PWM_POLARITY_NORMAL),
 	PWM_LOOKUP("pwm-gpio", 2, NULL, "ev3-right1:green:ev3dev", 0, PWM_POLARITY_NORMAL),
 	PWM_LOOKUP("pwm-gpio", 3, NULL, "ev3-right0:red:ev3dev",   0, PWM_POLARITY_NORMAL),
-	PWM_LOOKUP("ecap.0",   0, NULL, "outC",              0, PWM_POLARITY_INVERSED),
-	PWM_LOOKUP("ecap.1",   0, NULL, "outD",              0, PWM_POLARITY_INVERSED),
+	PWM_LOOKUP("ecap.0",   0, NULL, "ev3:outC",          0, PWM_POLARITY_INVERSED),
+	PWM_LOOKUP("ecap.1",   0, NULL, "ev3:outD",          0, PWM_POLARITY_INVERSED),
 	PWM_LOOKUP("ecap.2",   0, "legoev3-bluetooth", NULL, 0, PWM_POLARITY_INVERSED),
 	PWM_LOOKUP("ehrpwm.0", 1, "snd-legoev3",       NULL, 0, PWM_POLARITY_INVERSED),
-	PWM_LOOKUP("ehrpwm.1", 0, NULL, "outB",              0, PWM_POLARITY_INVERSED),
-	PWM_LOOKUP("ehrpwm.1", 1, NULL, "outA",              0, PWM_POLARITY_INVERSED),
+	PWM_LOOKUP("ehrpwm.1", 0, NULL, "ev3:outB",          0, PWM_POLARITY_INVERSED),
+	PWM_LOOKUP("ehrpwm.1", 1, NULL, "ev3:outA",          0, PWM_POLARITY_INVERSED),
 };
 
 
