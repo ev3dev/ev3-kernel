@@ -47,6 +47,7 @@ int create_hyp_io_mappings(void *from, void *to, phys_addr_t);
 void free_boot_hyp_pgd(void);
 void free_hyp_pgds(void);
 
+void stage2_unmap_vm(struct kvm *kvm);
 int kvm_alloc_stage2_pgd(struct kvm *kvm);
 void kvm_free_stage2_pgd(struct kvm *kvm);
 int kvm_phys_addr_ioremap(struct kvm *kvm, phys_addr_t guest_ipa,
@@ -76,17 +77,6 @@ static inline void kvm_set_pte(pte_t *pte, pte_t new_pte)
 	 * cache entries, so we can reuse the function for ptes.
 	 */
 	flush_pmd_entry(pte);
-}
-
-static inline bool kvm_is_write_fault(unsigned long hsr)
-{
-	unsigned long hsr_ec = hsr >> HSR_EC_SHIFT;
-	if (hsr_ec == HSR_EC_IABT)
-		return false;
-	else if ((hsr & HSR_ISV) && !(hsr & HSR_WNR))
-		return false;
-	else
-		return true;
 }
 
 static inline void kvm_clean_pgd(pgd_t *pgd)
@@ -126,6 +116,19 @@ static inline void kvm_set_s2pmd_writable(pmd_t *pmd)
 ({	u64 __boundary = ((addr) + PMD_SIZE) & PMD_MASK;		\
 	(__boundary - 1 < (end) - 1)? __boundary: (end);		\
 })
+
+#define kvm_pgd_index(addr)			pgd_index(addr)
+
+static inline bool kvm_page_empty(void *ptr)
+{
+	struct page *ptr_page = virt_to_page(ptr);
+	return page_count(ptr_page) == 1;
+}
+
+#define kvm_pte_table_empty(ptep) kvm_page_empty(ptep)
+#define kvm_pmd_table_empty(pmdp) kvm_page_empty(pmdp)
+#define kvm_pud_table_empty(pudp) (0)
+
 
 struct kvm;
 

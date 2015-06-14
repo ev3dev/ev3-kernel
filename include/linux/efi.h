@@ -20,6 +20,7 @@
 #include <linux/ioport.h>
 #include <linux/pfn.h>
 #include <linux/pstore.h>
+#include <linux/reboot.h>
 
 #include <asm/page.h>
 
@@ -875,6 +876,9 @@ extern void efi_reserve_boot_services(void);
 extern int efi_get_fdt_params(struct efi_fdt_params *params, int verbose);
 extern struct efi_memory_map memmap;
 
+extern int efi_reboot_quirk_mode;
+extern bool efi_poweroff_required(void);
+
 /* Iterate through an efi_memory_map */
 #define for_each_efi_memory_desc(m, md)					   \
 	for ((md) = (m)->map;						   \
@@ -926,11 +930,14 @@ static inline bool efi_enabled(int feature)
 {
 	return test_bit(feature, &efi.flags) != 0;
 }
+extern void efi_reboot(enum reboot_mode reboot_mode, const char *__unused);
 #else
 static inline bool efi_enabled(int feature)
 {
 	return false;
 }
+static inline void
+efi_reboot(enum reboot_mode reboot_mode, const char *__unused) {}
 #endif
 
 /*
