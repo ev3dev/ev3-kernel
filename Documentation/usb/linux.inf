@@ -1,32 +1,43 @@
-; Based on template INF file found at
-;    <http://msdn.microsoft.com/en-us/library/ff570620.aspx>
-; which was:
-;    Copyright (c) Microsoft Corporation
-; and released under the MLPL as found at:
-;    <http://msdn.microsoft.com/en-us/cc300389.aspx#MLPL>.
-; For use only on Windows operating systems.
+; Remote NDIS template device setup file
+; Copyright (c) Microsoft Corporation
+;
+; This is the template for the INF installation script  for the RNDIS-over-USB
+; host driver that leverages the newer NDIS 6.x miniport (rndismp6.sys) for
+; improved performance. This INF works for Windows 7, Windows Server 2008 R2,
+; and later operating systems on x86, amd64 and ia64 platforms.
+;
+; Template has been modified for use with the Linux g_ether USB gadget driver.
 
 [Version]
 Signature           = "$Windows NT$"
 Class               = Net
 ClassGUID           = {4d36e972-e325-11ce-bfc1-08002be10318}
-Provider            = %Linux%
-DriverVer           = 06/21/2006,6.0.6000.16384
+Provider            = %ev3dev%
+DriverVer           = 06/21/2006,10.0.10240.16384
+;CatalogFile        = device.cat
 
 [Manufacturer]
-%Linux%             = LinuxDevices,NTx86,NTamd64,NTia64
+%ev3dev%             = RndisDevices,NTx86,NTamd64,NTia64,NTarm,NTarm64
 
 ; Decoration for x86 architecture
-[LinuxDevices.NTx86]
-%LinuxDevice%       = RNDIS.NT.5.1, USB\VID_0525&PID_a4a2, USB\VID_1d6b&PID_0104&MI_00
+[RndisDevices.NTx86]
+%RndisDevice%       = RNDIS.NT.6.0, USB\VID_0525&PID_a4a2, USB\VID_1d6b&PID_0104&MI_00
 
 ; Decoration for x64 architecture
-[LinuxDevices.NTamd64]
-%LinuxDevice%       = RNDIS.NT.5.1, USB\VID_0525&PID_a4a2, USB\VID_1d6b&PID_0104&MI_00
+[RndisDevices.NTamd64]
+%RndisDevice%       = RNDIS.NT.6.0, USB\VID_0525&PID_a4a2, USB\VID_1d6b&PID_0104&MI_00
 
 ; Decoration for ia64 architecture
-[LinuxDevices.NTia64]
-%LinuxDevice%       = RNDIS.NT.5.1, USB\VID_0525&PID_a4a2, USB\VID_1d6b&PID_0104&MI_00
+[RndisDevices.NTia64]
+%RndisDevice%       = RNDIS.NT.6.0, USB\VID_0525&PID_a4a2, USB\VID_1d6b&PID_0104&MI_00
+
+; Decoration for arm architecture
+[RndisDevices.NTarm]
+%RndisDevice%       = RNDIS.NT.6.0, USB\VID_0525&PID_a4a2, USB\VID_1d6b&PID_0104&MI_00
+
+; Decoration for arm64 architecture
+[RndisDevices.NTarm64]
+%RndisDevice%       = RNDIS.NT.6.0, USB\VID_0525&PID_a4a2, USB\VID_1d6b&PID_0104&MI_00
 
 ;@@@ This is the common setting for setup
 [ControlFlags]
@@ -34,33 +45,26 @@ ExcludeFromSelect=*
 
 ; DDInstall section
 ; References the in-build Netrndis.inf
-[RNDIS.NT.5.1]
-Characteristics     = 0x84   ; NCF_PHYSICAL + NCF_HAS_UI
-BusType             = 15
+[RNDIS.NT.6.0]
+Characteristics = 0x84   ; NCF_PHYSICAL + NCF_HAS_UI
+BusType         = 15
 ; NEVER REMOVE THE FOLLOWING REFERENCE FOR NETRNDIS.INF
-include             = netrndis.inf
-needs               = Usb_Rndis.ndi
-AddReg              = Rndis_AddReg_Vista
+include            = netrndis.inf
+needs              = usbrndis6.ndi
+AddReg             = Rndis_AddReg_Vista
+*IfType            = 6    ; IF_TYPE_ETHERNET_CSMACD.
+*MediaType         = 0    ; NdisMediumNative802_3
+*PhysicalMediaType = 14   ; NdisPhysicalMedium802_3
 
 ; DDInstal.Services section
-[RNDIS.NT.5.1.Services]
-include             = netrndis.inf
-needs               = Usb_Rndis.ndi.Services
-
-; Optional registry settings. You can modify as needed.
-[RNDIS_AddReg_Vista]
-HKR, NDI\params\VistaProperty, ParamDesc,  0, %Vista_Property%
-HKR, NDI\params\VistaProperty, type,       0, "edit"
-HKR, NDI\params\VistaProperty, LimitText,  0, "12"
-HKR, NDI\params\VistaProperty, UpperCase,  0, "1"
-HKR, NDI\params\VistaProperty, default,    0, " "
-HKR, NDI\params\VistaProperty, optional,   0, "1"
+[RNDIS.NT.6.0.Services]
+include     = netrndis.inf
+needs       = usbrndis6.ndi.Services
 
 ; No sys copyfiles - the sys files are already in-build
 ; (part of the operating system).
-; We do not support XP SP1-, 2003 SP1-, ME, 9x.
 
+; Modify these strings for your device as needed.
 [Strings]
-Linux                 = "Linux Developer Community"
-LinuxDevice           = "Linux USB Ethernet/RNDIS Gadget"
-Vista_Property        = "Optional Vista Property"
+ev3dev                = "ev3dev.org"
+RndisDevice           = "Remote NDIS Compatible Device"
