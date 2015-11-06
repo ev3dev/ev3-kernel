@@ -169,25 +169,25 @@ static struct platform_device ev3_led_pwms_device = {
 
 static struct led_pwm ev3_leds[] = {
 	{
-		.name = "ev3-left0:red:ev3dev",
+		.name = "ev3:left:red:ev3dev",
 		.default_trigger = "mmc0",
 		.max_brightness = LED_FULL,
 		.pwm_period_ns = NSEC_PER_SEC / 100,
 	},
 	{
-		.name = "ev3-left1:green:ev3dev",
+		.name = "ev3:left:green:ev3dev",
 		.default_trigger = "mmc0",
 		.max_brightness = LED_FULL,
 		.pwm_period_ns = NSEC_PER_SEC / 100,
 	},
 	{
-		.name = "ev3-right1:green:ev3dev",
+		.name = "ev3:right:green:ev3dev",
 		.default_trigger = "mmc0",
 		.max_brightness = LED_FULL,
 		.pwm_period_ns = NSEC_PER_SEC / 100,
 	},
 	{
-		.name = "ev3-right0:red:ev3dev",
+		.name = "ev3:right:red:ev3dev",
 		.default_trigger = "mmc0",
 		.max_brightness = LED_FULL,
 		.pwm_period_ns = NSEC_PER_SEC / 100,
