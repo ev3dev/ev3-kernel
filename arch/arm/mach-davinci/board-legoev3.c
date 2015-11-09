@@ -855,10 +855,10 @@ static struct platform_device legoev3_battery_device = {
  */
 
 static struct pwm_lookup legoev3_pwm_lookup[] = {
-	PWM_LOOKUP("pwm-gpio", 0, NULL, "ev3-left0:red:ev3dev",    0, PWM_POLARITY_NORMAL),
-	PWM_LOOKUP("pwm-gpio", 1, NULL, "ev3-left1:green:ev3dev",  0, PWM_POLARITY_NORMAL),
-	PWM_LOOKUP("pwm-gpio", 2, NULL, "ev3-right1:green:ev3dev", 0, PWM_POLARITY_NORMAL),
-	PWM_LOOKUP("pwm-gpio", 3, NULL, "ev3-right0:red:ev3dev",   0, PWM_POLARITY_NORMAL),
+	PWM_LOOKUP("pwm-gpio", 0, NULL, "ev3:left:red:ev3dev",    0, PWM_POLARITY_NORMAL),
+	PWM_LOOKUP("pwm-gpio", 1, NULL, "ev3:left:green:ev3dev",  0, PWM_POLARITY_NORMAL),
+	PWM_LOOKUP("pwm-gpio", 2, NULL, "ev3:right:green:ev3dev", 0, PWM_POLARITY_NORMAL),
+	PWM_LOOKUP("pwm-gpio", 3, NULL, "ev3:right:red:ev3dev",   0, PWM_POLARITY_NORMAL),
 	PWM_LOOKUP("ecap.0",   0, NULL, "outC",              0, PWM_POLARITY_INVERSED),
 	PWM_LOOKUP("ecap.1",   0, NULL, "outD",              0, PWM_POLARITY_INVERSED),
 	PWM_LOOKUP("ecap.2",   0, "legoev3-bluetooth", NULL, 0, PWM_POLARITY_INVERSED),
