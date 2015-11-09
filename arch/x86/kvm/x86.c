@@ -2099,7 +2099,7 @@ int kvm_set_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 		if (guest_cpuid_has_tsc_adjust(vcpu)) {
 			if (!msr_info->host_initiated) {
 				u64 adj = data - vcpu->arch.ia32_tsc_adjust_msr;
-				kvm_x86_ops->adjust_tsc_offset(vcpu, adj, true);
+				adjust_tsc_offset_guest(vcpu, adj);
 			}
 			vcpu->arch.ia32_tsc_adjust_msr = data;
 		}
@@ -2425,6 +2425,8 @@ int kvm_get_msr_common(struct kvm_vcpu *vcpu, u32 msr, u64 *pdata)
 	case MSR_IA32_LASTINTFROMIP:
 	case MSR_IA32_LASTINTTOIP:
 	case MSR_K8_SYSCFG:
+	case MSR_K8_TSEG_ADDR:
+	case MSR_K8_TSEG_MASK:
 	case MSR_K7_HWCR:
 	case MSR_VM_HSAVE_PA:
 	case MSR_K7_EVNTSEL0:

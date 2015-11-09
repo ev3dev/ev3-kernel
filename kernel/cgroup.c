@@ -1248,13 +1248,14 @@ static int cgroup_show_options(struct seq_file *seq,
 
 	spin_lock(&release_agent_path_lock);
 	if (strlen(root->release_agent_path))
-		seq_printf(seq, ",release_agent=%s", root->release_agent_path);
+		seq_show_option(seq, "release_agent",
+				root->release_agent_path);
 	spin_unlock(&release_agent_path_lock);
 
 	if (test_bit(CGRP_CPUSET_CLONE_CHILDREN, &root->cgrp.flags))
 		seq_puts(seq, ",clone_children");
 	if (strlen(root->name))
-		seq_printf(seq, ",name=%s", root->name);
+		seq_show_option(seq, "name", root->name);
 	return 0;
 }
 
@@ -1847,8 +1848,6 @@ static struct file_system_type cgroup_fs_type = {
 	.mount = cgroup_mount,
 	.kill_sb = cgroup_kill_sb,
 };
-
-static struct kobject *cgroup_kobj;
 
 /**
  * task_cgroup_path - cgroup path of a task in the first cgroup hierarchy
@@ -4822,13 +4821,13 @@ int __init cgroup_init(void)
 		}
 	}
 
-	cgroup_kobj = kobject_create_and_add("cgroup", fs_kobj);
-	if (!cgroup_kobj)
-		return -ENOMEM;
+	err = sysfs_create_mount_point(fs_kobj, "cgroup");
+	if (err)
+		return err;
 
 	err = register_filesystem(&cgroup_fs_type);
 	if (err < 0) {
-		kobject_put(cgroup_kobj);
+		sysfs_remove_mount_point(fs_kobj, "cgroup");
 		return err;
 	}
 

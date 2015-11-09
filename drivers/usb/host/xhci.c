@@ -147,7 +147,8 @@ static int xhci_start(struct xhci_hcd *xhci)
 				"waited %u microseconds.\n",
 				XHCI_MAX_HALT_USEC);
 	if (!ret)
-		xhci->xhc_state &= ~XHCI_STATE_HALTED;
+		xhci->xhc_state &= ~(XHCI_STATE_HALTED | XHCI_STATE_DYING);
+
 	return ret;
 }
 
@@ -662,12 +663,6 @@ static void xhci_only_stop_hcd(struct usb_hcd *hcd)
 
 	spin_lock_irq(&xhci->lock);
 	xhci_halt(xhci);
-
-	/* The shared_hcd is going to be deallocated shortly (the USB core only
-	 * calls this function when allocation fails in usb_add_hcd(), or
-	 * usb_remove_hcd() is called).  So we need to unset xHCI's pointer.
-	 */
-	xhci->shared_hcd = NULL;
 	spin_unlock_irq(&xhci->lock);
 }
 

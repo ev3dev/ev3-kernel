@@ -487,7 +487,7 @@ __read_extent_tree_block(const char *function, unsigned int line,
 	struct buffer_head		*bh;
 	int				err;
 
-	bh = sb_getblk(inode->i_sb, pblk);
+	bh = sb_getblk_gfp(inode->i_sb, pblk, __GFP_MOVABLE | GFP_NOFS);
 	if (unlikely(!bh))
 		return ERR_PTR(-ENOMEM);
 
@@ -1061,7 +1061,7 @@ static int ext4_ext_split(handle_t *handle, struct inode *inode,
 		err = -EIO;
 		goto cleanup;
 	}
-	bh = sb_getblk(inode->i_sb, newblock);
+	bh = sb_getblk_gfp(inode->i_sb, newblock, __GFP_MOVABLE | GFP_NOFS);
 	if (unlikely(!bh)) {
 		err = -ENOMEM;
 		goto cleanup;
@@ -1247,7 +1247,7 @@ static int ext4_ext_grow_indepth(handle_t *handle, struct inode *inode,
 	if (newblock == 0)
 		return err;
 
-	bh = sb_getblk(inode->i_sb, newblock);
+	bh = sb_getblk_gfp(inode->i_sb, newblock, __GFP_MOVABLE | GFP_NOFS);
 	if (unlikely(!bh))
 		return -ENOMEM;
 	lock_buffer(bh);
@@ -4844,19 +4844,6 @@ static long ext4_zero_range(struct file *file, loff_t offset,
 
 		ret = ext4_alloc_file_blocks(file, lblk, max_blocks, new_size,
 					     flags, mode);
-		if (ret)
-			goto out_dio;
-		/*
-		 * Remove entire range from the extent status tree.
-		 *
-		 * ext4_es_remove_extent(inode, lblk, max_blocks) is
-		 * NOT sufficient.  I'm not sure why this is the case,
-		 * but let's be conservative and remove the extent
-		 * status tree for the entire inode.  There should be
-		 * no outstanding delalloc extents thanks to the
-		 * filemap_write_and_wait_range() call above.
-		 */
-		ret = ext4_es_remove_extent(inode, 0, EXT_MAX_BLOCKS);
 		if (ret)
 			goto out_dio;
 	}

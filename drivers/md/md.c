@@ -5264,6 +5264,8 @@ EXPORT_SYMBOL_GPL(md_stop_writes);
 
 static void __md_stop(struct mddev *mddev)
 {
+	/* Ensure ->event_work is done */
+	flush_workqueue(md_misc_wq);
 	mddev->ready = 0;
 	mddev->pers->stop(mddev);
 	if (mddev->pers->sync_request && mddev->to_remove == NULL)
@@ -5624,7 +5626,7 @@ static int get_bitmap_file(struct mddev * mddev, void __user * arg)
 	char *ptr, *buf = NULL;
 	int err = -ENOMEM;
 
-	file = kmalloc(sizeof(*file), GFP_NOIO);
+	file = kzalloc(sizeof(*file), GFP_NOIO);
 
 	if (!file)
 		goto out;
