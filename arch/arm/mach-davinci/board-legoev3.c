@@ -25,6 +25,8 @@
 #include <linux/input.h>
 #include <linux/leds.h>
 #include <linux/leds_pwm.h>
+#include <linux/memory.h>
+#include <linux/platform_data/at24.h>
 #include <linux/platform_data/legoev3.h>
 #include <linux/platform_device.h>
 #include <linux/mtd/mtd.h>
@@ -40,6 +42,7 @@
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
+#include <asm/system_info.h>
 
 #include <mach/cp_intc.h>
 #include <mach/da8xx.h>
@@ -438,13 +441,47 @@ static int legoev3_init_cpufreq(void) { return 0; }
 #endif
 
 /*
+ * EV3 EEPROM
+ * ==========
+ * Used get the hardware version and the bluetooth MAC address for the EV3.
+ * The MAC address is also used as the serial number.
+ */
+
+static void legoev3_eeprom_setup(struct memory_accessor *mem_acc, void *context)
+{
+	u8 data[8];
+
+	/*
+	 * The first byte read has corrupt data for some reason. It seems to be
+	 * a hardware problem with the EEPROM. So, we are reading a couple of
+	 * extra bytes before the actual data. data[2] is the hardware revision
+	 * and data[3] is checksum. Hardware rev 3 has the mac address at 0x3f00
+	 * instead of hw id.
+	 */
+	if (mem_acc->read(mem_acc, data, 0x3efe, 8) == 8)
+		system_rev = (data[2] ^ data[3]) == 0xff ? data[2] : 3;
+
+	/* revs > 3 have mac address at 0x3f06 */
+	if (system_rev == 3 || mem_acc->read(mem_acc, data, 0x3f04, 8) == 8) {
+		system_serial_high = be16_to_cpu(*(u16 *)(data + 2));
+		system_serial_low = be32_to_cpu(*(u32 *)(data + 4));
+	}
+}
+
+static struct at24_platform_data legoev3_eeprom_info = {
+	.byte_len	= 128 * 1024 / 8,
+	.page_size	= 64,
+	.flags		= AT24_FLAG_ADDR16 | AT24_FLAG_READONLY | AT24_FLAG_IRUGO,
+	.setup		= legoev3_eeprom_setup,
+};
+
+/*
  * EV3 I2C board configuration:
  * ============================
  * This is the I2C that communicates with other devices on the main board,
  * not the input ports. (Using I2C0)
  * Devices are:
- * - EEPROM (24c128) to get the hardware version and the bluetooth MAC
- *	address for the EV3.
+ * - EEPROM (24c128) see EEPROM section above.
  */
 
 static const short legoev3_i2c_board_pins[] __initconst = {
@@ -455,6 +492,7 @@ static const short legoev3_i2c_board_pins[] __initconst = {
 static struct i2c_board_info __initdata legoev3_i2c_board_devices[] = {
 	{
 		I2C_BOARD_INFO("24c128", 0x50),
+		.platform_data  = &legoev3_eeprom_info,
 	},
 };
 
