@@ -11285,6 +11285,11 @@ static int intel_user_framebuffer_create_handle(struct drm_framebuffer *fb,
 	struct intel_framebuffer *intel_fb = to_intel_framebuffer(fb);
 	struct drm_i915_gem_object *obj = intel_fb->obj;
 
+	if (obj->userptr.mm) {
+		DRM_DEBUG("attempting to use a userptr for a framebuffer, denied\n");
+		return -EINVAL;
+	}
+
 	return drm_gem_handle_create(file, &obj->base, handle);
 }
 
@@ -11706,6 +11711,9 @@ static struct intel_quirk intel_quirks[] = {
 
 	/* Dell Chromebook 11 */
 	{ 0x0a06, 0x1028, 0x0a35, quirk_backlight_present },
+
+	/* Dell Chromebook 11 (2015 version) */
+	{ 0x0a16, 0x1028, 0x0a35, quirk_backlight_present },
 };
 
 static void intel_init_quirks(struct drm_device *dev)

@@ -2225,11 +2225,11 @@ static void finish_task_switch(struct rq *rq, struct task_struct *prev)
 	 * If a task dies, then it sets TASK_DEAD in tsk->state and calls
 	 * schedule one last time. The schedule call will never return, and
 	 * the scheduled task must drop that reference.
-	 * The test for TASK_DEAD must occur while the runqueue locks are
-	 * still held, otherwise prev could be scheduled on another cpu, die
-	 * there before we look at prev->state, and then the reference would
-	 * be dropped twice.
-	 *		Manfred Spraul <manfred@colorfullife.com>
+	 *
+	 * We must observe prev->state before clearing prev->on_cpu (in
+	 * finish_lock_switch), otherwise a concurrent wakeup can get prev
+	 * running on another CPU and we could rave with its RUNNING -> DEAD
+	 * transition, resulting in a double drop.
 	 */
 	prev_state = prev->state;
 	vtime_task_switch(prev);
@@ -4172,7 +4172,7 @@ static void __cond_resched(void)
 
 int __sched _cond_resched(void)
 {
-	if (should_resched()) {
+	if (should_resched(0)) {
 		__cond_resched();
 		return 1;
 	}
@@ -4190,7 +4190,7 @@ EXPORT_SYMBOL(_cond_resched);
  */
 int __cond_resched_lock(spinlock_t *lock)
 {
-	int resched = should_resched();
+	int resched = should_resched(PREEMPT_LOCK_OFFSET);
 	int ret = 0;
 
 	lockdep_assert_held(lock);
@@ -4212,7 +4212,7 @@ int __sched __cond_resched_softirq(void)
 {
 	BUG_ON(!in_softirq());
 
-	if (should_resched()) {
+	if (should_resched(SOFTIRQ_DISABLE_OFFSET)) {
 		local_bh_enable();
 		__cond_resched();
 		local_bh_disable();

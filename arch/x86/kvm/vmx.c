@@ -1467,7 +1467,7 @@ static void update_exception_bitmap(struct kvm_vcpu *vcpu)
 	u32 eb;
 
 	eb = (1u << PF_VECTOR) | (1u << UD_VECTOR) | (1u << MC_VECTOR) |
-	     (1u << NM_VECTOR) | (1u << DB_VECTOR);
+	     (1u << NM_VECTOR) | (1u << DB_VECTOR) | (1u << AC_VECTOR);
 	if ((vcpu->guest_debug &
 	     (KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP)) ==
 	    (KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP))
@@ -3523,19 +3523,20 @@ static int vmx_set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
 		if (!is_paging(vcpu)) {
 			hw_cr4 &= ~X86_CR4_PAE;
 			hw_cr4 |= X86_CR4_PSE;
-			/*
-			 * SMEP/SMAP is disabled if CPU is in non-paging mode
-			 * in hardware. However KVM always uses paging mode to
-			 * emulate guest non-paging mode with TDP.
-			 * To emulate this behavior, SMEP/SMAP needs to be
-			 * manually disabled when guest switches to non-paging
-			 * mode.
-			 */
-			hw_cr4 &= ~(X86_CR4_SMEP | X86_CR4_SMAP);
 		} else if (!(cr4 & X86_CR4_PAE)) {
 			hw_cr4 &= ~X86_CR4_PAE;
 		}
 	}
+
+	if (!enable_unrestricted_guest && !is_paging(vcpu))
+		/*
+		 * SMEP/SMAP is disabled if CPU is in non-paging mode in
+		 * hardware.  However KVM always uses paging mode without
+		 * unrestricted guest.
+		 * To emulate this behavior, SMEP/SMAP needs to be manually
+		 * disabled when guest switches to non-paging mode.
+		 */
+		hw_cr4 &= ~(X86_CR4_SMEP | X86_CR4_SMAP);
 
 	vmcs_writel(CR4_READ_SHADOW, cr4);
 	vmcs_writel(GUEST_CR4, hw_cr4);
@@ -4880,6 +4881,9 @@ static int handle_exception(struct kvm_vcpu *vcpu)
 		return handle_rmode_exception(vcpu, ex_no, error_code);
 
 	switch (ex_no) {
+	case AC_VECTOR:
+		kvm_queue_exception_e(vcpu, AC_VECTOR, error_code);
+		return 1;
 	case DB_VECTOR:
 		dr6 = vmcs_readl(EXIT_QUALIFICATION);
 		if (!(vcpu->guest_debug &
