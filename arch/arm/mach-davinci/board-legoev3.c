@@ -448,10 +448,21 @@ static void legoev3_eeprom_setup(struct memory_accessor *mem_acc, void *context)
 	u8 data[8];
 
 	/*
+	 * U-boot in the official LEGO firmware does not set ATAGS, so if
+	 * system_rev != 0 here, we know we are using a newer version of u-boot
+	 * that actually set system_rev for us already. If system_rev is not
+	 * set already at this point, then we go ahead and read it (and the
+	 * serial/Bluetooth MAC) from the eeprom now.
+	 */
+	if (system_rev)
+		return;
+
+	/*
 	 * The first byte read has corrupt data for some reason. It seems to be
-	 * a hardware problem with the EEPROM. So, we are reading a couple of
-	 * extra bytes before the actual data. data[2] is the hardware revision
-	 * and data[3] is checksum. Hardware rev 3 has the mac address at 0x3f00
+	 * a hardware problem with the EEPROM combined with the way the at24
+	 * driver forms its i2c messages. So, we are reading a couple of extra
+	 * bytes before the actual data. data[2] is the hardware revision and
+	 * data[3] is checksum. Hardware rev 3 has the mac address at 0x3f00
 	 * instead of hw id.
 	 */
 	if (mem_acc->read(mem_acc, data, 0x3efe, 8) == 8)
