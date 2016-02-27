@@ -373,18 +373,14 @@ static __init void legoev3_usb_init(void)
  */
 
 static const short legoev3_bt_pins[] __initconst = {
-	EV3_BT_ENA, EV3_BT_CLK_ENA, EV3_BT_PIC_ENA, EV3_BT_PIC_RST,
-	EV3_BT_PIC_CTS, EV3_BT_CLK, EV3_BT_UART_CTS, EV3_BT_UART_RTS,
-	EV3_BT_UART_RXD, EV3_BT_UART_TXD,
+	EV3_BT_ENA, EV3_BT_CLK_ENA, EV3_BT_CLK, EV3_BT_UART_CTS,
+	EV3_BT_UART_RTS, EV3_BT_UART_RXD, EV3_BT_UART_TXD,
 	-1
 };
 
 static struct legoev3_bluetooth_platform_data legoev3_bt_pdata = {
 	.bt_ena_gpio		= EV3_BT_ENA_PIN,
 	.bt_clk_ena_gpio	= EV3_BT_CLK_ENA_PIN,
-	.pic_ena_gpio		= EV3_BT_PIC_ENA_PIN,
-	.pic_rst_gpio		= EV3_BT_PIC_RST_PIN,
-	.pic_cts_gpio		= EV3_BT_PIC_CTS_PIN,
 };
 
 static struct platform_device legoev3_bt_device = {
@@ -1013,15 +1009,6 @@ static __init void legoev3_init(void)
 				ret);
 
 	/* support for board-level I2C */
-	/*
-	 * There is a gpio connected to the I2C0 data line. We need to set the
-	 * gpio direction to input so that it does not pull the I2C data line
-	 * up or down. Then we free the gpio so that it can be used by the
-	 * bluetooth driver.
-	 */
-	gpio_request_one(EV3_BT_PIC_CTS_PIN, GPIOF_IN, "EV3_BT_PIC_CTS");
-	gpio_free(EV3_BT_PIC_CTS_PIN);
-
 	ret = davinci_cfg_reg_list(legoev3_i2c_board_pins);
 	if (ret)
 		pr_warn("legoev3_init: board i2c mux setup failed: %d\n",
