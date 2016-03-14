@@ -76,9 +76,4 @@ struct legoev3_ports_platform_data {
 	struct ev3_output_port_platform_data output_port_data[NUM_EV3_PORT_OUT];
 };
 
-struct ev3_motor_platform_data {
-	unsigned tacho_int_gpio;
-	unsigned tacho_dir_gpio;
-};
-
 #endif /* _PLATFORM_DATA_LEGOEV3_H */
