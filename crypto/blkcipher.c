@@ -325,12 +325,12 @@ static int blkcipher_walk_first(struct blkcipher_desc *desc,
 	if (WARN_ON_ONCE(in_irq()))
 		return -EDEADLK;
 
+	walk->iv = desc->info;
 	walk->nbytes = walk->total;
 	if (unlikely(!walk->total))
 		return 0;
 
 	walk->buffer = NULL;
-	walk->iv = desc->info;
 	if (unlikely(((unsigned long)walk->iv & walk->alignmask))) {
 		int err = blkcipher_copy_iv(walk);
 		if (err)
@@ -471,6 +471,7 @@ static int crypto_init_blkcipher_ops_async(struct crypto_tfm *tfm)
 	}
 	crt->base = __crypto_ablkcipher_cast(tfm);
 	crt->ivsize = alg->ivsize;
+	crt->has_setkey = alg->max_keysize;
 
 	return 0;
 }

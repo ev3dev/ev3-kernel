@@ -1398,7 +1398,10 @@ static struct page *alloc_huge_page(struct vm_area_struct *vma,
 		page = alloc_buddy_huge_page(h, NUMA_NO_NODE);
 		if (!page)
 			goto out_uncharge_cgroup;
-
+		if (!avoid_reserve && vma_has_reserves(vma, chg)) {
+			SetPagePrivate(page);
+			h->resv_huge_pages--;
+		}
 		spin_lock(&hugetlb_lock);
 		list_move(&page->lru, &h->hugepage_activelist);
 		/* Fall through */
@@ -3167,11 +3170,11 @@ int hugetlb_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 		} else if (unlikely(is_hugetlb_entry_hwpoisoned(entry)))
 			return VM_FAULT_HWPOISON_LARGE |
 				VM_FAULT_SET_HINDEX(hstate_index(h));
+	} else {
+		ptep = huge_pte_alloc(mm, address, huge_page_size(h));
+		if (!ptep)
+			return VM_FAULT_OOM;
 	}
-
-	ptep = huge_pte_alloc(mm, address, huge_page_size(h));
-	if (!ptep)
-		return VM_FAULT_OOM;
 
 	mapping = vma->vm_file->f_mapping;
 	idx = vma_hugecache_offset(h, vma, address);

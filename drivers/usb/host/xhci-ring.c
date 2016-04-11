@@ -1620,7 +1620,8 @@ static void handle_port_status(struct xhci_hcd *xhci,
 			 */
 			bogus_port_status = true;
 			goto cleanup;
-		} else {
+		} else if (!test_bit(faked_port_index,
+				     &bus_state->resuming_ports)) {
 			xhci_dbg(xhci, "resume HS port %d\n", port_id);
 			bus_state->resume_done[faked_port_index] = jiffies +
 				msecs_to_jiffies(USB_RESUME_TIMEOUT);
@@ -2191,10 +2192,6 @@ static int process_bulk_intr_td(struct xhci_hcd *xhci, struct xhci_td *td,
 				EVENT_TRB_LEN(le32_to_cpu(event->transfer_len)));
 	/* Fast path - was this the last TRB in the TD for this URB? */
 	if (event_trb == td->last_trb) {
-		if (td->urb_length_set && trb_comp_code == COMP_SHORT_TX)
-			return finish_td(xhci, td, event_trb, event, ep,
-					 status, false);
-
 		if (EVENT_TRB_LEN(le32_to_cpu(event->transfer_len)) != 0) {
 			td->urb->actual_length =
 				td->urb->transfer_buffer_length -
@@ -2246,12 +2243,6 @@ static int process_bulk_intr_td(struct xhci_hcd *xhci, struct xhci_td *td,
 			td->urb->actual_length +=
 				TRB_LEN(le32_to_cpu(cur_trb->generic.field[2])) -
 				EVENT_TRB_LEN(le32_to_cpu(event->transfer_len));
-
-		if (trb_comp_code == COMP_SHORT_TX) {
-			xhci_dbg(xhci, "mid bulk/intr SP, wait for last TRB event\n");
-			td->urb_length_set = true;
-			return 0;
-		}
 	}
 
 	return finish_td(xhci, td, event_trb, event, ep, status, false);
