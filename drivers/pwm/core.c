@@ -582,7 +582,6 @@ int pwm_adjust_config(struct pwm_device *pwm)
 		state.duty_cycle = 0;
 		state.period = pargs.period;
 		state.polarity = pargs.polarity;
-
 		return pwm_apply_state(pwm, &state);
 	}
 
@@ -592,7 +591,6 @@ int pwm_adjust_config(struct pwm_device *pwm)
 	 */
 	if (pargs.period != state.period) {
 		u64 dutycycle = (u64)state.duty_cycle * pargs.period;
-
 		do_div(dutycycle, state.period);
 		state.duty_cycle = dutycycle;
 		state.period = pargs.period;
