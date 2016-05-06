@@ -13,6 +13,8 @@ source "drivers/rapidio/Kconfig"
 
 source "drivers/base/Kconfig"
 
+source "drivers/lego/Kconfig"
+
 source "drivers/bus/Kconfig"
 
 source "drivers/cache/Kconfig"

@@ -195,3 +195,6 @@ obj-$(CONFIG_CDX_BUS)		+= cdx/
 obj-$(CONFIG_DPLL)		+= dpll/
 
 obj-$(CONFIG_S390)		+= s390/
+
+# this must come last to avoid depedency issues
+obj-$(CONFIG_LEGO_DRIVERS)	+= lego/
