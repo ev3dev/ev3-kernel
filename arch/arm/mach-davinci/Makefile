@@ -14,6 +14,9 @@ obj-$(CONFIG_ARCH_DAVINCI_DA830)	+= da830.o
 obj-$(CONFIG_ARCH_DAVINCI_DA850)	+= da850.o pdata-quirks.o
 
 obj-y					+= da8xx-dt.o
+obj-$(CONFIG_MACH_DAVINCI_LEGOEV3)	+= legoev3-dt.o
+
+obj-$(CONFIG_LEGOEV3_FIQ)		+= legoev3-fiq.o
 
 # Power Management
 obj-$(CONFIG_HAVE_CLK)			+= pm_domain.o
