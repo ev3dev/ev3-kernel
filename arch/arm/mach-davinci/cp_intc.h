@@ -54,4 +54,7 @@
 void cp_intc_init(void);
 int cp_intc_of_init(struct device_node *, struct device_node *);
 
+void cp_intc_fiq_enable(void);
+void cp_intc_fiq_disable(void);
+
 #endif	/* __ASM_HARDWARE_CP_INTC_H */
