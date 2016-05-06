@@ -1593,6 +1593,8 @@ config SERIAL_ST_ASC_CONSOLE
 	depends on SERIAL_ST_ASC=y
 	select SERIAL_CORE_CONSOLE
 
+source "drivers/tty/serial/omapl_pru/Kconfig"
+
 config SERIAL_MEN_Z135
 	tristate "MEN 16z135 Support"
 	select SERIAL_CORE
