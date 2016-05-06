@@ -14,8 +14,10 @@
 #include <linux/platform_device.h>
 #include <linux/dma-contiguous.h>
 #include <linux/serial_8250.h>
+#include <linux/ti_omapl_pru_suart.h>
 #include <linux/ahci_platform.h>
 #include <linux/clk.h>
+#include <linux/export.h>
 #include <linux/reboot.h>
 #include <linux/dmaengine.h>
 
@@ -600,6 +602,106 @@ void __init da8xx_register_mcasp(int id, struct snd_platform_data *pdata)
 
 	pdev->dev.platform_data = pdata;
 	platform_device_register(pdev);
+}
+
+static struct resource da8xx_pru_suart_resources[] = {
+	{
+		.name 	= "omapl_pru_suart",
+		.start  = DA8XX_PRUSS_MEM_BASE,
+		.end    = DA8XX_PRUSS_MEM_BASE + 0xFFFE,
+		.flags  = IORESOURCE_MEM,
+	},
+	{
+#if !(defined CONFIG_OMAPL_SUART_MCASP) || (CONFIG_OMAPL_SUART_MCASP == 0)
+		.start  = DAVINCI_DA8XX_MCASP0_REG_BASE,
+		.end    = DAVINCI_DA8XX_MCASP0_REG_BASE + (SZ_1K * 12) - 1,
+		.flags  = IORESOURCE_MEM,
+#elif (defined CONFIG_OMAPL_SUART_MCASP) && (CONFIG_OMAPL_SUART_MCASP == 1)
+		.start  = DAVINCI_DA830_MCASP1_REG_BASE,
+		.end    = DAVINCI_DA830_MCASP1_REG_BASE + (SZ_1K * 12) - 1,
+		.flags  = IORESOURCE_MEM,
+#elif (defined CONFIG_OMAPL_SUART_MCASP) && (CONFIG_OMAPL_SUART_MCASP == 2)
+		.start  = DAVINCI_DA830_MCASP2_REG_BASE,
+		.end    = DAVINCI_DA830_MCASP2_REG_BASE + (SZ_1K * 12) - 1,
+		.flags  = IORESOURCE_MEM,
+#else
+#error CONFIG_OMAPL_SUART_MCASP must be 0, 1 or 2
+#endif
+	},
+	{
+		.start  = DA8XX_PSC0_BASE,
+		.end    = DA8XX_PSC0_BASE + (SZ_1K * 3) - 1,
+		.flags  = IORESOURCE_MEM,
+	},
+	{
+		.start  = DA8XX_PSC1_BASE,
+		.end    = DA8XX_PSC1_BASE + (SZ_1K * 3) - 1,
+		.flags  = IORESOURCE_MEM,
+	},
+	{
+		.start  = DA8XX_SHARED_RAM_BASE,
+		.end    = DA8XX_SHARED_RAM_BASE + (SZ_1K * 8) - 1,
+		.flags  = IORESOURCE_MEM,
+	},
+	{
+		.start  = IRQ_DA8XX_EVTOUT0,
+		.end    = IRQ_DA8XX_EVTOUT0,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.start  = IRQ_DA8XX_EVTOUT1,
+		.end    = IRQ_DA8XX_EVTOUT1,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.start  = IRQ_DA8XX_EVTOUT2,
+		.end    = IRQ_DA8XX_EVTOUT2,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.start  = IRQ_DA8XX_EVTOUT3,
+		.end    = IRQ_DA8XX_EVTOUT3,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.start  = IRQ_DA8XX_EVTOUT4,
+		.end    = IRQ_DA8XX_EVTOUT4,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.start  = IRQ_DA8XX_EVTOUT5,
+		.end    = IRQ_DA8XX_EVTOUT5,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.start  = IRQ_DA8XX_EVTOUT6,
+		.end    = IRQ_DA8XX_EVTOUT6,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.start  = IRQ_DA8XX_EVTOUT7,
+		.end    = IRQ_DA8XX_EVTOUT7,
+		.flags  = IORESOURCE_IRQ,
+	},
+};
+
+static struct ti_pru_suart_platform_data da8xx_pru_suart_pdata = {
+	.version = 1,
+};
+
+struct platform_device da8xx_pru_suart_device = {
+	.name		= "ti_omapl_pru_suart",
+	.id		= 1,
+	.num_resources	= ARRAY_SIZE(da8xx_pru_suart_resources),
+	.resource	= da8xx_pru_suart_resources,
+	.dev		= {
+		.platform_data	= &da8xx_pru_suart_pdata,
+	},
+};
+
+int __init da8xx_register_pru_suart(void)
+{
+	return platform_device_register(&da8xx_pru_suart_device);
 }
 
 static struct resource da8xx_pruss_resources[] = {

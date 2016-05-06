@@ -19,6 +19,8 @@
  * and the chip/board init code should then explicitly include
  * <chipname>.h
  */
+#define DAVINCI_SYSTEM_MODULE_BASE        0x01C40000
+
 /*
  * I/O mapping
  */
