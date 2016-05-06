@@ -508,15 +508,11 @@ int pwm_enable(struct pwm_device *pwm)
 	if (!pwm)
 		return -EINVAL;
 
-	mutex_lock(&pwm->lock);
-
 	if (!test_and_set_bit(PWMF_ENABLED, &pwm->flags)) {
 		err = pwm->chip->ops->enable(pwm->chip, pwm);
 		if (err)
 			clear_bit(PWMF_ENABLED, &pwm->flags);
 	}
-
-	mutex_unlock(&pwm->lock);
 
 	return err;
 }
