@@ -33,9 +33,13 @@ struct fiq_handler {
 	void *dev_id;
 };
 
+typedef void (*fiq_c_handler_t)(void);
+
 extern int claim_fiq(struct fiq_handler *f);
 extern void release_fiq(struct fiq_handler *f);
 extern void set_fiq_handler(void *start, unsigned int length);
+extern fiq_c_handler_t get_fiq_c_handler(void);
+extern void set_fiq_c_handler(fiq_c_handler_t);
 extern void enable_fiq(int fiq);
 extern void disable_fiq(int fiq);
 
