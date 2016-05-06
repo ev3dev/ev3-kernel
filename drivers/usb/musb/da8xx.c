@@ -335,28 +335,6 @@ static irqreturn_t da8xx_musb_interrupt(int irq, void *hci)
 	return ret;
 }
 
-static int da8xx_musb_set_mode(struct musb *musb, u8 musb_mode)
-{
-	struct da8xx_glue *glue = dev_get_drvdata(musb->controller->parent);
-	enum phy_mode phy_mode;
-
-	switch (musb_mode) {
-	case MUSB_HOST:		/* Force VBUS valid, ID = 0 */
-		phy_mode = PHY_MODE_USB_HOST;
-		break;
-	case MUSB_PERIPHERAL:	/* Force VBUS valid, ID = 1 */
-		phy_mode = PHY_MODE_USB_DEVICE;
-		break;
-	case MUSB_OTG:		/* Don't override the VBUS/ID comparators */
-		phy_mode = PHY_MODE_USB_OTG;
-		break;
-	default:
-		return -EINVAL;
-	}
-
-	return phy_set_mode(glue->phy, phy_mode);
-}
-
 static int da8xx_musb_init(struct musb *musb)
 {
 	struct da8xx_glue *glue = dev_get_drvdata(musb->controller->parent);
@@ -446,7 +424,6 @@ static const struct musb_platform_ops da8xx_ops = {
 	.enable		= da8xx_musb_enable,
 	.disable	= da8xx_musb_disable,
 
-	.set_mode	= da8xx_musb_set_mode,
 	.try_idle	= da8xx_musb_try_idle,
 
 	.set_vbus	= da8xx_musb_set_vbus,
