@@ -34,6 +34,7 @@ struct davinci_timer_info {
 	struct davinci_timer_instance	*timers;
 	unsigned int			clockevent_id;
 	unsigned int			clocksource_id;
+	unsigned int			fiqsource_id;
 };
 
 struct davinci_gpio_controller;
