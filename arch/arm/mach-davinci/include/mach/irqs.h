@@ -408,4 +408,10 @@
 /* da850 currently has the most irqs so use DA850_N_CP_INTC_IRQ */
 #define NR_IRQS (DA850_N_CP_INTC_IRQ + DAVINCI_N_GPIO + DAVINCI_N_SPARE_IRQ)
 
+/*
+ * This value is needed by arch/arm/kernel/fiq.c but is not meaningful
+ * on this platform
+ */
+#define FIQ_START			0
+
 #endif /* __ASM_ARCH_IRQS_H */
