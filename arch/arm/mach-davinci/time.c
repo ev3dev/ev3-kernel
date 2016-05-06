@@ -3,6 +3,9 @@
  *
  * Author: Kevin Hilman, MontaVista Software, Inc. <source@mvista.com>
  *
+ * FIQ Timer changes copied from LEGO lsm2012 source code
+ * by David Lechner <david@lechnology.com>
+ *
  * 2007 (c) MontaVista Software, Inc. This file is licensed under
  * the terms of the GNU General Public License version 2. This program
  * is licensed "as is" without any warranty of any kind, whether express
@@ -19,8 +22,10 @@
 #include <linux/err.h>
 #include <linux/platform_device.h>
 #include <linux/sched_clock.h>
+#include <linux/export.h>
 
 #include <asm/mach/irq.h>
+#include <asm/fiq.h>
 #include <asm/mach/time.h>
 
 #include <mach/cputype.h>
@@ -40,6 +45,7 @@ static unsigned int davinci_clock_tick_rate;
 enum {
 	TID_CLOCKEVENT,
 	TID_CLOCKSOURCE,
+	TID_FIQSOURCE,
 };
 
 /* Timer register offsets */
@@ -176,6 +182,21 @@ static irqreturn_t freerun_interrupt(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+/*
+ * Only called when interrupt is configured as regular IRQ and not FIQ.
+ * In other words, this is for debugging (when assigned to IRQ) and serves
+ * as a placeholder during normal usage (when assigned to FIQ).
+ */
+static irqreturn_t fiqsource_interrupt(int irq, void *dev_id)
+{
+	fiq_c_handler_t handler = get_fiq_c_handler();
+
+	if (handler)
+		handler();
+
+	return IRQ_HANDLED;
+}
+
 static struct timer_s timers[] = {
 	[TID_CLOCKEVENT] = {
 		.name      = "clockevent",
@@ -192,6 +213,15 @@ static struct timer_s timers[] = {
 		.irqaction = {
 			.flags   = IRQF_TIMER,
 			.handler = freerun_interrupt,
+		}
+	},
+	[TID_FIQSOURCE] = {
+		.name       = "fiq interrupt source counter",
+		.period     = 50*24, /* 10kHz - clock is 24MHz */
+		.opts       = TIMER_OPTS_PERIODIC,
+		.irqaction = {
+			.flags   = IRQF_TIMER,
+			.handler = fiqsource_interrupt,
 		}
 	},
 };
@@ -348,13 +378,17 @@ void __init davinci_timer_init(void)
 	struct davinci_soc_info *soc_info = &davinci_soc_info;
 	unsigned int clockevent_id;
 	unsigned int clocksource_id;
+	unsigned int fiqsource_id;
+
 	int i;
 
 	clockevent_id = soc_info->timer_info->clockevent_id;
 	clocksource_id = soc_info->timer_info->clocksource_id;
+	fiqsource_id = soc_info->timer_info->fiqsource_id;
 
 	timers[TID_CLOCKEVENT].id = clockevent_id;
 	timers[TID_CLOCKSOURCE].id = clocksource_id;
+	timers[TID_FIQSOURCE].id = fiqsource_id;
 
 	/*
 	 * If using same timer for both clock events & clocksource,

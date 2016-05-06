@@ -543,7 +543,7 @@ static struct clk_lookup da850_clks[] = {
 	CLK(NULL,		"tptc1",	&tptc1_clk),
 	CLK(NULL,		"tpcc1",	&tpcc1_clk),
 	CLK(NULL,		"tptc2",	&tptc2_clk),
-	CLK("pruss_uio",	"pruss",	&pruss_clk),
+	CLK(NULL,		"pruss",	&pruss_clk),
 	CLK("serial8250.0",	NULL,		&uart0_clk),
 	CLK("serial8250.1",	NULL,		&uart1_clk),
 	CLK("serial8250.2",	NULL,		&uart2_clk),
@@ -555,7 +555,7 @@ static struct clk_lookup da850_clks[] = {
 	CLK(NULL,		"rmii",		&rmii_clk),
 	CLK("davinci_emac.1",	NULL,		&emac_clk),
 	CLK("davinci_mdio.0",	"fck",		&mdio_clk),
-	CLK("davinci-mcasp.0",	NULL,		&mcasp_clk),
+	CLK(NULL,		"mcasp",	&mcasp_clk),
 	CLK("davinci-mcbsp.0",	NULL,		&mcbsp0_clk),
 	CLK("davinci-mcbsp.1",	NULL,		&mcbsp1_clk),
 	CLK("da8xx_lcdc.0",	"fck",		&lcdc_clk),
@@ -598,17 +598,21 @@ static const struct mux_config da850_pins[] = {
 	MUX_CFG(DA850, UART0_RXD,	3,	16,	15,	2,	false)
 	MUX_CFG(DA850, UART0_TXD,	3,	20,	15,	2,	false)
 	/* UART1 function */
+	MUX_CFG(DA850, NUART1_CTS,	0,	20,	15,	4,	false)
+	MUX_CFG(DA850, NUART1_RTS,	0,	16,	15,	4,	false)
 	MUX_CFG(DA850, UART1_RXD,	4,	24,	15,	2,	false)
 	MUX_CFG(DA850, UART1_TXD,	4,	28,	15,	2,	false)
 	/* UART2 function */
+	MUX_CFG(DA850, NUART2_CTS,	0,	28,	15,	4,	false)
+	MUX_CFG(DA850, NUART2_RTS,	0,	24,	15,	4,	false)
 	MUX_CFG(DA850, UART2_RXD,	4,	16,	15,	2,	false)
 	MUX_CFG(DA850, UART2_TXD,	4,	20,	15,	2,	false)
-	/* I2C1 function */
-	MUX_CFG(DA850, I2C1_SCL,	4,	16,	15,	4,	false)
-	MUX_CFG(DA850, I2C1_SDA,	4,	20,	15,	4,	false)
 	/* I2C0 function */
 	MUX_CFG(DA850, I2C0_SDA,	4,	12,	15,	2,	false)
 	MUX_CFG(DA850, I2C0_SCL,	4,	8,	15,	2,	false)
+	/* I2C1 function */
+	MUX_CFG(DA850, I2C1_SCL,	4,	16,	15,	4,	false)
+	MUX_CFG(DA850, I2C1_SDA,	4,	20,	15,	4,	false)
 	/* EMAC function */
 	MUX_CFG(DA850, MII_TXEN,	2,	4,	15,	8,	false)
 	MUX_CFG(DA850, MII_TXCLK,	2,	8,	15,	8,	false)
@@ -677,6 +681,7 @@ static const struct mux_config da850_pins[] = {
 	MUX_CFG(DA850, LCD_D_9,		18,	0,	15,	2,	false)
 	MUX_CFG(DA850, LCD_D_8,		18,	4,	15,	2,	false)
 	MUX_CFG(DA850, LCD_PCLK,	18,	24,	15,	2,	false)
+	MUX_CFG(DA850, LCD_MCLK,	18,	28,	15,	2,	false)
 	MUX_CFG(DA850, LCD_HSYNC,	19,	0,	15,	2,	false)
 	MUX_CFG(DA850, LCD_VSYNC,	19,	4,	15,	2,	false)
 	MUX_CFG(DA850, NLCD_AC_ENB_CS,	19,	24,	15,	2,	false)
@@ -744,18 +749,166 @@ static const struct mux_config da850_pins[] = {
 	MUX_CFG(DA850, EMA_WAIT_1,	6,	24,	15,	1,	false)
 	MUX_CFG(DA850, NEMA_CS_2,	7,	0,	15,	1,	false)
 	/* GPIO function */
+	MUX_CFG(DA850, GPIO0_0,		1,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_1,		1,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_2,		1,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_3,		1,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_4,		1,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_5,		1,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_6,		1,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_7,		1,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_8,		0,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_9,		0,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_10,	0,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_11,	0,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_12,	0,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_13,	0,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_14,	0,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO0_15,	0,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO1_0,		4,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO1_1,		4,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO1_2,		4,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO1_3,		4,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO1_4,		4,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO1_5,		4,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO1_6,		4,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO1_7,		4,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO1_8,		3,	0,	15,	4,	false)
+	MUX_CFG(DA850, GPIO1_9,		2,	24,	15,	4,	false)
+	MUX_CFG(DA850, GPIO1_10,	2,	20,	15,	4,	false)
+	MUX_CFG(DA850, GPIO1_11,	2,	16,	15,	4,	false)
+	MUX_CFG(DA850, GPIO1_12,	2,	12,	15,	4,	false)
+	MUX_CFG(DA850, GPIO1_13,	2,	8,	15,	4,	false)
+	MUX_CFG(DA850, GPIO1_14,	2,	4,	15,	4,	false)
+	MUX_CFG(DA850, GPIO1_15,	2,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_0,		6,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_1,		6,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_2,		6,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_3,		6,	16,	15,	8,	false)
 	MUX_CFG(DA850, GPIO2_4,		6,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_5,		6,	8,	15,	8,	false)
 	MUX_CFG(DA850, GPIO2_6,		6,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_7,		6,	0,	15,	8,	false)
 	MUX_CFG(DA850, GPIO2_8,		5,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_9,		5,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_10,	5,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_11,	5,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_12,	5,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_13,	5,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO2_14,	5,	4,	15,	8,	false)
 	MUX_CFG(DA850, GPIO2_15,	5,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_0,		8,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_1,		8,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_2,		8,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_3,		8,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_4,		8,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_5,		8,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_6,		8,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_7,		8,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_8,		7,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_9,		7,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_10,	7,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_11,	7,	16,	15,	8,	false)
 	MUX_CFG(DA850, GPIO3_12,	7,	12,	15,	8,	false)
 	MUX_CFG(DA850, GPIO3_13,	7,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_14,	7,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO3_15,	7,	0,	15,	8,	false)
 	MUX_CFG(DA850, GPIO4_0,		10,	28,	15,	8,	false)
 	MUX_CFG(DA850, GPIO4_1,		10,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_2,		10,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_3,		10,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_4,		10,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_5,		10,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_6,		10,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_7,		10,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_8,		9,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_9,		9,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_10,	9,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_11,	9,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_12,	9,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_13,	9,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_14,	9,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO4_15,	9,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_0,		12,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_1,		12,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_2,		12,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_3,		12,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_4,		12,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_5,		12,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_6,		12,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_7,		12,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_8,		11,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_9,		11,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_10,	11,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_11,	11,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_12,	11,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_13,	11,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_14,	11,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO5_15,	11,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_0,		19,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_1,		19,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_2,		19,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_3,		19,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_4,		19,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_5,		16,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_6,		14,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_7,		14,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_8,		13,	28,	15,	8,	false)
 	MUX_CFG(DA850, GPIO6_9,		13,	24,	15,	8,	false)
 	MUX_CFG(DA850, GPIO6_10,	13,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_11,	13,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_12,	13,	12,	15,	8,	false)
 	MUX_CFG(DA850, GPIO6_13,	13,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_14,	13,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO6_15,	13,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_0,		18,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_1,		18,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_2,		17,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_3,		17,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_4,		17,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_5,		17,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_6,		17,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_7,		17,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_8,		17,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_9,		17,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_10,	16,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_11,	16,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_12,	16,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_13,	16,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_14,	16,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO7_15,	16,	8,	15,	8,	false)
+	MUX_CFG(DA850, GPIO8_0,		19,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO8_1,		3,	28,	15,	4,	false)
+	MUX_CFG(DA850, GPIO8_2,		3,	24,	15,	4,	false)
+	MUX_CFG(DA850, GPIO8_3,		3,	20,	15,	4,	false)
+	MUX_CFG(DA850, GPIO8_4,		3,	16,	15,	4,	false)
+	MUX_CFG(DA850, GPIO8_5,		3,	12,	15,	4,	false)
+	MUX_CFG(DA850, GPIO8_6,		3,	8,	15,	4,	false)
+	MUX_CFG(DA850, GPIO8_7,		2,	28,	15,	4,	false)
+	MUX_CFG(DA850, GPIO8_8,		19,	4,	15,	8,	false)
+	MUX_CFG(DA850, GPIO8_9,		19,	0,	15,	8,	false)
+	MUX_CFG(DA850, GPIO8_10,	18,	28,	15,	8,	false)
+	MUX_CFG(DA850, GPIO8_11,	18,	24,	15,	8,	false)
+	MUX_CFG(DA850, GPIO8_12,	18,	20,	15,	8,	false)
+	MUX_CFG(DA850, GPIO8_13,	18,	16,	15,	8,	false)
+	MUX_CFG(DA850, GPIO8_14,	18,	12,	15,	8,	false)
+	MUX_CFG(DA850, GPIO8_15,	18,	8,	15,	8,	false)
+	/* RTC function */
 	MUX_CFG(DA850, RTC_ALARM,	0,	28,	15,	2,	false)
+	/* eHRPWM0 function */
+	MUX_CFG(DA850,	EHRPWM0_A,	3,	0,	15,	2,	false)
+	MUX_CFG(DA850,	EHRPWM0_B,	3,	4,	15,	2,	false)
+	MUX_CFG(DA850,	EHRPWM0_TZ,	1,	0,	15,	2,	false)
+	/* eHRPWM1 function */
+	MUX_CFG(DA850,	EHRPWM1_A,	5,	0,	15,	2,	false)
+	MUX_CFG(DA850,	EHRPWM1_B,	5,	4,	15,	2,	false)
+	MUX_CFG(DA850,	EHRPWM1_TZ,	2,	0,	15,	8,	false)
+	/* eCAP0 function */
+	MUX_CFG(DA850, ECAP0_APWM0,	2,	28,	15,	2,	false)
+	/* eCAP1 function */
+	MUX_CFG(DA850, ECAP1_APWM1,	1,	28,	15,	4,	false)
+	/* eCAP2 function */
+	MUX_CFG(DA850, ECAP2_APWM2,	1,	0,	15,	4,	false)
 	/* VPIF Capture */
 	MUX_CFG(DA850, VPIF_DIN0,	15,	4,	15,	1,	false)
 	MUX_CFG(DA850, VPIF_DIN1,	15,	0,	15,	1,	false)
@@ -796,6 +949,50 @@ static const struct mux_config da850_pins[] = {
 	MUX_CFG(DA850, VPIF_DOUT15,	17,	8,	15,	1,	false)
 	MUX_CFG(DA850, VPIF_CLKO2,	19,	12,	15,	1,	false)
 	MUX_CFG(DA850, VPIF_CLKO3,	19,	20,	15,	1,	false)
+	/* PRU functions for soft can */
+	MUX_CFG(DA850, PRU0_R31_0,	7,	28,	15,	0,	false)
+	MUX_CFG(DA850, PRU1_R30_15,	12,	0,	15,	4,	false)
+	MUX_CFG(DA850, PRU1_R31_18,	11,	20,	15,	0,	false)
+	/* SPI0 function */
+	MUX_CFG(DA850, SPI0_SCS_0,	4,	4,	15,	1,	false)
+	MUX_CFG(DA850, SPI0_SCS_1,	4,	0,	15,	1,	false)
+	MUX_CFG(DA850, SPI0_SCS_2,	3,	28,	15,	1,	false)
+	MUX_CFG(DA850, SPI0_SCS_3,	3,	24,	15,	1,	false)
+	MUX_CFG(DA850, SPI0_SCS_4,	3,	20,	15,	1,	false)
+	MUX_CFG(DA850, SPI0_SCS_5,	3,	16,	15,	1,	false)
+	MUX_CFG(DA850, SPI0_CLK,	3,	0,	15,	1,	false)
+	MUX_CFG(DA850, SPI0_ENA,	3,	4,	15,	1,	false)
+	MUX_CFG(DA850, SPI0_SOMI,	3,	8,	15,	1,	false)
+	MUX_CFG(DA850, SPI0_SIMO,	3,	12,	15,	1,	false)
+	/* SPI1 function */
+	MUX_CFG(DA850, SPI1_SCS_0,	5,	4,	15,	1,	false)
+	MUX_CFG(DA850, SPI1_SCS_1,	5,	0,	15,	1,	false)
+	MUX_CFG(DA850, SPI1_SCS_2,	4,	28,	15,	1,	false)
+	MUX_CFG(DA850, SPI1_SCS_3,	4,	24,	15,	1,	false)
+	MUX_CFG(DA850, SPI1_SCS_4,	4,	20,	15,	1,	false)
+	MUX_CFG(DA850, SPI1_SCS_5,	4,	16,	15,	1,	false)
+	MUX_CFG(DA850, SPI1_SCS_6,	4,	12,	15,	1,	false)
+	MUX_CFG(DA850, SPI1_SCS_7,	4,	8,	15,	1,	false)
+	MUX_CFG(DA850, SPI1_CLK,	5,	4,	15,	1,	false)
+	MUX_CFG(DA850, SPI1_ENA,	5,	8,	15,	1,	false)
+	MUX_CFG(DA850, SPI1_SOMI,	5,	16,	15,	1,	false)
+	MUX_CFG(DA850, SPI1_SIMO,	5,	20,	15,	1,	false)
+	/* McBSP0 function */
+	MUX_CFG(DA850, MCBSP0_CLKR,	2,	4,	15,	2,	false)
+	MUX_CFG(DA850, MCBSP0_CLKX,	2,	8,	15,	2,	false)
+	MUX_CFG(DA850, MCBSP0_FSR,	2,	12,	15,	2,	false)
+	MUX_CFG(DA850, MCBSP0_FSX,	2,	16,	15,	2,	false)
+	MUX_CFG(DA850, MCBSP0_DR,	2,	20,	15,	2,	false)
+	MUX_CFG(DA850, MCBSP0_DX,	2,	24,	15,	2,	false)
+	MUX_CFG(DA850, MCBSP0_CLKS,	2,	28,	15,	0,	false)
+	/* McBSP1 function */
+	MUX_CFG(DA850, MCBSP1_CLKR,	1,	4,	15,	2,	false)
+	MUX_CFG(DA850, MCBSP1_CLKX,	1,	8,	15,	2,	false)
+	MUX_CFG(DA850, MCBSP1_FSR,	1,	12,	15,	2,	false)
+	MUX_CFG(DA850, MCBSP1_FSX,	1,	16,	15,	2,	false)
+	MUX_CFG(DA850, MCBSP1_DR,	1,	20,	15,	2,	false)
+	MUX_CFG(DA850, MCBSP1_DX,	1,	24,	15,	2,	false)
+	MUX_CFG(DA850, MCBSP1_CLKS,	1,	28,	15,	2,	false)
 #endif
 };
 
@@ -864,10 +1061,31 @@ static u8 da850_default_priorities[DA850_N_CP_INTC_IRQ] = {
 	[IRQ_DA8XX_TINT12_0]		= 7,
 	[IRQ_DA8XX_TINT34_0]		= 7,
 	[IRQ_DA8XX_TINT12_1]		= 7,
-	[IRQ_DA8XX_TINT34_1]		= 7,
+	[IRQ_DA8XX_TINT34_1]		= 1, /* Uses FIQ for EV3 input port i2c */
 	[IRQ_DA8XX_UARTINT0]		= 7,
 	[IRQ_DA8XX_KEYMGRINT]		= 7,
+	[IRQ_DA8XX_SECINT]		= 7,
+	[IRQ_DA8XX_SECKEYERR]		= 7,
 	[IRQ_DA850_MPUADDRERR0]		= 7,
+	[IRQ_DA850_MPUPROTERR0]		= 7,
+	[IRQ_DA850_IOPUADDRERR0]	= 7,
+	[IRQ_DA850_IOPUPROTERR0]	= 7,
+	[IRQ_DA850_IOPUADDRERR1]	= 7,
+	[IRQ_DA850_IOPUPROTERR1]	= 7,
+	[IRQ_DA850_IOPUADDRERR2]	= 7,
+	[IRQ_DA850_IOPUPROTERR2]	= 7,
+	[IRQ_DA850_BOOTCFG_ADDR_ERR]	= 7,
+	[IRQ_DA850_BOOTCFG_PROT_ERR]	= 7,
+	[IRQ_DA850_MPUADDRERR1]		= 7,
+	[IRQ_DA850_MPUPROTERR1]		= 7,
+	[IRQ_DA850_IOPUADDRERR3]	= 7,
+	[IRQ_DA850_IOPUPROTERR3]	= 7,
+	[IRQ_DA850_IOPUADDRERR4]	= 7,
+	[IRQ_DA850_IOPUPROTERR4]	= 7,
+	[IRQ_DA850_IOPUADDRERR5]	= 7,
+	[IRQ_DA850_IOPUPROTERR5]	= 7,
+	[IRQ_DA850_MIOPU_BOOTCFG_ERR]	= 7,
+//	[IRQ_DA850_MPUADDRERR0]		= 7,
 	[IRQ_DA8XX_CHIPINT0]		= 7,
 	[IRQ_DA8XX_CHIPINT1]		= 7,
 	[IRQ_DA8XX_CHIPINT2]		= 7,
@@ -903,11 +1121,13 @@ static u8 da850_default_priorities[DA850_N_CP_INTC_IRQ] = {
 	[IRQ_DA8XX_RWAKEUP]		= 7,
 	[IRQ_DA8XX_UARTINT2]		= 7,
 	[IRQ_DA8XX_DFTSSINT]		= 7,
-	[IRQ_DA8XX_EHRPWM0]		= 7,
+	[IRQ_DA8XX_EHRPWM0]		= 0, /* Uses FIQ for EV3 sound playback */
 	[IRQ_DA8XX_EHRPWM0TZ]		= 7,
 	[IRQ_DA8XX_EHRPWM1]		= 7,
 	[IRQ_DA8XX_EHRPWM1TZ]		= 7,
 	[IRQ_DA850_SATAINT]		= 7,
+	[IRQ_DA850_TINT12_2]		= 7,
+	[IRQ_DA850_TINT34_2]		= 7,
 	[IRQ_DA850_TINTALL_2]		= 7,
 	[IRQ_DA8XX_ECAP0]		= 7,
 	[IRQ_DA8XX_ECAP1]		= 7,
@@ -935,6 +1155,8 @@ static u8 da850_default_priorities[DA850_N_CP_INTC_IRQ] = {
 	[IRQ_DA850_CCINT1]		= 7,
 	[IRQ_DA850_CCERRINT1]		= 7,
 	[IRQ_DA850_TCERRINT2]		= 7,
+	[IRQ_DA850_TINT12_3]		= 7,
+	[IRQ_DA850_TINT34_3]		= 7,
 	[IRQ_DA850_TINTALL_3]		= 7,
 	[IRQ_DA850_MCBSP0RINT]		= 7,
 	[IRQ_DA850_MCBSP0XINT]		= 7,
@@ -1004,12 +1226,14 @@ static struct davinci_timer_instance da850_timer_instance[4] = {
 /*
  * T0_BOT: Timer 0, bottom		: Used for clock_event
  * T0_TOP: Timer 0, top			: Used for clocksource
- * T1_BOT, T1_TOP: Timer 1, bottom & top: Used for watchdog timer
+ * T1_TOP: Timer 1, bottom		: Used for fiqsource - see legoev3-fiq.c
+ * T1_BOT and T1_TOP are also used for watchdog
  */
 static struct davinci_timer_info da850_timer_info = {
 	.timers		= da850_timer_instance,
 	.clockevent_id	= T0_BOT,
 	.clocksource_id	= T0_TOP,
+	.fiqsource_id	= T1_TOP,
 };
 
 #ifdef CONFIG_CPU_FREQ
