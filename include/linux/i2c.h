@@ -691,6 +691,7 @@ i2c_unlock_adapter(struct i2c_adapter *adapter)
 #define I2C_CLASS_SPD		(1<<7)	/* Memory modules */
 /* Warn users that the adapter doesn't support classes anymore */
 #define I2C_CLASS_DEPRECATED	(1<<8)
+#define I2C_CLASS_LEGOEV3	(1<<31)	/* LEGO EV3 sensors */
 
 /* Internal numbers to terminate lists */
 #define I2C_CLIENT_END		0xfffeU
