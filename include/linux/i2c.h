@@ -870,6 +870,7 @@ static inline void i2c_mark_adapter_resumed(struct i2c_adapter *adap)
 #define I2C_CLASS_HWMON		(1<<0)	/* lm_sensors, ... */
 /* Warn users that the adapter doesn't support classes anymore */
 #define I2C_CLASS_DEPRECATED	(1<<8)
+#define I2C_CLASS_LEGOEV3	(1<<31)	/* LEGO EV3 sensors */
 
 /* Internal numbers to terminate lists */
 #define I2C_CLIENT_END		0xfffeU
