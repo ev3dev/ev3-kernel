@@ -20,12 +20,184 @@
 	model = "LEGO MINDSTORMS EV3";
 
 	aliases {
+		serial0 = &serial0;
 		serial1 = &serial1;
+		serial2 = &serial2;
 	};
 
 	memory@c0000000 {
 		device_type = "memory";
 		reg = <0xc0000000 0x04000000>;
+	};
+
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		pru_suart_reserved: serial@80000000 {
+			compatible = "shared-dma-pool";
+			reg = <0x80000000 0x2000>;
+			no-map;
+		};
+
+	};
+
+	soc@1c00000 {
+		pru_rproc: remote-processor@30000 {
+			compatible = "ev3dev,da850-pruss";
+			ranges = <0x0 0x30000 0x10000>;
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			power-domains = <&psc0 13>;
+
+			pru_intc: intc {
+				compatible = "ev3dev,da850-pru-intc";
+				reg = <0x4000 0x3000>;
+				interrupts = <3>, <4>, <5>, <6>, <7>, <8>, <9>,
+					     <10>;
+				interrupt-controller;
+				#interrupt-cells = <3>;
+			};
+
+			pru0: pru0 {
+				status = "disabled";
+				compatible = "ev3dev,da850-pru-rproc";
+				reg = <0x0 0x200>, <0x7000 0x400>,
+				      <0x8000 0x1000>;
+				reg-names = "dram", "ctrl", "iram";
+				interrupt-parent = <&pru_intc>;
+				interrupts = <63 0xffffffff 0>,
+					     <62 0xffffffff 2>;
+				interrupt-names = "vq-to-pru", "vq-from-pru";
+			};
+
+			pru1: pru1 {
+				compatible = "ev3dev,da850-pru-rproc";
+				reg = <0x2000 0x200>, <0x7800 0x400>,
+				      <0xc000 0x1000>;
+				reg-names = "dram", "ctrl", "iram";
+				interrupt-parent = <&pru_intc>;
+				interrupts = <61 0xffffffff 1>,
+					     <60 0xffffffff 4>;
+				interrupt-names = "vq-to-pru", "vq-from-pru";
+				firmware = "ev3-pru1.fw";
+
+				vdevs {
+					#address-cells = <1>;
+					#size-cells = <0>;
+
+					rpmsg@0 {
+						compatible = "virtio,rpmsg";
+						reg = <0>;
+						#address-cells = <1>;
+						#size-cells = <0>;
+
+						tacho: ev3-tacho-rpmsg@0 {
+							compatible = "ev3dev,ev3-pru-tacho";
+							reg = <0>;
+							#io-channel-cells = <1>;
+
+							/* hacking in LED pwm with tacho for now */
+							pwm-gpios = <&gpio 103 GPIO_ACTIVE_HIGH>,
+								    <&gpio 108 GPIO_ACTIVE_HIGH>,
+								    <&gpio 109 GPIO_ACTIVE_HIGH>,
+								    <&gpio 110 GPIO_ACTIVE_HIGH>;
+						};
+
+						i2c@3 {
+							compatible = "ev3dev,ev3-pru-i2c";
+							reg = <3>;
+						};
+
+						i2c@4 {
+							compatible = "ev3dev,ev3-pru-i2c";
+							reg = <4>;
+						};
+
+						i2c@5 {
+							compatible = "ev3dev,ev3-pru-i2c";
+							reg = <5>;
+						};
+
+						i2c@6 {
+							compatible = "ev3dev,ev3-pru-i2c";
+							reg = <6>;
+						};
+					};
+				};
+			};
+		};
+
+		pru_suart: serial@30000 {
+			compatible = "ev3dev,omapl-pru-suart";
+			reg = <0x30000 0x200>, <0x37000 0x400>, <0x38000 0x1000>,
+			      //<0x32000 0x200>, <0x37800 0x400>, <0x3c000 0x1000>,
+			      <0x100000 0x3000>;
+			reg-names = "pru0-dram", "pru0-ctrl", "pru0-iram",
+				    //"pru1-dram", "pru1-ctrl", "pru1-iram",
+				    "mcasp";
+
+			clocks = <&psc0 13>, <&psc1 7>;
+			clock-names = "pruss", "mcasp";
+
+			interrupt-parent = <&pru_intc>;
+			interrupts = <31 0xffffffff 0>,
+				     <32 0xffffffff 0>,
+				     //<33 0xffffffff 1>,
+				     <34 0xffffffff 2>,
+				     <35 0xffffffff 2>,
+				     <36 0xffffffff 3>,
+				     <37 0xffffffff 3>;
+				     //<38 0xffffffff 4>,
+				     //<39 0xffffffff 4>,
+				     //<40 0xffffffff 5>,
+				     //<41 0xffffffff 5>,
+				     //<42 0xffffffff 6>,
+				     //<33 0xffffffff 6>,
+				     //<34 0xffffffff 7>,
+				     //<45 0xffffffff 7>,
+				     //<46 0xffffffff 8>,
+				     //<47 0xffffffff 8>,
+				     //<48 0xffffffff 9>,
+				     //<49 0xffffffff 9>,
+				     //<50 0xffffffff 1>;
+			interrupt-names = "mcasp",
+					  "arm-to-pru0",
+					  //"arm-to-pru1",
+					  "suart0-tx",
+					  "suart0-rx",
+					  "suart1-tx",
+					  "suart1-rx";
+					  //"suart2-tx",
+					  //"suart2-rx",
+					  //"suart3-tx",
+					  //"suart3-rx",
+					  //"suart4-tx",
+					  //"suart4-rx",
+					  //"suart5-tx",
+					  //"suart5-rx",
+					  //"suart6-tx",
+					  //"suart6-rx",
+					  //"suart7-tx",
+					  //"suart7-rx",
+					  //"pru-to-pru";
+			memory-region = <&pru_suart_reserved>;
+		};
+	};
+
+	board {
+		pinctrl-0 = <&hw_id_pinconf>;
+		pinctrl-names = "default";
+		compatible = "lego,ev3-board";
+		hw-id-gpios = <&gpio 53 GPIO_ACTIVE_HIGH>, /* HWID0 */
+			      <&gpio 52 GPIO_ACTIVE_HIGH>, /* HWID1 */
+			      <&gpio 50 GPIO_ACTIVE_HIGH>, /* HWID2 */
+			      <&gpio 74 GPIO_ACTIVE_HIGH>; /* HWID3 */
+
+		nvmem-cells = <&hw_id>;
+		nvmem-cell-names = "hw-id";
 	};
 
 	/*
@@ -78,6 +250,7 @@
 	 * The EV3 has two built-in bi-color LEDs behind the buttons.
 	 */
 	leds {
+		status = "disabled";
 		compatible = "gpio-leds";
 
 		left_green {
@@ -118,11 +291,13 @@
 	};
 
 	sound {
-		compatible = "pwm-beeper";
+		compatible = "ev3dev,ev3-sound";
 		pinctrl-names = "default";
 		pinctrl-0 = <&ehrpwm0b_pins>;
+		label = "LEGO MINDSTORMS EV3 Speaker";
+		enable-gpios = <&gpio 111 GPIO_ACTIVE_HIGH>;
 		pwms = <&ehrpwm0 1 1000000 0>;
-		amp-supply = <&amp>;
+		pwm-names = "speaker";
 	};
 
 	/*
@@ -157,6 +332,7 @@
 	 * This is the amplifier for the speaker.
 	 */
 	amp: regulator3 {
+		status = "disabled";
 		compatible = "regulator-fixed";
 		regulator-name = "amp";
 		gpio = <&gpio 111 GPIO_ACTIVE_HIGH>;
@@ -171,6 +347,166 @@
 		io-channels = <&adc 4>, <&adc 3>;
 		io-channel-names = "voltage", "current";
 		rechargeable-gpios = <&gpio 136 GPIO_ACTIVE_LOW>;
+	};
+
+	ev3_ports: ev3-ports {
+		compatible = "ev3dev,ev3-ports";
+
+		in1 {
+			pinctrl-names = "default", "i2c", "uart";
+			pinctrl-0 = <&in1_pins>, <&in1_i2c_pins>;
+			pinctrl-1 = <&in1_pins>, <&in1_i2c_pins>;
+			pinctrl-2 = <&in1_pins>, <&in1_uart_pins>;
+
+			compatible = "ev3dev,ev3-input-port";
+			io-channels = <&adc 6>, <&adc 5>;
+			io-channel-names = "pin1", "pin6";
+			pin1-gpios = <&gpio 138 0>;
+			pin2-gpios = <&gpio 34 0>;
+			pin5-gpios = <&gpio 2 0>;
+			pin6-gpios = <&gpio 15 0>;
+			buf-ena-gpios = <&gpio 139 GPIO_ACTIVE_LOW>;
+			ev3dev,tty-name = "ttyS1";
+			ev3dev,i2c-adapter = <3>;
+		};
+
+		in2 {
+			pinctrl-names = "default", "i2c", "uart";
+			pinctrl-0 = <&in2_pins>, <&in2_i2c_pins>;
+			pinctrl-1 = <&in2_pins>, <&in2_i2c_pins>;
+			pinctrl-2 = <&in2_pins>, <&in2_uart_pins>;
+
+			compatible = "ev3dev,ev3-input-port";
+			io-channels = <&adc 8>, <&adc 7>;
+			io-channel-names = "pin1", "pin6";
+			pin1-gpios = <&gpio 140 0>;
+			pin2-gpios = <&gpio 143 0>;
+			pin5-gpios = <&gpio 14 0>;
+			pin6-gpios = <&gpio 13 0>;
+			buf-ena-gpios = <&gpio 142 GPIO_ACTIVE_LOW>;
+			ev3dev,tty-name = "ttyS0";
+			ev3dev,i2c-adapter = <4>;
+		};
+
+		in3 {
+			pinctrl-names = "default", "i2c", "uart";
+			pinctrl-0 = <&in3_pins>, <&in3_i2c_pins>;
+			pinctrl-1 = <&in3_pins>, <&in3_i2c_pins>;
+			pinctrl-2 = <&in3_pins>, <&in3_uart_pins>;
+
+			compatible = "ev3dev,ev3-input-port";
+			io-channels = <&adc 10>, <&adc 9>;
+			io-channel-names = "pin1", "pin6";
+			pin1-gpios = <&gpio 137 0>;
+			pin2-gpios = <&gpio 123 0>;
+			pin5-gpios = <&gpio 12 0>;
+			pin6-gpios = <&gpio 30 0>;
+			buf-ena-gpios = <&gpio 121 GPIO_ACTIVE_LOW>;
+			ev3dev,tty-name = "ttySU1";
+			ev3dev,i2c-adapter = <5>;
+		};
+
+		in4 {
+			pinctrl-names = "default", "i2c", "uart";
+			pinctrl-0 = <&in4_pins>, <&in4_i2c_pins>;
+			pinctrl-1 = <&in4_pins>, <&in4_i2c_pins>;
+			pinctrl-2 = <&in4_pins>, <&in4_uart_pins>;
+
+			compatible = "ev3dev,ev3-input-port";
+			io-channels = <&adc 12>, <&adc 11>;
+			io-channel-names = "pin1", "pin6";
+			pin1-gpios = <&gpio 100 0>;
+			pin2-gpios = <&gpio 120 0>;
+			pin5-gpios = <&gpio 1 0>;
+			pin6-gpios = <&gpio 31 0>;
+			buf-ena-gpios = <&gpio 122 GPIO_ACTIVE_LOW>;
+			ev3dev,tty-name = "ttySU0";
+			ev3dev,i2c-adapter = <6>;
+		};
+
+		outA {
+			pinctrl-names = "default";
+			pinctrl-0 = <&ehrpwm1b_pins>;
+
+			compatible = "ev3dev,ev3-output-port";
+			io-channels = <&adc 1>;
+			io-channel-names = "pin5";
+			pin1-gpios = <&gpio 63 0>;
+			pin2-gpios = <&gpio 54 0>;
+			pin5-det-gpios = <&gpio 84 0>;
+			pin5-gpios = <&gpio 91 GPIO_ACTIVE_LOW>;
+			pin6-gpios = <&gpio 4 GPIO_ACTIVE_LOW>;
+			pwms = <&ehrpwm1 1 75758 PWM_POLARITY_INVERTED>;
+			pwm-names = "motor";
+
+			motor {
+				io-channels = <&tacho 0>, <&tacho 1>;
+				io-channel-names = "count", "rate";
+			};
+		};
+
+		outB {
+			pinctrl-names = "default";
+			pinctrl-0 = <&ehrpwm1a_pins>;
+
+			compatible = "ev3dev,ev3-output-port";
+			io-channels = <&adc 0>;
+			io-channel-names = "pin5";
+			pin1-gpios = <&gpio 33 0>;
+			pin2-gpios = <&gpio 3 0>;
+			pin5-det-gpios = <&gpio 37 0>;
+			pin5-gpios = <&gpio 88 GPIO_ACTIVE_LOW>;
+			pin6-gpios = <&gpio 41 GPIO_ACTIVE_LOW>;
+			pwms = <&ehrpwm1 0 75758 PWM_POLARITY_INVERTED>;
+			pwm-names = "motor";
+
+			motor {
+				io-channels = <&tacho 2>, <&tacho 3>;
+				io-channel-names = "count", "rate";
+			};
+		};
+
+		outC {
+			pinctrl-names = "default";
+			pinctrl-0 = <&ecap0_pins>;
+
+			compatible = "ev3dev,ev3-output-port";
+			io-channels = <&adc 13>;
+			io-channel-names = "pin5";
+			pin1-gpios = <&gpio 104 0>;
+			pin2-gpios = <&gpio 89 0>;
+			pin5-det-gpios = <&gpio 56 0>;
+			pin5-gpios = <&gpio 93 GPIO_ACTIVE_LOW>;
+			pin6-gpios = <&gpio 62 GPIO_ACTIVE_LOW>;
+			pwms = <&ecap0 0 75758 PWM_POLARITY_INVERTED>;
+			pwm-names = "motor";
+
+			motor {
+				io-channels = <&tacho 4>, <&tacho 5>;
+				io-channel-names = "count", "rate";
+			};
+		};
+
+		outD {
+			pinctrl-names = "default";
+			pinctrl-0 = <&ecap1_pins>;
+
+			compatible = "ev3dev,ev3-output-port";
+			io-channels = <&adc 14>;
+			io-channel-names = "pin5";
+			pin1-gpios = <&gpio 83 0>;
+			pin2-gpios = <&gpio 90 0>;
+			pin5-det-gpios = <&gpio 95 0>;
+			pin5-gpios = <&gpio 105 GPIO_ACTIVE_LOW>;
+			pin6-gpios = <&gpio 40 GPIO_ACTIVE_LOW>;
+			pwms = <&ecap1 0 75758 PWM_POLARITY_INVERTED>;
+			pwm-names = "motor";
+
+			motor {
+				io-channels = <&tacho 6>, <&tacho 7>;
+				io-channel-names = "count", "rate";
+			};
+		};
 	};
 
 	bt_slow_clk: bt-clock {
@@ -205,6 +541,8 @@
 };
 
 &pmx_core {
+	pinctrl-0 = <&fixed_pins>;
+	pinctrl-names = "default";
 	status = "okay";
 
 	ev3_lcd_pins: pinmux_lcd {
@@ -213,10 +551,159 @@
 			0x14 0x00100100 0x00f00f00
 		>;
 	};
+
+	fixed_pins: pinmux-fixed {
+		pinctrl-single,bits = <
+			/*
+			 * AHCLKX, AHCLKR
+			 */
+			0x00 0x00110000 0x00ff0000
+			/*
+			 * GP2[0], GP2[7]
+			 */
+			0x18 0x80000008 0xf000000f
+			/*
+			 * GP4[9]
+			 */
+			0x24 0x08000000 0x0f000000
+			/*
+			 * GP5[2]
+			 */
+			0x30 0x00800000 0x00f00000
+			/*
+			 * RTCK, GP6[2]
+			 */
+			0x4c 0x00080000 0xf00f0000
+		>;
+	};
+	in1_pins: pinmux-in1 {
+		pinctrl-single,bits = <
+			/* GP0[15] */
+			0x00 0x00000008 0x0000000f
+			/* GP0[2] */
+			0x04 0x00800000 0x00f00000
+			/* UART1_RXD */
+			0x10 0x02000000 0x0f000000
+			/* GP2[2] */
+			0x18 0x00800000 0x00f00000
+			/* GP8[10], GP8[11] */
+			0x48 0x88000000 0xff000000
+		>;
+	};
+
+	in1_uart_pins: pinmux-in1-uart {
+		pinctrl-single,bits = <
+			/* UART1_TXD */
+			0x10 0x20000000 0xf0000000
+		>;
+	};
+
+	in1_i2c_pins: pinmux-in1-i2c {
+		pinctrl-single,bits = <
+			/* GP1[0] */
+			0x10 0x80000000 0xf0000000
+		>;
+	};
+
+	in2_pins: pinmux-in2 {
+		pinctrl-single,bits = <
+			/* GP0[13], GP0[14] */
+			0x00 0x00000880 0x00000ff0
+			/* UART0_RXD */
+			0x0c 0x00020000 0x000f0000
+			/* GP8[12], GP8[14], GP8[15]*/
+			0x48 0x00808800 0x00f0ff00
+		>;
+	};
+
+	in2_uart_pins: pinmux-in2-uart {
+		pinctrl-single,bits = <
+			/* UART0_TXD */
+			0x0c 0x00200000 0x00f00000
+		>;
+	};
+
+	in2_i2c_pins: pinmux-in2-i2c {
+		pinctrl-single,bits = <
+			/* GP8[3] */
+			0x0c 0x00400000 0x00f00000
+		>;
+	};
+
+	in3_pins: pinmux-in3 {
+		pinctrl-single,bits = <
+			/* GP0[12] */
+			0x00 0x00008000 0x0000f000
+			/* AXR2, GP1[14] */
+			0x08 0x00100040 0x00f000f0
+			/* GP7[11] */
+			0x40 0x08000000 0x0f000000
+			/* GP7[9] */
+			0x44 0x00000008 0x0000000f
+			/* GP8[9] */
+			0x4c 0x00000008 0x0000000f
+		>;
+	};
+
+	in3_uart_pins: pinmux-in3-uart {
+		pinctrl-single,bits = <
+			/* AXR4 */
+			0x08 0x00001000 0x0000f000
+		>;
+	};
+
+	in3_i2c_pins: pinmux-in3-i2c {
+		pinctrl-single,bits = <
+			/* GP1[12] */
+			0x08 0x00004000 0x0000f000
+		>;
+	};
+
+	in4_pins: pinmux-in4 {
+		pinctrl-single,bits = <
+			/* GP0[1] */
+			0x04 0x08000000 0x0f000000
+			/* AXR1, GP1[15] */
+			0x08 0x01000008 0x0f00000f
+			/* GP7[10] */
+			0x40 0x80000000 0xf0000000
+			/* GP7[8] */
+			0x44 0x00000080 0x000000f0
+			/* GP6[4] */
+			0x4c 0x00000800 0x00000f00
+		>;
+	};
+
+	in4_uart_pins: pinmux-in4-uart {
+		pinctrl-single,bits = <
+			/* AXR3 */
+			0x08 0x00010000 0x000f0000
+		>;
+	};
+
+	in4_i2c_pins: pinmux-in4-i2c {
+		pinctrl-single,bits = <
+			/* GP1[11] */
+			0x08 0x00040000 0x000f0000
+		>;
+	};
 };
 
 &pinconf {
+	pinctrl-0 = <&pinconf_bias_groups>;
+	pinctrl-names = "default";
 	status = "okay";
+
+	pinconf_bias_groups: bias-groups {
+		disable {
+			groups = "cp0", "cp1", "cp3", "cp4",
+				 "cp6", "cp7", "cp8", "cp9", "cp10", "cp11",
+				 "cp12", "cp13", "cp14", "cp15", "cp16",
+				 "cp18", "cp19", "cp21", "cp22", "cp23",
+				 "cp26", "cp27", "cp29", "cp30", "cp31";
+			bias-disable;
+		};
+	};
 
 	/* Buttons have external pulldown resistors */
 	button_bias: button-bias-groups {
@@ -239,13 +726,25 @@
 			bias-disable;
 		};
 	};
+
+	hw_id_pinconf: hw-id {
+		disable {
+			groups = "cp17";
+			bias-disable;
+		};
+	};
+};
+
+/* Input port 2 */
+&serial0 {
+	#tty-cells = <0>;
+	status = "okay";
 };
 
 /* Input port 1 */
 &serial1 {
+	#tty-cells = <0>;
 	status = "okay";
-	pinctrl-names = "default";
-	pinctrl-0 = <&serial1_rxtx_pins>;
 };
 
 &serial2 {
@@ -285,6 +784,11 @@
 		#address-cells = <1>;
 		#size-cells = <1>;
 
+		/* Hardware ID + Bluetooth MAC address */
+		hw_id: hw-id@0x3F00 {
+			reg = <0x3F00 12>;
+		};
+
 		bdaddr: bdaddr@3f06 {
 			reg = <0x3f06 0x06>;
 		};
@@ -310,6 +814,7 @@
 	pinctrl-0 = <&spi0_pins>, <&spi0_cs0_pin>, <&spi0_cs3_pin>;
 
 	flash@0 {
+		status = "disabled";
 		compatible = "n25q128a13", "jedec,spi-nor";
 		reg = <0>;
 		spi-max-frequency = <50000000>;
@@ -373,11 +878,23 @@
 	};
 };
 
+&ecap0 {
+	status = "okay";
+};
+
+&ecap1 {
+	status = "okay";
+};
+
 &ecap2 {
 	status = "okay";
 };
 
 &ehrpwm0 {
+	status = "okay";
+};
+
+&ehrpwm1 {
 	status = "okay";
 };
 
