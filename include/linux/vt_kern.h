@@ -145,6 +145,7 @@ static inline bool vt_force_oops_output(struct vc_data *vc)
 extern char vt_dont_switch;
 extern int default_utf8;
 extern int global_cursor_default;
+extern int default_screen_mode;
 
 struct vt_spawn_console {
 	spinlock_t lock;
