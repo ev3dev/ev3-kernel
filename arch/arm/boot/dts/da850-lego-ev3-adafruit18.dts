@@ -1,0 +1,37 @@
+/*
+ * Device tree for LEGO MINDSTORMS EV3 with Adafruit 1.8" Color TFT
+ *
+ * Copyright (C) 2018 David Lechner <david@lechnology.com>
+ *
+ * This program is free software; you can redistribute  it and/or modify it
+ * under  the terms of  the GNU General  Public License as published by the
+ * Free Software Foundation, version 2.
+ */
+
+#include "da850-lego-ev3.dts"
+
+/ {
+	backlight: backlight {
+		compatible = "gpio-backlight";
+		gpios = <&gpio 44 GPIO_ACTIVE_HIGH>;
+	};
+};
+
+&spi1 {
+	/delete-property/cs-gpios;
+
+	display@0 {
+		status = "disabled";
+	};
+
+	display@1{
+		compatible = "jianda,jd-t18003-t01";
+		/* not actually using CS */
+		reg = <1>;
+		spi-max-frequency = <32000000>;
+		dc-gpios = <&gpio 43 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio 80 GPIO_ACTIVE_HIGH>;
+		backlight = <&backlight>;
+		rotation = <270>;
+	};
+};
