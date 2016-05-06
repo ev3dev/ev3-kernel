@@ -36,6 +36,17 @@ config VIDEOMODE_HELPERS
 config HDMI
 	bool
 
+config FB_ST7586
+	tristate "ST7586 framebuffer support"
+	depends on FB && SPI
+	select FB_SYS_FILLRECT
+	select FB_SYS_COPYAREA
+	select FB_SYS_IMAGEBLIT
+	select FB_SYS_FOPS
+	select FB_DEFERRED_IO
+	help
+	  This driver implements support for the ST7586 display controller
+	  in SPI mode.
 if VT
 	source "drivers/video/console/Kconfig"
 endif
