@@ -38,7 +38,7 @@
  *
  *     - Arno Griffioen <arno@usn.nl>
  *     - David Carter <carter@cs.bris.ac.uk>
- * 
+ *
  *   The abstract console driver provides a generic interface for a text
  *   console. It supports VGA text mode, frame buffer based graphical consoles
  *   and special graphics processors that are only accessible through some
@@ -158,9 +158,12 @@ static void unblank_screen(void);
 
 int default_utf8 = true;
 module_param(default_utf8, int, S_IRUGO | S_IWUSR);
-int global_cursor_default = -1;
+int global_cursor_default = 0;
 module_param(global_cursor_default, int, S_IRUGO | S_IWUSR);
 EXPORT_SYMBOL(global_cursor_default);
+int default_screen_mode = -1;
+module_param(default_screen_mode, int, S_IRUGO | S_IWUSR);
+EXPORT_SYMBOL(default_screen_mode);
 
 static int cur_default = CUR_UNDERLINE;
 module_param(cur_default, int, S_IRUGO | S_IWUSR);
@@ -1086,9 +1089,12 @@ int vc_allocate(unsigned int currcons)	/* return 0 on success */
 		goto err_free;
 
 	/* If no drivers have overridden us and the user didn't pass a
-	   boot option, default to displaying the cursor */
+	       boot option, default to displaying the cursor and normal
+	       screen mode */
 	if (global_cursor_default == -1)
 		global_cursor_default = 1;
+	    if (default_screen_mode == -1)
+		    default_screen_mode = 1;
 
 	vc_init(vc, 1);
 	vcs_make_sysfs(currcons);
@@ -2155,7 +2161,7 @@ static void reset_terminal(struct vc_data *vc, int do_clear)
 	vc->vc_disp_ctrl	= 0;
 	vc->vc_toggle_meta	= 0;
 
-	vc->vc_decscnm		= 0;
+	vc->vc_decscnm		= default_screen_mode;
 	vc->vc_decom		= 0;
 	vc->vc_decawm		= 1;
 	vc->vc_deccm		= global_cursor_default;
