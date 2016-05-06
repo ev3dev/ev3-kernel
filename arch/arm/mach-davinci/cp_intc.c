@@ -150,7 +150,7 @@ int __init cp_intc_of_init(struct device_node *node, struct device_node *parent)
 	for (i = 0; i < num_reg; i++)
 		cp_intc_write(~0, CP_INTC_SYS_STAT_CLR(i));
 
-	/* Enable nIRQ (what about nFIQ?) */
+	/* Enable nIRQ */
 	cp_intc_write(1, CP_INTC_HOST_ENABLE_IDX_SET);
 
 	/*
@@ -164,7 +164,7 @@ int __init cp_intc_of_init(struct device_node *node, struct device_node *parent)
 		u32 val;
 
 		for (k = i = 0; i < num_reg; i++) {
-			for (val = j = 0; j < 4; j++, k++) {
+			for (val = j = 0; j < 4 && k < num_irq; j++, k++) {
 				val >>= 8;
 				if (k < num_irq)
 					val |= irq_prio[k] << 24;
@@ -210,6 +210,16 @@ int __init cp_intc_of_init(struct device_node *node, struct device_node *parent)
 void __init cp_intc_init(void)
 {
 	cp_intc_of_init(NULL, NULL);
+}
+
+void cp_intc_fiq_enable(void)
+{
+	cp_intc_write(0, CP_INTC_HOST_ENABLE_IDX_SET);
+}
+
+void cp_intc_fiq_disable(void)
+{
+	cp_intc_write(0, CP_INTC_HOST_ENABLE_IDX_CLR);
 }
 
 IRQCHIP_DECLARE(cp_intc, "ti,cp-intc", cp_intc_of_init);
