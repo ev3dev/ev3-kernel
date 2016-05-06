@@ -20,6 +20,8 @@
 #ifndef LINUX_SERIAL_CORE_H
 #define LINUX_SERIAL_CORE_H
 
+/* OMAPL PRU UART Emulation */
+#define OMAPL_PRU_SUART	100
 
 #include <linux/compiler.h>
 #include <linux/interrupt.h>
