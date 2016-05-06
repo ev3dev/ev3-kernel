@@ -211,7 +211,7 @@ static int ecap_pwm_probe(struct platform_device *pdev)
 	if (!pc)
 		return -ENOMEM;
 
-	clk = devm_clk_get(&pdev->dev, "fck");
+	clk = devm_clk_get(&pdev->dev, "ecap");
 	if (IS_ERR(clk)) {
 		if (of_device_is_compatible(np, "ti,am33xx-ecap")) {
 			dev_warn(&pdev->dev, "Binding is obsolete.\n");
