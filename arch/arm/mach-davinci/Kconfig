@@ -189,6 +189,33 @@ config DA850_UI_SD_VIDEO_PORT
 
 endchoice
 
+config MACH_DAVINCI_LEGOEV3
+	bool "LEGO MINDSTORMS EV3 Programmable Brick"
+	depends on ARCH_DAVINCI_DA850
+	select DAVINCI_MUX
+	select CONFIG_DA850_UI_NONE
+	help
+	  Say Y here to select the LEGO MINDSTORMS EV3 Programmable Brick .
+	  Information on this board may be found at
+	  http://mindstorms.lego.com/
+
+config LEGOEV3_FIQ
+	bool "FIQ backend for LEGO Mindstorms EV3 input ports"
+	depends on MACH_DAVINCI_LEGOEV3
+	select FIQ
+	help
+	  Say Y here to enable the FIQ (fast interrupt) backend for the I2C
+	  implementation used by the input ports on the LEGO Mindstorms EV3.
+
+config DA850_FIX_PLL0_SYSCLK3RATE
+	int "PLL0_SYSCLK3 rate"
+	depends on ARCH_DAVINCI_DA850
+	range 0 148000000
+	default 0
+	help
+	  Set this value with desired EMIF clock rate, Otherwise EMIF clock
+	  rate is decided based on OPP value.
+
 config MACH_MITYOMAPL138
 	bool "Critical Link MityDSP-L138/MityARM-1808 SoM"
 	depends on ARCH_DAVINCI_DA850
