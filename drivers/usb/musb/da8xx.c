@@ -383,29 +383,6 @@ static irqreturn_t da8xx_musb_interrupt(int irq, void *hci)
 	return ret;
 }
 
-static int da8xx_musb_set_mode(struct musb *musb, u8 musb_mode)
-{
-	u32 cfgchip2 = __raw_readl(CFGCHIP2);
-
-	cfgchip2 &= ~CFGCHIP2_OTGMODE;
-	switch (musb_mode) {
-	case MUSB_HOST:		/* Force VBUS valid, ID = 0 */
-		cfgchip2 |= CFGCHIP2_FORCE_HOST;
-		break;
-	case MUSB_PERIPHERAL:	/* Force VBUS valid, ID = 1 */
-		cfgchip2 |= CFGCHIP2_FORCE_DEVICE;
-		break;
-	case MUSB_OTG:		/* Don't override the VBUS/ID comparators */
-		cfgchip2 |= CFGCHIP2_NO_OVERRIDE;
-		break;
-	default:
-		dev_dbg(musb->controller, "Trying to set unsupported mode %u\n", musb_mode);
-	}
-
-	__raw_writel(cfgchip2, CFGCHIP2);
-	return 0;
-}
-
 static int da8xx_musb_init(struct musb *musb)
 {
 	void __iomem *reg_base = musb->ctrl_base;
@@ -466,7 +443,6 @@ static const struct musb_platform_ops da8xx_ops = {
 	.enable		= da8xx_musb_enable,
 	.disable	= da8xx_musb_disable,
 
-	.set_mode	= da8xx_musb_set_mode,
 	.try_idle	= da8xx_musb_try_idle,
 
 	.set_vbus	= da8xx_musb_set_vbus,
