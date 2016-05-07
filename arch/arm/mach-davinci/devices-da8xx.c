@@ -102,7 +102,8 @@ static struct plat_serial8250_port da8xx_serial2_pdata[] = {
 		.mapbase	= DA8XX_UART2_BASE,
 		.irq		= IRQ_DA8XX_UARTINT2,
 		.flags		= UPF_BOOT_AUTOCONF | UPF_SKIP_TEST |
-					UPF_IOREMAP,
+					UPF_IOREMAP | UPF_FIXED_TYPE,
+		.type		= PORT_TL16C550,
 		.iotype		= UPIO_MEM,
 		.regshift	= 2,
 	},
