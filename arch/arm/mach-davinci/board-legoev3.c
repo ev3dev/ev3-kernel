@@ -105,7 +105,7 @@ static const struct fbtft_platform_data legoev3_st7735r_data = {
 		.buswidth = 8,
 		.backlight = 1,
 	},
-	.rotate = 90,
+	.rotate = 270,
 	.gpios = (const struct fbtft_gpio []) {
 		{ "reset", EV3_LCD_RESET_PIN },
 		{ "dc", EV3_LCD_A0_PIN },
