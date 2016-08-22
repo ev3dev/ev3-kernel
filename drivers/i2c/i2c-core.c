@@ -1800,6 +1800,23 @@ static const struct i2c_lock_operations i2c_adapter_lock_ops = {
 	.unlock_bus =  i2c_adapter_unlock_bus,
 };
 
+/**
+ * i2c_adapter_probe - probe adapter for clients
+ * @adap: The i2c adapter.
+ *
+ * This calls the detect function of each driver that matches the class of the
+ * adapter. This function is called when an adapter is added, so there is no
+ * need to call this manually, unless you have hot-plugable i2c devices that
+ * are connected after the adapter is created.
+ */
+void i2c_adapter_probe(struct i2c_adapter *adap)
+{
+	mutex_lock(&core_lock);
+	bus_for_each_drv(&i2c_bus_type, NULL, adap, __process_new_adapter);
+	mutex_unlock(&core_lock);
+}
+EXPORT_SYMBOL(i2c_adapter_probe);
+
 static int i2c_register_adapter(struct i2c_adapter *adap)
 {
 	int res = -EINVAL;
@@ -1865,9 +1882,7 @@ static int i2c_register_adapter(struct i2c_adapter *adap)
 		i2c_scan_static_board_info(adap);
 
 	/* Notify drivers */
-	mutex_lock(&core_lock);
-	bus_for_each_drv(&i2c_bus_type, NULL, adap, __process_new_adapter);
-	mutex_unlock(&core_lock);
+	i2c_adapter_probe(adap);
 
 	return 0;
 
@@ -2010,6 +2025,25 @@ static int __process_removed_adapter(struct device_driver *d, void *data)
 }
 
 /**
+ * i2c_adapter_remove_probed - Remove clients that were automatically detected.
+ * @adap: The i2c adapter.
+ *
+ * This removes all i2c clients from this adapter that were added via driver
+ * detect() functions. This function is called when an adapter is removed, so
+ * there is no need to call this manually, unless you have hot-plugable i2c
+ * devices that are disconnected before the adapter is destroyed.
+ *
+ * Any clients that were added manually (e.g. via sysfs) are not removed.
+ */
+void i2c_adapter_remove_probed(struct i2c_adapter *adap)
+{
+	mutex_lock(&core_lock);
+	bus_for_each_drv(&i2c_bus_type, NULL, adap, __process_removed_adapter);
+	mutex_unlock(&core_lock);
+}
+EXPORT_SYMBOL(i2c_adapter_remove_probed);
+
+/**
  * i2c_del_adapter - unregister I2C adapter
  * @adap: the adapter being unregistered
  * Context: can sleep
@@ -2033,10 +2067,7 @@ void i2c_del_adapter(struct i2c_adapter *adap)
 
 	i2c_acpi_remove_space_handler(adap);
 	/* Tell drivers about this removal */
-	mutex_lock(&core_lock);
-	bus_for_each_drv(&i2c_bus_type, NULL, adap,
-			       __process_removed_adapter);
-	mutex_unlock(&core_lock);
+	i2c_adapter_remove_probed(adap);
 
 	/* Remove devices instantiated from sysfs */
 	mutex_lock_nested(&adap->userspace_clients_lock,
