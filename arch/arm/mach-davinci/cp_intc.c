@@ -39,17 +39,10 @@ static void cp_intc_ack_irq(struct irq_data *d)
 /* Disable interrupt */
 static void cp_intc_mask_irq(struct irq_data *d)
 {
-	unsigned int channel = (cp_intc_read(CP_INTC_CHAN_MAP(d->irq >> 2)
-				>> ((d->irq % 4) * 8))) & 0xF;
-
 	/* XXX don't know why we need to disable nIRQ here... */
-	if (channel < 2)
-		cp_intc_write(0, CP_INTC_HOST_ENABLE_IDX_CLR);
 	cp_intc_write(1, CP_INTC_HOST_ENABLE_IDX_CLR);
 	cp_intc_write(d->hwirq, CP_INTC_SYS_ENABLE_IDX_CLR);
 	cp_intc_write(1, CP_INTC_HOST_ENABLE_IDX_SET);
-	if (channel < 2)
-		cp_intc_write(0, CP_INTC_HOST_ENABLE_IDX_SET);
 }
 
 /* Enable interrupt */
@@ -216,4 +209,14 @@ int __init cp_intc_of_init(struct device_node *node, struct device_node *parent)
 void __init cp_intc_init(void)
 {
 	cp_intc_of_init(NULL, NULL);
+}
+
+void cp_intc_fiq_enable(void)
+{
+	cp_intc_write(0, CP_INTC_HOST_ENABLE_IDX_SET);
+}
+
+void cp_intc_fiq_disable(void)
+{
+	cp_intc_write(0, CP_INTC_HOST_ENABLE_IDX_CLR);
 }

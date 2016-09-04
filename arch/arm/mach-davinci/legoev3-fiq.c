@@ -27,6 +27,7 @@
 
 #include <asm/io.h>
 #include <asm/fiq.h>
+#include <mach/cp_intc.h>
 #include <mach/legoev3-fiq.h>
 
 enum transfer_states {
@@ -944,6 +945,8 @@ static int legoev3_fiq_probe(struct platform_device *pdev)
 
 	fiq_data->pdev = pdev;
 	legoev3_fiq_data = fiq_data;
+
+	cp_intc_fiq_enable();
 
 	return 0;
 
