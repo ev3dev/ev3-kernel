@@ -30,10 +30,12 @@
 #include <linux/of_gpio.h>
 #include <linux/regulator/of_regulator.h>
 #include <linux/regulator/machine.h>
+#include <linux/interrupt.h>
 
 struct fixed_voltage_data {
 	struct regulator_desc desc;
 	struct regulator_dev *dev;
+	struct gpio_desc *oc_gpio;
 };
 
 
@@ -94,7 +96,36 @@ of_get_fixed_voltage_config(struct device *dev,
 	return config;
 }
 
+static irqreturn_t reg_fixed_overcurrent_irq(int irq, void *data)
+{
+	struct fixed_voltage_data *drvdata = data;
+
+	regulator_notifier_call_chain(drvdata->dev,
+				REGULATOR_EVENT_OVER_CURRENT, NULL);
+
+	return IRQ_HANDLED;
+}
+
+static int reg_fixed_get_error_flags(struct regulator_dev *dev,
+					unsigned int *flags)
+{
+	struct fixed_voltage_data *drvdata = rdev_get_drvdata(dev);
+	int oc_value;
+
+	*flags = 0;
+
+	if (!drvdata->oc_gpio)
+		return 0;
+
+	oc_value = gpiod_get_value_cansleep(drvdata->oc_gpio);
+	if (oc_value)
+		*flags = REGULATOR_ERROR_OVER_CURRENT;
+
+	return 0;
+}
+
 static struct regulator_ops fixed_voltage_ops = {
+	.get_error_flags = reg_fixed_get_error_flags,
 };
 
 static int reg_fixed_voltage_probe(struct platform_device *pdev)
@@ -102,6 +133,7 @@ static int reg_fixed_voltage_probe(struct platform_device *pdev)
 	struct fixed_voltage_config *config;
 	struct fixed_voltage_data *drvdata;
 	struct regulator_config cfg = { };
+	unsigned long irqflags = IRQF_ONESHOT;
 	int ret;
 
 	drvdata = devm_kzalloc(&pdev->dev, sizeof(struct fixed_voltage_data),
@@ -174,6 +206,33 @@ static int reg_fixed_voltage_probe(struct platform_device *pdev)
 	cfg.init_data = config->init_data;
 	cfg.driver_data = drvdata;
 	cfg.of_node = pdev->dev.of_node;
+
+
+	drvdata->oc_gpio = devm_gpiod_get_optional(&pdev->dev, "over-current",
+						GPIOF_DIR_IN);
+	if (IS_ERR(drvdata->oc_gpio)) {
+		ret = PTR_ERR(drvdata->oc_gpio);
+		dev_err(&pdev->dev,
+			"Failed to get over current gpio: %d\n", ret);
+		return ret;
+	}
+
+	if (drvdata->oc_gpio) {
+		if (gpiod_is_active_low(drvdata->oc_gpio))
+			irqflags |= IRQF_TRIGGER_FALLING;
+		else
+			irqflags |= IRQF_TRIGGER_RISING;
+
+		ret = devm_request_threaded_irq(&pdev->dev,
+				gpiod_to_irq(drvdata->oc_gpio), NULL,
+				reg_fixed_overcurrent_irq, irqflags,
+				"over_current", drvdata);
+		if (ret) {
+			dev_err(&pdev->dev,
+				"Failed to request irq: %d\n", ret);
+			return ret;
+		}
+	}
 
 	drvdata->dev = devm_regulator_register(&pdev->dev, &drvdata->desc,
 					       &cfg);
