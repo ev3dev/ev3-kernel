@@ -11,6 +11,7 @@ If this property is missing, the default assumed is Active low.
 - gpio-open-drain: GPIO is open drain type.
   If this property is missing then default assumption is false.
 -vin-supply: Input supply name.
+- over-current-gpios: Input gpio that signal an over current condition.
 
 Any property defined as part of the core regulator
 binding, defined in regulator.txt, can also be used.
@@ -26,6 +27,7 @@ Example:
 		regulator-min-microvolt = <1800000>;
 		regulator-max-microvolt = <1800000>;
 		gpio = <&gpio1 16 0>;
+		over-current-gpios = <&gpio1 18 0>;
 		startup-delay-us = <70000>;
 		enable-active-high;
 		regulator-boot-on;
