@@ -87,6 +87,14 @@
 	};
 };
 
+&usb_phy {
+	status = "okay";
+};
+
+&usb1 {
+	status = "okay";
+};
+
 &serial2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&serial2_rxtx_pins>;
