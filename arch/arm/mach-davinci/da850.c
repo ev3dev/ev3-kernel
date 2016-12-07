@@ -319,6 +319,11 @@ static struct clk emac_clk = {
 	.gpsc		= 1,
 };
 
+static struct clk mdio_clk = {
+	.name		= "mdio",
+	.parent		= &emac_clk,
+};
+
 static struct clk mcasp_clk = {
 	.name		= "mcasp",
 	.parent		= &async3_clk,
@@ -539,7 +544,7 @@ static struct clk_lookup da850_clks[] = {
 	CLK(NULL,		"arm",		&arm_clk),
 	CLK(NULL,		"rmii",		&rmii_clk),
 	CLK("davinci_emac.1",	NULL,		&emac_clk),
-	CLK("davinci_mdio.0",	"fck",		&emac_clk),
+	CLK("davinci_mdio.0",	"fck",		&mdio_clk),
 	CLK("davinci-mcasp.0",	NULL,		&mcasp_clk),
 	CLK("davinci-mcbsp.0",	NULL,		&mcbsp0_clk),
 	CLK("davinci-mcbsp.1",	NULL,		&mcbsp1_clk),
