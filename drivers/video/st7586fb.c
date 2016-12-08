@@ -463,12 +463,36 @@ static int st7586fb_probe (struct spi_device *spi)
 	u8 *fb_mem, *spi_data_mem;
 	struct fb_info *info;
 	struct st7586fb_par *par;
-	int retval = -ENOMEM;
+	int retval;
 
 	if (chip != ST7586_DISPLAY_LEGO_EV3) {
 		pr_err("%s: only the %s device is supported\n", DRVNAME,
 			to_spi_driver(spi->dev.driver)->id_table->name);
 		return -EINVAL;
+	}
+
+	if (spi->dev.of_node) {
+		struct gpio_desc *gpio;
+
+		pdata = devm_kzalloc(&spi->dev, sizeof(*pdata), GFP_KERNEL);
+
+		gpio = gpiod_get(&spi->dev, "rst", GPIOD_ASIS);
+		retval = PTR_ERR_OR_ZERO(gpio);
+		if (retval) {
+			dev_err(&spi->dev, "Failed to get rst gpio\n");
+			return retval;
+		}
+		pdata->rst_gpio = desc_to_gpio(gpio);
+		gpiod_put(gpio);
+
+		gpio = gpiod_get(&spi->dev, "a0", GPIOD_ASIS);
+		retval = PTR_ERR_OR_ZERO(gpio);
+		if (retval) {
+			dev_err(&spi->dev, "Failed to get a0 gpio\n");
+			return retval;
+		}
+		pdata->a0_gpio = desc_to_gpio(gpio);
+		gpiod_put(gpio);
 	}
 
 	if (!pdata) {
@@ -479,7 +503,7 @@ static int st7586fb_probe (struct spi_device *spi)
 
 	info = framebuffer_alloc(sizeof(struct st7586fb_par), &spi->dev);
 	if (!info)
-		return retval;
+		return -ENOMEM;
 
 	fb_mem = dma_alloc_coherent(info->dev, fb_mem_size, &fb_dma, GFP_KERNEL);
 	if (!fb_mem)
@@ -596,7 +620,6 @@ MODULE_DEVICE_TABLE(spi, st7586fb_ids);
 static struct spi_driver st7586fb_driver = {
 	.driver = {
 		.name   = "st7586fb",
-		.owner  = THIS_MODULE,
 	},
 	.id_table = st7586fb_ids,
 	.probe  = st7586fb_probe,
