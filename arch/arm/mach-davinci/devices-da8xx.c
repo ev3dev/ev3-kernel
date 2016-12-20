@@ -66,8 +66,9 @@ static struct plat_serial8250_port da8xx_serial0_pdata[] = {
 		.mapbase	= DA8XX_UART0_BASE,
 		.irq		= IRQ_DA8XX_UARTINT0,
 		.flags		= UPF_BOOT_AUTOCONF | UPF_SKIP_TEST |
-					UPF_IOREMAP,
-		.iotype		= UPIO_MEM,
+					UPF_IOREMAP | UPF_FIXED_TYPE,
+		.iotype		= UPIO_MEM32,
+		.type		= PORT_DA830,
 		.regshift	= 2,
 	},
 	{
@@ -79,8 +80,9 @@ static struct plat_serial8250_port da8xx_serial1_pdata[] = {
 		.mapbase	= DA8XX_UART1_BASE,
 		.irq		= IRQ_DA8XX_UARTINT1,
 		.flags		= UPF_BOOT_AUTOCONF | UPF_SKIP_TEST |
-					UPF_IOREMAP,
-		.iotype		= UPIO_MEM,
+					UPF_IOREMAP | UPF_FIXED_TYPE,
+		.type		= PORT_DA830,
+		.iotype		= UPIO_MEM32,
 		.regshift	= 2,
 	},
 	{
@@ -92,8 +94,9 @@ static struct plat_serial8250_port da8xx_serial2_pdata[] = {
 		.mapbase	= DA8XX_UART2_BASE,
 		.irq		= IRQ_DA8XX_UARTINT2,
 		.flags		= UPF_BOOT_AUTOCONF | UPF_SKIP_TEST |
-					UPF_IOREMAP,
-		.iotype		= UPIO_MEM,
+					UPF_IOREMAP | UPF_FIXED_TYPE,
+		.type		= PORT_DA830,
+		.iotype		= UPIO_MEM32,
 		.regshift	= 2,
 	},
 	{
