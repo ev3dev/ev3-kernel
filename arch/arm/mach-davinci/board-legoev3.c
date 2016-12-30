@@ -443,7 +443,7 @@ static int legoev3_init_cpufreq(void) { return 0; }
  * The MAC address is also used as the serial number.
  */
 
-static void legoev3_eeprom_setup(struct memory_accessor *mem_acc, void *context)
+static void legoev3_eeprom_setup(struct nvmem_device *nvmem, void *context)
 {
 	u8 data[8];
 
@@ -465,11 +465,11 @@ static void legoev3_eeprom_setup(struct memory_accessor *mem_acc, void *context)
 	 * data[3] is checksum. Hardware rev 3 has the mac address at 0x3f00
 	 * instead of hw id.
 	 */
-	if (mem_acc->read(mem_acc, data, 0x3efe, 8) == 8)
+	if (nvmem_device_read(nvmem, 0x3efe, 8, data) == 8)
 		system_rev = (data[2] ^ data[3]) == 0xff ? data[2] : 3;
 
 	/* revs > 3 have mac address at 0x3f06 */
-	if (system_rev == 3 || mem_acc->read(mem_acc, data, 0x3f04, 8) == 8) {
+	if (system_rev == 3 || nvmem_device_read(nvmem, 0x3f04, 8, data) == 8) {
 		system_serial_high = be16_to_cpu(*(u16 *)(data + 2));
 		system_serial_low = be32_to_cpu(*(u32 *)(data + 4));
 	}
