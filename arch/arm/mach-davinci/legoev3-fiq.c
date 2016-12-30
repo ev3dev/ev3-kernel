@@ -27,7 +27,7 @@
 
 #include <asm/io.h>
 #include <asm/fiq.h>
-#include <mach/cp_intc.h>
+#include "cp_intc.h"
 #include <mach/legoev3-fiq.h>
 
 enum transfer_states {
