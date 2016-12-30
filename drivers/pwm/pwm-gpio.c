@@ -57,10 +57,11 @@ static enum hrtimer_restart pwm_gpio_handle_timer(struct hrtimer *timer)
 			container_of(timer, struct pwm_gpio_device, timer);
 	ktime_t tnew;
 
-	if (data->gpio_value ^ data->pwm->polarity)
-		tnew = ktime_set(0, data->pwm->period - data->pwm->duty_cycle);
+	if (data->gpio_value ^ pwm_get_polarity(data->pwm))
+		tnew = ktime_set(0, pwm_get_period(data->pwm)
+				    - pwm_get_duty_cycle(data->pwm));
 	else
-		tnew = ktime_set(0, data->pwm->duty_cycle);
+		tnew = ktime_set(0, pwm_get_duty_cycle(data->pwm));
 	hrtimer_forward_now(&data->timer, tnew);
 
 	data->gpio_value = !data->gpio_value;
@@ -79,7 +80,7 @@ static int pwm_gpio_config(struct pwm_chip *chip, struct pwm_device *pwm,
 
 	if (duty_ns == 0 || duty_ns == period_ns || !data->enabled) {
 		hrtimer_cancel(&data->timer);
-		data->gpio_value = data->pwm->polarity;
+		data->gpio_value = pwm_get_polarity(data->pwm);
 		if (duty_ns == period_ns)
 			data->gpio_value = !data->gpio_value;
 		gpio_direction_output(data->gpio, data->gpio_value);
@@ -92,7 +93,8 @@ static int pwm_gpio_config(struct pwm_chip *chip, struct pwm_device *pwm,
 static int pwm_gpio_set_polarity(struct pwm_chip *chip, struct pwm_device *pwm,
 				 enum pwm_polarity polarity)
 {
-	return pwm_gpio_config(chip, pwm, pwm->duty_cycle, pwm->period);
+	return pwm_gpio_config(chip, pwm, pwm_get_duty_cycle(pwm),
+			       pwm_get_period(pwm));
 }
 
 static int pwm_gpio_enable(struct pwm_chip *chip, struct pwm_device *pwm)
@@ -100,7 +102,8 @@ static int pwm_gpio_enable(struct pwm_chip *chip, struct pwm_device *pwm)
 	struct pwm_gpio_device *data = pwm_get_chip_data(pwm);
 
 	data->enabled= true;
-	return pwm_gpio_config(chip, pwm, pwm->duty_cycle, pwm->period);
+	return pwm_gpio_config(chip, pwm, pwm_get_duty_cycle(pwm),
+			       pwm_get_period(pwm));
 }
 
 static void pwm_gpio_disable(struct pwm_chip *chip, struct pwm_device *pwm)
@@ -126,8 +129,8 @@ static int init_pwm_gpio(struct pwm_device *pwm, struct pwm_gpio_device *data,
 
 	strncpy(data->name, pdata->name, PWM_GPIO_NAME_SIZE);
 	data->gpio = pdata->gpio;
-	ret = gpio_request_one(pdata->gpio, pwm->polarity ? GPIOF_INIT_HIGH
-		: GPIOF_INIT_LOW, data->name);
+	ret = gpio_request_one(pdata->gpio, pwm_get_polarity(pwm) ?
+			       GPIOF_INIT_HIGH : GPIOF_INIT_LOW, data->name);
 	if (ret < 0)
 		return ret;
 	hrtimer_init(&data->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
