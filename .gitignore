@@ -53,6 +53,7 @@ modules.builtin
 /vmlinux-gdb.py
 /vmlinuz
 /System.map
+/System.precious
 /Module.markers
 
 #
