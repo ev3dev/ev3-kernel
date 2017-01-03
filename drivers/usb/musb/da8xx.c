@@ -478,7 +478,20 @@ static const struct platform_device_info da8xx_dev_info = {
 	.dma_mask	= DMA_BIT_MASK(32),
 };
 
+/* special config to match official LEGO firmware */
+static struct musb_fifo_cfg ev3dev_cfg[] = {
+	{ .hw_ep_num = 1, .style = FIFO_TX,   .maxpacket = 1024, },
+	{ .hw_ep_num = 1, .style = FIFO_RX,   .maxpacket = 1024, },
+	{ .hw_ep_num = 2, .style = FIFO_TX,   .maxpacket = 64 ,  },
+	{ .hw_ep_num = 2, .style = FIFO_RX,   .maxpacket = 64 ,  },
+	{ .hw_ep_num = 3, .style = FIFO_TX,   .maxpacket = 1024, },
+	/* TODO: what about ep3 FIFO_RX? */
+	{ .hw_ep_num = 4, .style = FIFO_RXTX, .maxpacket = 128,  },
+};
+
 static const struct musb_hdrc_config da8xx_config = {
+	.fifo_cfg	= ev3dev_cfg,
+	.fifo_cfg_size	= ARRAY_SIZE(ev3dev_cfg),
 	.ram_bits = 10,
 	.num_eps = 5,
 	.multipoint = 1,
