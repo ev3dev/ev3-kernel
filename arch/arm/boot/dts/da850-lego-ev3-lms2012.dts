@@ -228,10 +228,10 @@
 			     <&gpio 105 GPIO_ACTIVE_LOW>,
 			     <&gpio  40 GPIO_ACTIVE_LOW>;
 
-		pwms = <&ehrpwm1 1 0 PWM_POLARITY_INVERTED>,
-		       <&ehrpwm1 0 0 PWM_POLARITY_INVERTED>,
-		       <&ecap0 0 0 PWM_POLARITY_INVERTED>,
-		       <&ecap1 0 0 PWM_POLARITY_INVERTED>;
+		pwms = <&ehrpwm1 1 100000 PWM_POLARITY_INVERTED>,
+		       <&ehrpwm1 0 100000 PWM_POLARITY_INVERTED>,
+		       <&ecap0 0 100000 PWM_POLARITY_INVERTED>,
+		       <&ecap1 0 100000 PWM_POLARITY_INVERTED>;
 		pwm-names = "outA", "outB", "outC", "outD";
 	};
 };
