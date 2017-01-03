@@ -539,7 +539,7 @@ static int hidg_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 		}
 		status = usb_ep_enable(hidg->out_ep);
 		if (status < 0) {
-			ERROR(cdev, "Enable IN endpoint FAILED!\n");
+			ERROR(cdev, "Enable OUT endpoint FAILED!\n");
 			goto fail;
 		}
 		hidg->out_ep->driver_data = hidg;
@@ -617,8 +617,12 @@ static int hidg_bind(struct usb_configuration *c, struct usb_function *f)
 
 	/* preallocate request and buffer */
 	status = -ENOMEM;
-	hidg->req = alloc_ep_req(hidg->in_ep, hidg->report_length);
+	hidg->req = usb_ep_alloc_request(hidg->in_ep, GFP_KERNEL);
 	if (!hidg->req)
+		goto fail;
+
+	hidg->req->buf = kmalloc(hidg->report_length, GFP_KERNEL);
+	if (!hidg->req->buf)
 		goto fail;
 
 	/* set descriptor dynamic values */
@@ -673,8 +677,11 @@ fail_free_descs:
 	usb_free_all_descriptors(f);
 fail:
 	ERROR(f->config->cdev, "hidg_bind FAILED\n");
-	if (hidg->req != NULL)
-		free_ep_req(hidg->in_ep, hidg->req);
+	if (hidg->req != NULL) {
+		kfree(hidg->req->buf);
+		if (hidg->in_ep != NULL)
+			usb_ep_free_request(hidg->in_ep, hidg->req);
+	}
 
 	return status;
 }
@@ -913,7 +920,8 @@ static void hidg_unbind(struct usb_configuration *c, struct usb_function *f)
 
 	/* disable/free request and end point */
 	usb_ep_disable(hidg->in_ep);
-	free_ep_req(hidg->in_ep, hidg->req);
+	kfree(hidg->req->buf);
+	usb_ep_free_request(hidg->in_ep, hidg->req);
 
 	usb_free_all_descriptors(f);
 }
