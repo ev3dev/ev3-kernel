@@ -142,6 +142,13 @@
 		vin-supply = <&vcc5v>;
 	};
 
+	sound {
+		compatible = "ev3dev,ev3-sound";
+		enable-gpios = <&gpio 111 GPIO_ACTIVE_HIGH>;
+		pwms = <&ehrpwm0 1 1 PWM_POLARITY_INVERTED>;
+		pwm-names = "speaker";
+	};
+
 	/* Dummy devices to handle input pin mux */
 
 	lms2012_compat_in1: lms2012-compat-in1 {

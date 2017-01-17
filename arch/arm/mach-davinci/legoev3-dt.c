@@ -139,22 +139,8 @@ static struct platform_device legoev3_bt_device = {
 	.id	= -1,
 };
 
-static struct snd_legoev3_platform_data ev3_snd_data = {
-	.amp_gpio	= EV3_SND_ENA_PIN,
-};
-
-static struct platform_device snd_legoev3 =
-{
-	.name	= "snd-legoev3",
-	.id	= -1,
-	.dev	= {
-		.platform_data = &ev3_snd_data,
-	},
-};
-
 static struct pwm_lookup legoev3_pwm_lookup[] = {
 	PWM_LOOKUP("ecap.2",   0, "legoev3-bluetooth", NULL, 0, PWM_POLARITY_INVERSED),
-	PWM_LOOKUP("ehrpwm.0", 1, "snd-legoev3",       NULL, 0, PWM_POLARITY_INVERSED),
 };
 
 static void __init legoev3_init_machine(void)
@@ -208,11 +194,6 @@ static void __init legoev3_init_machine(void)
 	ret = platform_device_register(&legoev3_bt_device);
 	if (ret)
 		pr_warn("%s: registering on-board bluetooth failed: %d\n",
-			__func__, ret);
-
-	ret = platform_device_register(&snd_legoev3);
-	if (ret)
-		pr_warn("%s: sound device registration failed: %d\n",
 			__func__, ret);
 }
 
