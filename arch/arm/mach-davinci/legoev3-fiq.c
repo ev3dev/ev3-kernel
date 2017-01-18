@@ -458,6 +458,13 @@ static void legoev3_fiq_ehrpwm_callback(struct legoev3_fiq_ehrpwm_data *data)
 
 	fiq_ehrpwm_set_duty_ticks(duty_ticks);
 
+	/*
+	 * FIXME: Setting the buffer data to 0 here because there is a tendency
+	 * to replay part of a sample at the end of playback. If we can figure
+	 * out how to detect the end of playback, we wouldn't need to do this.
+	 */
+	*(short *)(data->dma_area + data->playback_ptr) = 0;
+
 	data->playback_ptr += data->frame_bytes;
 	if (data->playback_ptr >= data->buffer_bytes)
 		data->playback_ptr = 0;
