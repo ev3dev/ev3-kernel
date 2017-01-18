@@ -194,6 +194,9 @@
 		/* IN PIN1 x 4, PIN6 x 4, OUT PIN5 x 4, N/C, N/C, BATT_I, BATT_V */
 		adc-channels = <6 8 10 12 5 7 9 11 1 0 13 14 15 2 3 4>;
 
+		/* ADCBATEN, SW_RECHARGE */
+		adc-gpios = <&gpio 6 0>, <&gpio 136 0>;
+
 		/* PIN1 */
 		in1-pin1-gpios = <&gpio 138 0>;
 		in2-pin1-gpios = <&gpio 140 0>;
