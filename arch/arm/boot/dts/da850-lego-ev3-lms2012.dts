@@ -144,6 +144,7 @@
 
 	sound {
 		compatible = "ev3dev,ev3-sound";
+		label = "LEGO MINDSTORMS EV3 Speaker";
 		enable-gpios = <&gpio 111 GPIO_ACTIVE_HIGH>;
 		pwms = <&ehrpwm0 1 1 PWM_POLARITY_INVERTED>;
 		pwm-names = "speaker";
