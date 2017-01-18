@@ -523,7 +523,7 @@ void legoev3_fiq_handler(void)
 
 /* --------------- END OF CODE THAT IS CALLED IN FIQ CONTEXT -----------------*/
 
-void legoev3_fiq_set_gpio(int gpio_pin, struct legoev3_fiq_gpio *gpio)
+static void legoev3_fiq_set_gpio(int gpio_pin, struct legoev3_fiq_gpio *gpio)
 {
 	int bank = gpio_pin >> 4;
 	int bank_offset = (bank >> 1) * 0x28;
