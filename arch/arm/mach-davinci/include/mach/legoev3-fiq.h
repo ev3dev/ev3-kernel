@@ -62,5 +62,6 @@ extern unsigned legoev3_fiq_ehrpwm_get_playback_ptr(void);
 extern void legoev3_fiq_ehrpwm_set_volume(int volume);
 extern int legoev3_fiq_ehrpwm_int_enable(void);
 extern int legoev3_fiq_ehrpwm_int_disable(void);
+extern bool legoev3_fiq_ehrpwm_int_is_enabled(void);
 
 #endif /* __MACH_LEGOEV3_FIQ_H */

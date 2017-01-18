@@ -220,6 +220,12 @@ static inline void fiq_ehrpwm_et_int_disable(void)
 	__raw_writew(dir, legoev3_fiq_data->ehrpwm_base + ETSEL);
 }
 
+static inline bool fiq_ehrpwm_et_int_is_enabled(void)
+{
+	short dir = __raw_readw(legoev3_fiq_data->ehrpwm_base + ETSEL);
+	return !!(dir & INTEN);
+}
+
 #define ETPS 0x34 /* Event-Trigger Prescale Register */
 #define INTPRD_MASK (BIT(1)|BIT(0))
 static inline void fiq_ehrpwm_et_int_set_period(unsigned char period)
@@ -696,6 +702,15 @@ int legoev3_fiq_ehrpwm_int_disable(void)
 	return 0;
 }
 EXPORT_SYMBOL_GPL(legoev3_fiq_ehrpwm_int_disable);
+
+bool legoev3_fiq_ehrpwm_int_is_enabled(void)
+{
+	if (!legoev3_fiq_data || !legoev3_fiq_data->ehrpwm_data.requested_flag)
+		return false;
+
+	return fiq_ehrpwm_et_int_is_enabled();
+}
+EXPORT_SYMBOL_GPL(legoev3_fiq_ehrpwm_int_is_enabled);
 
 /*
  * Only called when the ehrpwm interrupt is configured as regular IRQ and
