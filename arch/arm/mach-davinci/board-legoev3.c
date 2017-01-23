@@ -224,12 +224,54 @@ static const short legoev3_button_pins[] __initconst = {
 };
 
 static struct gpio_keys_button ev3_gpio_keys_table[] = {
-	{KEY_UP,        EV3_BUTTON_0_PIN, 1, "ev3:UP",    EV_KEY, 0, 50, 1},
-	{KEY_ENTER,     EV3_BUTTON_1_PIN, 1, "ev3:ENTER", EV_KEY, 0, 50, 1},
-	{KEY_DOWN,      EV3_BUTTON_2_PIN, 1, "ev3:DOWN",  EV_KEY, 0, 50, 1},
-	{KEY_RIGHT,     EV3_BUTTON_3_PIN, 1, "ev3:RIGHT", EV_KEY, 0, 50, 1},
-	{KEY_LEFT,      EV3_BUTTON_4_PIN, 1, "ev3:LEFT",  EV_KEY, 0, 50, 1},
-	{KEY_BACKSPACE, EV3_BUTTON_5_PIN, 1, "ev3:BACK",   EV_KEY, 0, 50, 1},
+	{
+		.code			= KEY_UP,
+		.gpio			= EV3_BUTTON_0_PIN,
+		.desc			= "ev3:UP",
+		.type			= EV_KEY,
+		.debounce_interval	= 50,
+		.can_disable		= 1,
+	},
+	{
+		.code			= KEY_ENTER,
+		.gpio			= EV3_BUTTON_1_PIN,
+		.desc			= "ev3:ENTER",
+		.type			= EV_KEY,
+		.debounce_interval	= 50,
+		.can_disable		= 1,
+	},
+	{
+		.code			= KEY_DOWN,
+		.gpio			= EV3_BUTTON_2_PIN,
+		.desc			= "ev3:DOWN",
+		.type			= EV_KEY,
+		.debounce_interval	= 50,
+		.can_disable		= 1,
+	},
+	{
+		.code			= KEY_RIGHT,
+		.gpio			= EV3_BUTTON_3_PIN,
+		.desc			= "ev3:RIGHT",
+		.type			= EV_KEY,
+		.debounce_interval	= 50,
+		.can_disable		= 1,
+	},
+	{
+		.code			= KEY_LEFT,
+		.gpio			= EV3_BUTTON_4_PIN,
+		.desc			= "ev3:LEFT",
+		.type			= EV_KEY,
+		.debounce_interval	= 50,
+		.can_disable		= 1,
+	},
+	{
+		.code			= KEY_BACKSPACE,
+		.gpio			= EV3_BUTTON_5_PIN,
+		.desc			= "ev3:BACK",
+		.type			= EV_KEY,
+		.debounce_interval	= 50,
+		.can_disable		= 1,
+	},
 };
 
 static struct gpio_keys_platform_data ev3_gpio_keys_data = {
