@@ -99,6 +99,8 @@ struct fbtft_ops {
  * struct fbtft_display - Describes the display properties
  * @width: Width of display in pixels
  * @height: Height of display in pixels
+ * @phys_width: Physical width of viewable area in mm
+ * @phys_height: Physical height of viewable area in mm
  * @regwidth: LCD Controller Register width in bits
  * @buswidth: Display interface bus width in bits
  * @backlight: Backlight type.
@@ -117,6 +119,8 @@ struct fbtft_ops {
 struct fbtft_display {
 	unsigned int width;
 	unsigned int height;
+	unsigned phys_width;
+	unsigned phys_height;
 	unsigned int regwidth;
 	unsigned int buswidth;
 	unsigned int backlight;
