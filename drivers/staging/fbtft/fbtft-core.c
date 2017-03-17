@@ -656,6 +656,8 @@ struct fb_info *fbtft_framebuffer_alloc(struct fbtft_display *display,
 	void *buf = NULL;
 	unsigned int width;
 	unsigned int height;
+	unsigned phys_width;
+	unsigned phys_height;
 	int txbuflen = display->txbuflen;
 	unsigned int bpp = display->bpp;
 	unsigned int fps = display->fps;
@@ -699,6 +701,10 @@ struct fb_info *fbtft_framebuffer_alloc(struct fbtft_display *display,
 		display->width = pdata->display.width;
 	if (pdata->display.height)
 		display->height = pdata->display.height;
+	if (pdata->display.phys_width)
+		display->phys_width = pdata->display.phys_width;
+	if (pdata->display.phys_height)
+		display->phys_height = pdata->display.phys_height;
 	if (pdata->display.buswidth)
 		display->buswidth = pdata->display.buswidth;
 	if (pdata->display.regwidth)
@@ -712,10 +718,14 @@ struct fb_info *fbtft_framebuffer_alloc(struct fbtft_display *display,
 	case 270:
 		width =  display->height;
 		height = display->width;
+		phys_width = display->phys_height;
+		phys_height = display->phys_width;
 		break;
 	default:
 		width =  display->width;
 		height = display->height;
+		phys_width = display->phys_width;
+		phys_height = display->phys_height;
 	}
 
 	vmem_size = display->width * display->height * bpp / 8;
@@ -783,6 +793,8 @@ struct fb_info *fbtft_framebuffer_alloc(struct fbtft_display *display,
 	info->var.yres_virtual =   info->var.yres;
 	info->var.bits_per_pixel = bpp;
 	info->var.nonstd =         1;
+	info->var.width =          phys_width;
+	info->var.height =         phys_height;
 
 	/* RGB565 */
 	info->var.red.offset =     11;
@@ -1284,6 +1296,8 @@ static struct fbtft_platform_data *fbtft_probe_dt(struct device *dev)
 
 	pdata->display.width = fbtft_of_value(node, "width");
 	pdata->display.height = fbtft_of_value(node, "height");
+	pdata->display.phys_width = fbtft_of_value(node, "phys-width");
+	pdata->display.phys_height = fbtft_of_value(node, "phys-height");
 	pdata->display.regwidth = fbtft_of_value(node, "regwidth");
 	pdata->display.buswidth = fbtft_of_value(node, "buswidth");
 	pdata->display.backlight = fbtft_of_value(node, "backlight");
