@@ -1917,7 +1917,7 @@ static void dualshock4_send_output_report(struct sony_sc *sc)
 	} else {
 		memset(buf, 0, DS4_REPORT_0x11_SIZE);
 		buf[0] = 0x11;
-		buf[1] = 0x80;
+		buf[1] = 0xB0;
 		buf[3] = 0x0F;
 		offset = 6;
 	}
