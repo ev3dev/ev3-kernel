@@ -239,6 +239,14 @@ static int lego_ev3_battery_probe(struct platform_device *pdev)
 		return err;
 	}
 
+	/* work around for gpio-hog not working in 4.9 kernel */
+	err = PTR_ERR_OR_ZERO(devm_gpiod_get(dev, "voltage", GPIOD_OUT_HIGH));
+	if (err) {
+		if (err != -EPROBE_DEFER)
+			dev_err(dev, "Failed to get voltage gpio\n");
+		return err;
+	}
+
 	/*
 	 * The rechargeable battery indication switch cannot be changed without
 	 * removing the battery, so we only need to read it once.
