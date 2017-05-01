@@ -157,6 +157,7 @@
 		io-channels = <&ev3_adc 4>, <&ev3_adc 3>;
 		io-channel-names = "voltage", "current";
 		rechargeable-gpios = <&gpio 136 GPIO_ACTIVE_LOW>;
+		voltage-gpios = <&gpio 6 GPIO_ACTIVE_HIGH>;
 	};
 
 	sound {
@@ -507,7 +508,7 @@
 		>;
 	};
 
-	battery_pins: pinmux_battery_pins {
+	battery_pins: pinmux-battery-pins {
 		pinctrl-single,bits = <
 			/* GP0[6] */
 			0x04 0x00000080 0x000000f0
@@ -725,13 +726,6 @@
 
 &gpio {
 	status = "okay";
-
-	/* Don't pull down battery voltage adc io channel */
-	batt_volt_en {
-		gpio-hog;
-		gpios = <6 GPIO_ACTIVE_HIGH>;
-		output-low;
-	};
 };
 
 &usb_phy {
