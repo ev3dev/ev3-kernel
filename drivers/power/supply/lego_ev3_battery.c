@@ -27,11 +27,14 @@
 struct lego_ev3_battery {
 	struct iio_channel *iio_v;
 	struct iio_channel *iio_i;
+	struct iio_cb_buffer *iio_cb;
 	struct gpio_desc *rechargeable_gpio;
 	struct power_supply *psy;
 	int technology;
 	int v_max;
 	int v_min;
+	int v_now;
+	int c_now;
 };
 
 static int lego_ev3_battery_get_property(struct power_supply *psy,
@@ -48,17 +51,21 @@ static int lego_ev3_battery_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
 		/* battery voltage is iio channel * 2 + Vce of transistor */
 		ret = iio_read_channel_processed(batt->iio_v, &val->intval);
-		if (ret == -ENODEV || ret == -EAGAIN)
+		if (ret == -EBUSY)
+			val->intval = batt->v_now;
+		else if (ret == -ENODEV || ret == -EAGAIN)
 			return ret;
-		if (ret < 0)
+		else if (ret < 0)
 			return -ENODATA;
 		val->intval *= 2000;
 		val->intval += 200000;
 		/* plus adjust for shunt resistor drop */
 		ret = iio_read_channel_processed(batt->iio_i, &val2);
-		if (ret == -ENODEV || ret == -EAGAIN)
+		if (ret == -EBUSY)
+			val2 = batt->c_now;
+		else if (ret == -ENODEV || ret == -EAGAIN)
 			return ret;
-		if (ret < 0)
+		else if (ret < 0)
 			return -ENODATA;
 		val2 *= 1000;
 		val2 /= 15;
@@ -73,9 +80,11 @@ static int lego_ev3_battery_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
 		/* battery current is iio channel / 15 / 0.05 ohms */
 		ret = iio_read_channel_processed(batt->iio_i, &val->intval);
-		if (ret == -ENODEV || ret == -EAGAIN)
+		if (ret == -EBUSY)
+			val->intval = batt->c_now;
+		else if (ret == -ENODEV || ret == -EAGAIN)
 			return ret;
-		if (ret < 0)
+		else if (ret < 0)
 			return -ENODATA;
 		val->intval *= 20000;
 		val->intval /= 15;
@@ -153,6 +162,37 @@ static const struct power_supply_desc lego_ev3_battery_desc = {
 	.property_is_writeable	= lego_ev3_battery_property_is_writeable,
 };
 
+static int lego_ev3_battery_iio_cb(const void *data, void *private)
+{
+	const u16 *raw = data;
+	struct lego_ev3_battery *batt = private;
+
+	/*
+	 * Making some assumptions about the data format here. This works for
+	 * the ti-ads7957 driver, but won't work for just any old iio channels.
+	 * To do this properly, we should be reading the iio_channel structs
+	 * to determine how to properly decode the data.
+	 */
+	batt->c_now =  ((raw[0] & 0xFFF) * 5002) >> 12;
+	batt->v_now =  ((raw[1] & 0xFFF) * 5002) >> 12;
+
+	return 0;
+}
+
+static void lego_ev3_battery_release_all_cb(void *data)
+{
+	struct iio_cb_buffer *iio_cb = data;
+
+	iio_channel_release_all_cb(iio_cb);
+}
+
+static void lego_ev3_battery_stop_all_cb(void *data)
+{
+	struct iio_cb_buffer *iio_cb = data;
+
+	iio_channel_stop_all_cb(iio_cb);
+}
+
 static int lego_ev3_battery_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -181,6 +221,15 @@ static int lego_ev3_battery_probe(struct platform_device *pdev)
 			dev_err(dev, "Failed to get current iio channel\n");
 		return err;
 	}
+
+	batt->iio_cb = iio_channel_get_all_cb(dev, lego_ev3_battery_iio_cb, batt);
+	err = PTR_ERR_OR_ZERO(batt->iio_cb);
+	if (err) {
+		dev_err(dev, "Failed to get iio callback\n");
+		return err;
+	}
+
+	devm_add_action(dev, lego_ev3_battery_release_all_cb, batt->iio_cb);
 
 	batt->rechargeable_gpio = devm_gpiod_get(dev, "rechargeable", GPIOD_IN);
 	err = PTR_ERR_OR_ZERO(batt->rechargeable_gpio);
@@ -216,6 +265,14 @@ static int lego_ev3_battery_probe(struct platform_device *pdev)
 		dev_err(dev, "failed to register power supply\n");
 		return err;
 	}
+
+	err = iio_channel_start_all_cb(batt->iio_cb);
+	if (err) {
+		dev_err(dev, "Failed to start iio callback\n");
+		return err;
+	}
+
+	devm_add_action(dev, lego_ev3_battery_stop_all_cb, batt->iio_cb);
 
 	return 0;
 }
