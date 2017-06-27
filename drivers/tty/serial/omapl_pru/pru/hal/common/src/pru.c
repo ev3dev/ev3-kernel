@@ -27,7 +27,6 @@
 /************************************************************
 * Local Function Declarations                               *
 ************************************************************/
-static void pru_psc_disable(arm_pru_iomap * pru_arm_iomap);
 static void pru_psc_enable(arm_pru_iomap * pru_arm_iomap);
 
 // Load the specified PRU with code
@@ -177,32 +176,6 @@ static void pru_psc_enable(arm_pru_iomap * pru_arm_iomap)
 	// Wait and verify the state
 	while (CSL_FEXT(PSC->MDSTAT[CSL_PSC_PRU], PSC_MDSTAT_STATE) !=
 	       CSL_PSC_MDSTAT_STATE_ENABLE) ;
-}
-
-static void pru_psc_disable(arm_pru_iomap * pru_arm_iomap)
-{
-	CSL_PscRegsOvly PSC = (CSL_PscRegsOvly) pru_arm_iomap->psc0_io_addr;	//CSL_PSC_0_REGS;
-
-	// Wait for any outstanding transition to complete
-	while (CSL_FEXT(PSC->PTSTAT, PSC_PTSTAT_GOSTAT0) ==
-	       CSL_PSC_PTSTAT_GOSTAT0_IN_TRANSITION) ;
-
-	// If we are already in that state, just return
-	if (CSL_FEXT(PSC->MDSTAT[CSL_PSC_PRU], PSC_MDSTAT_STATE) ==
-	    CSL_PSC_MDSTAT_STATE_SYNCRST)
-		return;
-
-	// Perform transition
-	CSL_FINST(PSC->MDCTL[CSL_PSC_PRU], PSC_MDCTL_NEXT, SYNCRST);
-	CSL_FINST(PSC->PTCMD, PSC_PTCMD_GO0, SET);
-
-	// Wait for transition to complete
-	while (CSL_FEXT(PSC->PTSTAT, PSC_PTSTAT_GOSTAT0) ==
-	       CSL_PSC_PTSTAT_GOSTAT0_IN_TRANSITION) ;
-
-	// Wait and verify the state
-	while (CSL_FEXT(PSC->MDSTAT[CSL_PSC_PRU], PSC_MDSTAT_STATE) !=
-	       CSL_PSC_MDSTAT_STATE_SYNCRST) ;
 }
 
 /***********************************************************
