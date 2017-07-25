@@ -520,10 +520,10 @@
 	cs-gpios = <&gpio 44 GPIO_ACTIVE_LOW>;
 
 	lcd@0 {
-		compatible = "st7586fb-legoev3";
+		compatible = "lego,ev3-lcd";
 		reg = <0>;
 		spi-max-frequency = <10000000>;
-		rst-gpios = <&gpio 80 GPIO_ACTIVE_HIGH>;
+		rst-gpios = <&gpio 80 GPIO_ACTIVE_LOW>;
 		a0-gpios = <&gpio 43 GPIO_ACTIVE_HIGH>;
 	};
 };
