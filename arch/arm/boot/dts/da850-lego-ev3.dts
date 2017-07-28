@@ -171,7 +171,7 @@
 	};
 
 	ev3_ports: ev3-ports {
-		compatible = "ev3dev,evb-ports";
+		compatible = "ev3dev,ev3-ports";
 
 		in1 {
 			pinctrl-names = "default", "i2c", "uart";
@@ -179,7 +179,7 @@
 			pinctrl-1 = <&in1_pins>, <&in1_i2c_pins>;
 			pinctrl-2 = <&in1_pins>, <&in1_uart_pins>;
 
-			compatible = "ev3dev,evb-input-port";
+			compatible = "ev3dev,ev3-input-port";
 			io-channels = <&ev3_adc 6>, <&ev3_adc 5>;
 			io-channel-names = "pin1", "pin6";
 			pin1-gpios = <&gpio 138 0>;
@@ -197,7 +197,7 @@
 			pinctrl-1 = <&in2_pins>, <&in2_i2c_pins>;
 			pinctrl-2 = <&in2_pins>, <&in2_uart_pins>;
 
-			compatible = "ev3dev,evb-input-port";
+			compatible = "ev3dev,ev3-input-port";
 			io-channels = <&ev3_adc 8>, <&ev3_adc 7>;
 			io-channel-names = "pin1", "pin6";
 			pin1-gpios = <&gpio 140 0>;
@@ -215,7 +215,7 @@
 			pinctrl-1 = <&in3_pins>, <&in3_i2c_pins>;
 			pinctrl-2 = <&in3_pins>, <&in3_uart_pins>;
 
-			compatible = "ev3dev,evb-input-port";
+			compatible = "ev3dev,ev3-input-port";
 			io-channels = <&ev3_adc 10>, <&ev3_adc 9>;
 			io-channel-names = "pin1", "pin6";
 			pin1-gpios = <&gpio 137 0>;
@@ -233,7 +233,7 @@
 			pinctrl-1 = <&in4_pins>, <&in4_i2c_pins>;
 			pinctrl-2 = <&in4_pins>, <&in4_uart_pins>;
 
-			compatible = "ev3dev,evb-input-port";
+			compatible = "ev3dev,ev3-input-port";
 			io-channels = <&ev3_adc 12>, <&ev3_adc 11>;
 			io-channel-names = "pin1", "pin6";
 			pin1-gpios = <&gpio 100 0>;
@@ -249,7 +249,7 @@
 			pinctrl-names = "default";
 			pinctrl-0 = <&outA_pins>;
 
-			compatible = "ev3dev,evb-output-port";
+			compatible = "ev3dev,ev3-output-port";
 			io-channels = <&ev3_adc 1>;
 			io-channel-names = "pin5";
 			pin1-gpios = <&gpio 63 0>;
@@ -265,7 +265,7 @@
 			pinctrl-names = "default";
 			pinctrl-0 = <&outB_pins>;
 
-			compatible = "ev3dev,evb-output-port";
+			compatible = "ev3dev,ev3-output-port";
 			io-channels = <&ev3_adc 0>;
 			io-channel-names = "pin5";
 			pin1-gpios = <&gpio 33 0>;
@@ -281,7 +281,7 @@
 			pinctrl-names = "default";
 			pinctrl-0 = <&outC_pins>;
 
-			compatible = "ev3dev,evb-output-port";
+			compatible = "ev3dev,ev3-output-port";
 			io-channels = <&ev3_adc 13>;
 			io-channel-names = "pin5";
 			pin1-gpios = <&gpio 104 0>;
@@ -297,7 +297,7 @@
 			pinctrl-names = "default";
 			pinctrl-0 = <&outD_pins>;
 
-			compatible = "ev3dev,evb-output-port";
+			compatible = "ev3dev,ev3-output-port";
 			io-channels = <&ev3_adc 14>;
 			io-channel-names = "pin5";
 			pin1-gpios = <&gpio 83 0>;
