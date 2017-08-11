@@ -82,25 +82,28 @@
 		compatible = "gpio-leds";
 
 		left_green {
-			label = "ev3:left:green:ev3dev";
+			label = "led0:green:brick-status";
 			/* GP6[13] */
 			gpios = <&gpio 103 GPIO_ACTIVE_HIGH>;
 			linux,default-trigger = "mmc0";
 		};
+
 		right_red {
-			label = "ev3:right:red:ev3dev";
+			label = "led1:red:brick-status";
 			/* GP6[7] */
 			gpios = <&gpio 108 GPIO_ACTIVE_HIGH>;
 			linux,default-trigger = "mmc0";
 		};
+
 		left_red {
-			label = "ev3:left:red:ev3dev";
+			label = "led0:red:brick-status";
 			/* GP6[12] */
 			gpios = <&gpio 109 GPIO_ACTIVE_HIGH>;
 			linux,default-trigger = "mmc0";
 		};
+
 		right_green {
-			label = "ev3:right:green:ev3dev";
+			label = "led1:green:brick-status";
 			/* GP6[14] */
 			gpios = <&gpio 110 GPIO_ACTIVE_HIGH>;
 			linux,default-trigger = "mmc0";
