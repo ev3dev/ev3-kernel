@@ -119,7 +119,7 @@ static struct spi_board_info legoev3_st7735r_spi1_board_info[] = {
 		.modalias		= "fb_st7735r",
 		.platform_data		= &legoev3_st7735r_data,
 		.mode			= SPI_MODE_0 | SPI_NO_CS,
-		.max_speed_hz		= 32000000,
+		.max_speed_hz		= 10000000,
 		.bus_num		= 1,
 	},
 };
