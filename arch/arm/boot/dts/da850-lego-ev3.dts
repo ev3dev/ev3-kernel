@@ -30,6 +30,19 @@
 		reg = <0xc0000000 0x04000000>;
 	};
 
+	board {
+		pinctrl-0 = <&hw_id_pins>, <&hw_id_pinconf>;
+		pinctrl-names = "default";
+		compatible = "lego,ev3-board";
+		hw-id-gpios = <&gpio 53 GPIO_ACTIVE_HIGH>, /* HWID0 */
+			      <&gpio 52 GPIO_ACTIVE_HIGH>, /* HWID1 */
+			      <&gpio 50 GPIO_ACTIVE_HIGH>, /* HWID2 */
+			      <&gpio 74 GPIO_ACTIVE_HIGH>; /* HWID3 */
+
+		nvmem-cells = <&hw_id>;
+		nvmem-cell-names = "hw-id";
+	};
+
 	/*
 	 * The buttons on the EV3 are mapped to keyboard keys.
 	 */
@@ -561,6 +574,19 @@
 		>;
 	};
 
+	hw_id_pins: pinmux-hw-id {
+		pinctrl-single,bits = <
+			/*
+			 * GP3[2], GP3[4], GP3[5]
+			 */
+			0x20 0x00808800 0x00f0ff00
+			/*
+			 * GP4[10]
+			 */
+			0x24 0x00800000 0x00f00000
+		>;
+	};
+
 	fixed_pins: pinmux-fixed {
 		pinctrl-single,bits = <
 			/*
@@ -580,13 +606,13 @@
 			 */
 			0x18 0x80000008 0xf000000f
 			/*
-			 * GP3[2], GP3[3], GP3[4], GP3[5]
+			 * GP3[3]
 			 */
-			0x20 0x00888800 0x00ffff00
+			0x20 0x00080000 0x000f0000
 			/*
-			 * GP4[9], GP4[10], GP4[14]
+			 * GP4[9], GP4[14]
 			 */
-			0x24 0x08800080 0x0ff000f0
+			0x24 0x08000080 0x0f0000f0
 			/*
 			 * GP5[2], GP5[7]
 			 */
@@ -608,7 +634,7 @@
 		disable {
 			groups = "cp0", "cp1", "cp2", "cp3", "cp4",
 				 "cp6", "cp7", "cp8", "cp9", "cp10", "cp11",
-				 "cp12", "cp13", "cp14", "cp15", "cp16", "cp17",
+				 "cp12", "cp13", "cp14", "cp15", "cp16",
 				 "cp18", "cp19", "cp20", "cp21", "cp22", "cp23",
 				 "cp26", "cp27", "cp29", "cp30", "cp31";
 			bias-disable;
@@ -622,6 +648,13 @@
 	button_pinconf: buttons {
 		disable {
 			groups = "cp5", "cp24", "cp25", "cp28";
+			bias-disable;
+		};
+	};
+
+	hw_id_pinconf: buttons {
+		disable {
+			groups = "cp17";
 			bias-disable;
 		};
 	};
@@ -661,6 +694,14 @@
 		pagesize = <64>;
 		read-only;
 		reg = <0x50>;
+
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		/* Hardware ID + Bluetooth MAC address */
+		hw_id: hw-id@0x3F00 {
+			reg = <0x3F00 12>;
+		};
 	};
 };
 
