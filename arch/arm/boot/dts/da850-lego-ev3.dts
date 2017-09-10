@@ -652,7 +652,7 @@
 		};
 	};
 
-	hw_id_pinconf: buttons {
+	hw_id_pinconf: hw-id {
 		disable {
 			groups = "cp17";
 			bias-disable;
