@@ -276,7 +276,7 @@ static ssize_t modalias_show(struct device *dev,
 {
 	return of_device_modalias(dev, buf, PAGE_SIZE);
 }
-DEVICE_ATTR_RO(modalias);
+static DEVICE_ATTR_RO(modalias);
 
 static struct attribute *serdev_device_attrs[] = {
 	&dev_attr_modalias.attr,
