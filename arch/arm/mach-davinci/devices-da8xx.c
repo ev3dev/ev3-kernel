@@ -15,7 +15,6 @@
 #include <linux/platform_device.h>
 #include <linux/dma-contiguous.h>
 #include <linux/serial_8250.h>
-#include <linux/ti_omapl_pru_suart.h>
 #include <linux/ahci_platform.h>
 #include <linux/clk.h>
 #include <linux/reboot.h>
@@ -667,18 +666,11 @@ static struct resource da8xx_pru_suart_resources[] = {
 	},
 };
 
-static struct ti_pru_suart_platform_data da8xx_pru_suart_pdata = {
-	.version = 1,
-};
-
 struct platform_device da8xx_pru_suart_device = {
 	.name		= "ti_omapl_pru_suart",
 	.id		= 1,
 	.num_resources	= ARRAY_SIZE(da8xx_pru_suart_resources),
 	.resource	= da8xx_pru_suart_resources,
-	.dev		= {
-		.platform_data	= &da8xx_pru_suart_pdata,
-	},
 };
 
 int __init da8xx_register_pru_suart(void)
