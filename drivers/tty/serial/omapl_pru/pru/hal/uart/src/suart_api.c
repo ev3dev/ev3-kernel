@@ -546,12 +546,17 @@ short pru_softuart_init(unsigned int txBaudValue,
 
 	pru_arm_iomap.pru_io_addr = arm_iomap_pru->pru_io_addr;
 	pru_arm_iomap.mcasp_io_addr = arm_iomap_pru->mcasp_io_addr;
+	pru_arm_iomap.psc0_io_addr = arm_iomap_pru->psc0_io_addr;
+	pru_arm_iomap.psc1_io_addr = arm_iomap_pru->psc1_io_addr;
 	pru_arm_iomap.syscfg_io_addr = arm_iomap_pru->syscfg_io_addr;
 	pru_arm_iomap.pFifoBufferPhysBase = arm_iomap_pru->pFifoBufferPhysBase;
 	pru_arm_iomap.pFifoBufferVirtBase = arm_iomap_pru->pFifoBufferVirtBase;
 	pru_arm_iomap.pru_clk_freq = arm_iomap_pru->pru_clk_freq;
 
 	omapl_addr = (unsigned int)arm_iomap_pru->syscfg_io_addr;
+
+	omapl_addr = (unsigned int)arm_iomap_pru->psc1_io_addr;
+	suart_mcasp_psc_enable(omapl_addr);
 
 	omapl_addr = (unsigned int)arm_iomap_pru->mcasp_io_addr;
 	/* Configure McASP0  */

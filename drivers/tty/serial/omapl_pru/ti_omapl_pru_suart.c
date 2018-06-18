@@ -44,7 +44,7 @@
 #define DRV_DESC "TI PRU SUART Controller Driver v0.1"
 #define MAX_SUART_RETRIES 100
 #define SUART_CNTX_SZ 512
-#define PLATFORM_SUART_RES_SZ 3
+#define PLATFORM_SUART_RES_SZ 5
 #define SUART_FIFO_TIMEOUT_DFLT 10
 #define SUART_FIFO_TIMEOUT_MIN 4
 #define SUART_FIFO_TIMEOUT_MAX 500
@@ -794,6 +794,18 @@ static int omapl_pru_suart_probe(struct platform_device *pdev)
 		err = -EBUSY;
 		goto probe_exit_1;
 	}
+	if (!request_mem_region(res_mem[2]->start, resource_size(res_mem[2]),
+				dev_name(&pdev->dev))) {
+		dev_err(&pdev->dev, "psc0 memory region already claimed!\n");
+		err = -EBUSY;
+		goto probe_exit_2;
+	}
+	if (!request_mem_region(res_mem[3]->start, resource_size(res_mem[3]),
+				dev_name(&pdev->dev))) {
+		dev_err(&pdev->dev, "psc1 memory region already claimed!\n");
+		err = -EBUSY;
+		goto probe_exit_3;
+	}
 
 	soft_uart->pru_arm_iomap.pru_io_addr = ioremap(res_mem[0]->start,
 						       resource_size(res_mem
@@ -811,13 +823,28 @@ static int omapl_pru_suart_probe(struct platform_device *pdev)
 		err = -ENOMEM;
 		goto probe_exit_iounmap_1;
 	}
-
+	soft_uart->pru_arm_iomap.psc0_io_addr = ioremap(res_mem[2]->start,
+							resource_size(res_mem
+								      [2]));
+	if (!soft_uart->pru_arm_iomap.psc0_io_addr) {
+		dev_err(&pdev->dev, "ioremap failed\n");
+		err = -ENOMEM;
+		goto probe_exit_iounmap_2;
+	}
+	soft_uart->pru_arm_iomap.psc1_io_addr = ioremap(res_mem[3]->start,
+							resource_size(res_mem
+								      [3]));
+	if (!soft_uart->pru_arm_iomap.psc1_io_addr) {
+		dev_err(&pdev->dev, "ioremap failed\n");
+		err = -ENOMEM;
+		goto probe_exit_iounmap_3;
+	}
 	soft_uart->pru_arm_iomap.syscfg_io_addr =
 	    IO_ADDRESS(DA8XX_SYSCFG0_BASE);
 	if (!soft_uart->pru_arm_iomap.syscfg_io_addr) {
 		dev_err(&pdev->dev, "ioremap failed\n");
 		err = -ENOMEM;
-		goto probe_exit_iounmap_2;
+		goto probe_exit_iounmap_4;
 	}
 
 	soft_uart->clk_pru = clk_get(&pdev->dev, "pruss");
@@ -854,8 +881,8 @@ static int omapl_pru_suart_probe(struct platform_device *pdev)
 	memcpy((void *)fw_data, (const void *)soft_uart->fw->data,
 	       soft_uart->fw->size);
 
-	dma_phys_addr = res_mem[2]->start;
-	dma_vaddr_buff = ioremap(res_mem[2]->start, resource_size(res_mem[2]));
+	dma_phys_addr = res_mem[4]->start;
+	dma_vaddr_buff = ioremap(res_mem[4]->start, resource_size(res_mem[4]));
 	if (!dma_vaddr_buff) {
 		__suart_err("Failed to allocate shared ram.\n");
 		err = -EFAULT;
@@ -928,11 +955,19 @@ probe_exit_clk:
 	clk_put(soft_uart->clk_mcasp);
 probe_exit_clk_pru:
 	clk_put(soft_uart->clk_pru);
+probe_exit_iounmap_4:
+	iounmap(soft_uart->pru_arm_iomap.psc1_io_addr);
+probe_exit_iounmap_3:
+	iounmap(soft_uart->pru_arm_iomap.psc0_io_addr);
 probe_exit_iounmap_2:
 	iounmap(soft_uart->pru_arm_iomap.mcasp_io_addr);
 probe_exit_iounmap_1:
 	iounmap(soft_uart->pru_arm_iomap.pru_io_addr);
 probe_exit_free_region:
+	release_mem_region(res_mem[3]->start, resource_size(res_mem[3]));
+probe_exit_3:
+	release_mem_region(res_mem[2]->start, resource_size(res_mem[2]));
+probe_exit_2:
 	release_mem_region(res_mem[1]->start, resource_size(res_mem[1]));
 probe_exit_1:
 	release_mem_region(res_mem[0]->start, resource_size(res_mem[0]));
@@ -945,7 +980,7 @@ static int omapl_pru_suart_remove(struct platform_device *pdev)
 {
 	struct ti_pru_suart_platform_data *pdata;
 	struct omapl_pru_suart *soft_uart = platform_get_drvdata(pdev);
-	struct resource *res_mem[PLATFORM_SUART_RES_SZ];
+	struct resource *res_mem[4];
 	int i;
 	u32 err = 0;
 
@@ -956,7 +991,7 @@ static int omapl_pru_suart_remove(struct platform_device *pdev)
 	}
 	platform_set_drvdata(pdev, NULL);
 
-	for (i = 0; i < PLATFORM_SUART_RES_SZ; i++) {
+	for (i = 0; i < 4; i++) {
 		res_mem[i] = platform_get_resource(pdev, IORESOURCE_MEM, i);
 		if (!res_mem[i]) {
 			dev_err(&pdev->dev,
@@ -980,8 +1015,12 @@ static int omapl_pru_suart_remove(struct platform_device *pdev)
 	clk_disable(soft_uart->clk_pru);
 	iounmap(soft_uart->pru_arm_iomap.mcasp_io_addr);
 	iounmap(soft_uart->pru_arm_iomap.pru_io_addr);
-	for (i = 0; i < PLATFORM_SUART_RES_SZ; i++)
-		release_mem_region(res_mem[i]->start, resource_size(res_mem[i]));
+	iounmap(soft_uart->pru_arm_iomap.psc0_io_addr);
+	iounmap(soft_uart->pru_arm_iomap.psc1_io_addr);
+	release_mem_region(res_mem[0]->start, resource_size(res_mem[0]));
+	release_mem_region(res_mem[1]->start, resource_size(res_mem[1]));
+	release_mem_region(res_mem[2]->start, resource_size(res_mem[2]));
+	release_mem_region(res_mem[3]->start, resource_size(res_mem[3]));
 	kfree(soft_uart);
 	return err;
 }
