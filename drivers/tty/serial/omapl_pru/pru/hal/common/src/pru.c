@@ -21,13 +21,11 @@
 #include "csl/cslr.h"
 #include "csl/soc_OMAPL138.h"
 #include "csl/cslr_prucore.h"
-#include "csl/cslr_psc_OMAPL138.h"
 #include "pru.h"
 
 /************************************************************
 * Local Function Declarations                               *
 ************************************************************/
-static void pru_psc_enable(arm_pru_iomap * pru_arm_iomap);
 
 // Load the specified PRU with code
 Uint32 pru_load(Uint8 pruNum, Uint32 * pruCode, Uint32 codeSizeInWords,
@@ -133,9 +131,6 @@ Uint32 pru_enable(Uint8 pruNum, arm_pru_iomap * pru_arm_iomap)
 {
 	CSL_PrucoreRegsOvly hPru;
 
-	// Enable PRU SS
-	pru_psc_enable(pru_arm_iomap);
-
 	if (pruNum == CSL_PRUCORE_0) {
 		// Reset PRU0
 		hPru = (CSL_PrucoreRegsOvly) ((Uint32 )pru_arm_iomap->pru_io_addr + 0x7000);	//CSL_PRUCORE_0_REGS;
@@ -146,36 +141,6 @@ Uint32 pru_enable(Uint8 pruNum, arm_pru_iomap * pru_arm_iomap)
 		hPru->CONTROL = CSL_PRUCORE_CONTROL_RESETVAL;
 	}
 	return E_PASS;
-}
-
-/************************************************************
-* Local Function Definitions                                *
-************************************************************/
-
-static void pru_psc_enable(arm_pru_iomap * pru_arm_iomap)
-{
-	CSL_PscRegsOvly PSC = (CSL_PscRegsOvly) pru_arm_iomap->psc0_io_addr;	//CSL_PSC_0_REGS;
-
-	// Wait for any outstanding transition to complete
-	while (CSL_FEXT(PSC->PTSTAT, PSC_PTSTAT_GOSTAT0) ==
-	       CSL_PSC_PTSTAT_GOSTAT0_IN_TRANSITION) ;
-
-	// If we are already in that state, just return
-	if (CSL_FEXT(PSC->MDSTAT[CSL_PSC_PRU], PSC_MDSTAT_STATE) ==
-	    CSL_PSC_MDSTAT_STATE_ENABLE)
-		return;
-
-	// Perform transition
-	CSL_FINST(PSC->MDCTL[CSL_PSC_PRU], PSC_MDCTL_NEXT, ENABLE);
-	CSL_FINST(PSC->PTCMD, PSC_PTCMD_GO0, SET);
-
-	// Wait for transition to complete
-	while (CSL_FEXT(PSC->PTSTAT, PSC_PTSTAT_GOSTAT0) ==
-	       CSL_PSC_PTSTAT_GOSTAT0_IN_TRANSITION) ;
-
-	// Wait and verify the state
-	while (CSL_FEXT(PSC->MDSTAT[CSL_PSC_PRU], PSC_MDSTAT_STATE) !=
-	       CSL_PSC_MDSTAT_STATE_ENABLE) ;
 }
 
 /***********************************************************
