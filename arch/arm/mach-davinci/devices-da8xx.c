@@ -621,16 +621,6 @@ static struct resource da8xx_pru_suart_resources[] = {
 #endif
 	},
 	{
-		.start  = DA8XX_PSC0_BASE,
-		.end    = DA8XX_PSC0_BASE + (SZ_1K * 3) - 1,
-		.flags  = IORESOURCE_MEM,
-	},
-	{
-		.start  = DA8XX_PSC1_BASE,
-		.end    = DA8XX_PSC1_BASE + (SZ_1K * 3) - 1,
-		.flags  = IORESOURCE_MEM,
-	},
-	{
 		.start  = DA8XX_SHARED_RAM_BASE,
 		.end    = DA8XX_SHARED_RAM_BASE + (SZ_1K * 8) - 1,
 		.flags  = IORESOURCE_MEM,
