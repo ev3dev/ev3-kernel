@@ -82,6 +82,8 @@
 					unsigned int oversampling,
 					arm_pru_iomap * pru_arm_iomap);
 
+	extern void suart_mcasp_psc_disable(unsigned int psc1_addr);
+	extern void suart_mcasp_psc_enable(unsigned int psc1_addr);
 	extern short suart_asp_serializer_deactivate (unsigned short u16srNum,
 			 arm_pru_iomap * pru_arm_iomap);
 

@@ -30,6 +30,7 @@
 #include "csl/soc_OMAPL138.h"
 #include "csl/cslr_dspintc.h"
 #include "csl/cslr_mcasp.h"
+#include "csl/cslr_psc_OMAPL138.h"
 
 #define SUART_TRX_DIV_CONF_SZ	4
 
@@ -411,4 +412,69 @@ short suart_asp_serializer_deactivate (unsigned short u16srNum,
 
 }
 
+#if !(defined CONFIG_OMAPL_SUART_MCASP) || (CONFIG_OMAPL_SUART_MCASP == 0)
+#define MCASP_PSC_OFFSET	(CSL_PSC_MCASP0)
+#elif (defined CONFIG_OMAPL_SUART_MCASP) && (CONFIG_OMAPL_SUART_MCASP == 1)
+#define MCASP_PSC_OFFSET	(CSL_PSC_MCASP0 + 1)
+#elif (defined CONFIG_OMAPL_SUART_MCASP) && (CONFIG_OMAPL_SUART_MCASP == 2)
+#define MCASP_PSC_OFFSET	(CSL_PSC_MCASP0 + 2)
+#endif
+
+/*
+ * mcasp psc enable routine 
+ */
+void suart_mcasp_psc_enable(unsigned int psc1_addr)
+{
+	CSL_PscRegsOvly PSC = (CSL_PscRegsOvly) psc1_addr;	// CSL_PSC_1_REGS;
+
+	// Wait for any outstanding transition to complete
+	while (CSL_FEXT(PSC->PTSTAT, PSC_PTSTAT_GOSTAT0) ==
+	       CSL_PSC_PTSTAT_GOSTAT0_IN_TRANSITION) ;
+
+	// If we are already in that state, just return
+	if (CSL_FEXT(PSC->MDSTAT[MCASP_PSC_OFFSET], PSC_MDSTAT_STATE) ==
+	    CSL_PSC_MDSTAT_STATE_ENABLE)
+		return;
+
+	// Perform transition
+	CSL_FINST(PSC->MDCTL[MCASP_PSC_OFFSET], PSC_MDCTL_NEXT, ENABLE);
+	CSL_FINST(PSC->PTCMD, PSC_PTCMD_GO0, SET);
+
+	// Wait for transition to complete
+	while (CSL_FEXT(PSC->PTSTAT, PSC_PTSTAT_GOSTAT0) ==
+	       CSL_PSC_PTSTAT_GOSTAT0_IN_TRANSITION) ;
+
+	// Wait and verify the state
+	while (CSL_FEXT(PSC->MDSTAT[MCASP_PSC_OFFSET], PSC_MDSTAT_STATE) !=
+	       CSL_PSC_MDSTAT_STATE_ENABLE) ;
+}
+
+/*
+ * mcasp psc disable routine 
+ */
+void suart_mcasp_psc_disable(unsigned int psc1_addr)
+{
+	CSL_PscRegsOvly PSC = (CSL_PscRegsOvly) psc1_addr;	// CSL_PSC_1_REGS;
+
+	// Wait for any outstanding transition to complete
+	while (CSL_FEXT(PSC->PTSTAT, PSC_PTSTAT_GOSTAT0) ==
+	       CSL_PSC_PTSTAT_GOSTAT0_IN_TRANSITION) ;
+
+	// If we are already in that state, just return
+	if (CSL_FEXT(PSC->MDSTAT[MCASP_PSC_OFFSET], PSC_MDSTAT_STATE) ==
+	    CSL_PSC_MDSTAT_STATE_SYNCRST)
+		return;
+
+	// Perform transition
+	CSL_FINST(PSC->MDCTL[MCASP_PSC_OFFSET], PSC_MDCTL_NEXT, SYNCRST);
+	CSL_FINST(PSC->PTCMD, PSC_PTCMD_GO0, SET);
+
+	// Wait for transition to complete
+	while (CSL_FEXT(PSC->PTSTAT, PSC_PTSTAT_GOSTAT0) ==
+	       CSL_PSC_PTSTAT_GOSTAT0_IN_TRANSITION) ;
+
+	// Wait and verify the state
+	while (CSL_FEXT(PSC->MDSTAT[MCASP_PSC_OFFSET], PSC_MDSTAT_STATE) !=
+	       CSL_PSC_MDSTAT_STATE_SYNCRST) ;
+}
 /* End of file */
