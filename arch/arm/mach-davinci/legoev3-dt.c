@@ -188,11 +188,6 @@ static void __init legoev3_init_machine(void)
 		pr_warn("%s: Input port 4 I2C registration failed: %d\n", 
 			__func__, ret);
 
-	ret = da8xx_register_pru_suart();
-	if (ret)
-		pr_warn("%s: pru suart registration failed: %d\n",
-			__func__, ret);
-
 	ret = platform_device_register(&legoev3_bt_device);
 	if (ret)
 		pr_warn("%s: registering on-board bluetooth failed: %d\n",

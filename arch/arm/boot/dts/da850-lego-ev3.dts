@@ -30,6 +30,28 @@
 		reg = <0xc0000000 0x04000000>;
 	};
 
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		pru_suart_reserved: serial@80000000 {
+			compatible = "shared-dma-pool";
+			reg = <0x80000000 0x2000>;
+			no-map;
+		};
+
+	};
+
+	soc@1c00000 {
+		pru_suart: serial@30000 {
+			compatible = "ev3dev,omapl-pru-suart";
+			reg = <0x30000 0x10000>, <0x100000 0x3000>;
+			interrupts = <3>, <4>, <5>, <6>, <7>, <8>, <9>, <10>;
+			memory-region = <&pru_suart_reserved>;
+		};
+	};
+
 	board {
 		pinctrl-0 = <&hw_id_pins>, <&hw_id_pinconf>;
 		pinctrl-names = "default";
