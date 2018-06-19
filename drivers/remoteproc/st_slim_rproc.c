@@ -178,7 +178,7 @@ static int slim_rproc_stop(struct rproc *rproc)
 	return 0;
 }
 
-static void *slim_rproc_da_to_va(struct rproc *rproc, u64 da, int len)
+static void *slim_rproc_da_to_va(struct rproc *rproc, u64 da, int len, int page)
 {
 	struct st_slim_rproc *slim_rproc = rproc->priv;
 	void *va = NULL;
