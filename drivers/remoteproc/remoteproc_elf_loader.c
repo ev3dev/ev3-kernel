@@ -32,6 +32,103 @@
 
 #include "remoteproc_internal.h"
 
+#define SHT_TI_PHATTRS 0x7F000004
+#define SHT_TI_SH_PAGE 0x7F000007
+
+typedef struct {
+	Elf32_Half pha_seg_id; /* Segment id */
+	Elf32_Half pha_tag_id; /* Attribute kind id */
+	union {
+		Elf32_Off pha_offset; /* byte offset within the section */
+		Elf32_Word pha_value; /* Constant tag value */
+	} pha_un;
+} Elf32_TI_PHAttrs;
+
+/* this struct is reverse engineered, so not sure what most of the values are */
+struct ti_section_page {
+	u32 unk0;
+	u32 unk1;
+	u32 unk2;
+	u32 unk3;
+	u32 unk4;
+	u16 size;
+	u16 unk5;
+	u16 unk6;
+	u8 data; /* array of size */
+};
+
+/**
+ * rproc_elf_segment_to_page() - Gets memory page for segment
+ * @id: segment id
+ * @elf_data: pointer to ELF file data
+ * 
+ * Returns the memory page for the segment.
+ */
+static int rproc_elf_segment_to_page(u32 id, const u8 *elf_data)
+{
+	struct elf32_hdr *ehdr;
+	struct elf32_shdr *shdr;
+	Elf32_TI_PHAttrs *attrs = NULL;
+	int i;
+
+	ehdr = (struct elf32_hdr *)elf_data;
+	shdr = (struct elf32_shdr *)(elf_data + ehdr->e_shoff);
+
+	if (ehdr->e_machine != EM_TI_PRU)
+		return 0;
+
+	for (i = 0; i < ehdr->e_shnum; i++, shdr++) {
+		if (shdr->sh_type == SHT_TI_PHATTRS) {
+			attrs = (Elf32_TI_PHAttrs *)(elf_data + shdr->sh_offset);
+			break;
+		}
+	}
+
+	if (!attrs)
+		return 0;
+
+	/* list is terminated by tag id == 0 (PHA_NULL) */
+	for (; attrs->pha_tag_id; attrs++) {
+		if (attrs->pha_tag_id == 3 && attrs->pha_seg_id == id)
+			return attrs->pha_un.pha_value;
+	}
+
+	return 0;
+}
+
+/**
+ * rproc_elf_section_to_page() - Gets memory page for section
+ * @id: segment id
+ * @elf_data: pointer to ELF file data
+ * 
+ * Returns the memory page for the section.
+ */
+static int rproc_elf_section_to_page(u32 id, const u8 *elf_data)
+{
+	struct elf32_hdr *ehdr;
+	struct elf32_shdr *shdr;
+	struct ti_section_page *map = NULL;
+	int i;
+
+	ehdr = (struct elf32_hdr *)elf_data;
+	shdr = (struct elf32_shdr *)(elf_data + ehdr->e_shoff);
+
+	if (ehdr->e_machine != EM_TI_PRU)
+		return 0;
+
+	for (i = 0; i < ehdr->e_shnum; i++, shdr++) {
+		if (shdr->sh_type == SHT_TI_SH_PAGE) {
+			map = (struct ti_section_page *)(elf_data + shdr->sh_offset);
+			break;
+		}
+	}
+
+	if (!map || id >= map->size)
+		return 0;
+
+	return (&map->data)[id];
+}
+
 /**
  * rproc_elf_sanity_check() - Sanity Check ELF firmware image
  * @rproc: the remote processor handle
@@ -147,7 +244,7 @@ int rproc_elf_load_segments(struct rproc *rproc, const struct firmware *fw)
 	struct device *dev = &rproc->dev;
 	struct elf32_hdr *ehdr;
 	struct elf32_phdr *phdr;
-	int i, ret = 0;
+	int i, page, ret = 0;
 	const u8 *elf_data = fw->data;
 
 	ehdr = (struct elf32_hdr *)elf_data;
@@ -181,8 +278,10 @@ int rproc_elf_load_segments(struct rproc *rproc, const struct firmware *fw)
 			break;
 		}
 
+		page = rproc_elf_segment_to_page(i, elf_data);
+
 		/* grab the kernel address for this device address */
-		ptr = rproc_da_to_va(rproc, da, memsz, 0);
+		ptr = rproc_da_to_va(rproc, da, memsz, page);
 		if (!ptr) {
 			dev_err(dev, "bad phdr da 0x%x mem 0x%x\n", da, memsz);
 			ret = -EINVAL;
@@ -209,7 +308,7 @@ int rproc_elf_load_segments(struct rproc *rproc, const struct firmware *fw)
 EXPORT_SYMBOL(rproc_elf_load_segments);
 
 static struct elf32_shdr *
-find_table(struct device *dev, struct elf32_hdr *ehdr, size_t fw_size)
+find_table(struct device *dev, struct elf32_hdr *ehdr, size_t fw_size, int *id)
 {
 	struct elf32_shdr *shdr;
 	int i;
@@ -261,6 +360,9 @@ find_table(struct device *dev, struct elf32_hdr *ehdr, size_t fw_size)
 			return NULL;
 		}
 
+		if (id)
+			*id = i;
+
 		return shdr;
 	}
 
@@ -288,7 +390,7 @@ int rproc_elf_load_rsc_table(struct rproc *rproc, const struct firmware *fw)
 
 	ehdr = (struct elf32_hdr *)elf_data;
 
-	shdr = find_table(dev, ehdr, fw->size);
+	shdr = find_table(dev, ehdr, fw->size, NULL);
 	if (!shdr)
 		return -EINVAL;
 
@@ -328,11 +430,14 @@ struct resource_table *rproc_elf_find_loaded_rsc_table(struct rproc *rproc,
 {
 	struct elf32_hdr *ehdr = (struct elf32_hdr *)fw->data;
 	struct elf32_shdr *shdr;
+	int id, page;
 
-	shdr = find_table(&rproc->dev, ehdr, fw->size);
+	shdr = find_table(&rproc->dev, ehdr, fw->size, &id);
 	if (!shdr)
 		return NULL;
 
-	return rproc_da_to_va(rproc, shdr->sh_addr, shdr->sh_size, 0);
+	page = rproc_elf_section_to_page(id, fw->data);
+
+	return rproc_da_to_va(rproc, shdr->sh_addr, shdr->sh_size, page);
 }
 EXPORT_SYMBOL(rproc_elf_find_loaded_rsc_table);
