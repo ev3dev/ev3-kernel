@@ -249,6 +249,12 @@ static struct clk pruss_clk = {
 	.lpsc		= DA8XX_LPSC0_PRUSS,
 };
 
+/* dummy child clock for use by secondary device */
+static struct clk pruss_x_clk = {
+	.name		= "pruss_x",
+	.parent		= &pruss_clk,
+};
+
 static struct clk uart0_clk = {
 	.name		= "uart0",
 	.parent		= &pll0_sysclk2,
@@ -544,6 +550,7 @@ static struct clk_lookup da850_clks[] = {
 	CLK(NULL,		"tpcc1",	&tpcc1_clk),
 	CLK(NULL,		"tptc2",	&tptc2_clk),
 	CLK(NULL,		"pruss",	&pruss_clk),
+	CLK("da8xx-pru-rproc",	"fck",		&pruss_x_clk),
 	CLK("serial8250.0",	NULL,		&uart0_clk),
 	CLK("serial8250.1",	NULL,		&uart1_clk),
 	CLK("serial8250.2",	NULL,		&uart2_clk),
