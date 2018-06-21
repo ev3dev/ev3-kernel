@@ -550,7 +550,7 @@ static struct clk_lookup da850_clks[] = {
 	CLK(NULL,		"tpcc1",	&tpcc1_clk),
 	CLK(NULL,		"tptc2",	&tptc2_clk),
 	CLK(NULL,		"pruss",	&pruss_clk),
-	CLK("da8xx-pru-rproc",	"fck",		&pruss_x_clk),
+	CLK("ti-pru-rproc",	"fck",		&pruss_x_clk),
 	CLK("serial8250.0",	NULL,		&uart0_clk),
 	CLK("serial8250.1",	NULL,		&uart1_clk),
 	CLK("serial8250.2",	NULL,		&uart2_clk),
