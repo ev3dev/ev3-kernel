@@ -44,20 +44,65 @@
 	};
 
 	soc@1c00000 {
-		pru_rproc: cpu@30000 {
-			compatible = "ev3dev,da850-pru-rproc";
-			reg = <0x30000 0x10000>;
-			interrupts = <3>, <4>;
-			interrupt-names = "pru0-vq", "pru1-vq";
+		pru_rproc: remote-processor@30000 {
 			status = "disabled";
+			compatible = "ev3dev,da850-pruss";
+			ranges = <0x0 0x30000 0x10000>;
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			pru_intc: intc {
+				compatible = "ev3dev,da850-pru-intc";
+				reg = <0x4000 0x3000>;
+				interrupts = <3>, <4>, <5>, <6>, <7>, <8>, <9>,
+					     <10>;
+				interrupt-controller;
+				#interrupt-cells = <3>;
+			};
+
+			pru0: pru0 {
+				compatible = "ev3dev,da850-pru-rproc";
+				reg = <0x0 0x200>, <0x7000 0x400>,
+				      <0x8000 0x1000>;
+				reg-names = "dram", "ctrl", "iram";
+				interrupt-parent = <&pru_intc>;
+				interrupts = <32 0xffffffff 0>,
+					     <33 0xffffffff 2>;
+				interrupt-names = "vq-to-pru", "vq-from-pru";
+			};
+
+			pru1: pru1 {
+				compatible = "ev3dev,da850-pru-rproc";
+				reg = <0x2000 0x200>, <0x7800 0x400>,
+				      <0xc000 0x1000>;
+				reg-names = "dram", "ctrl", "iram";
+				interrupt-parent = <&pru_intc>;
+				interrupts = <34 0xffffffff 1>,
+					     <35 0xffffffff 3>;
+				interrupt-names = "vq-to-pru", "vq-from-pru";
+			};
 		};
 
 		pru_suart: serial@30000 {
+			status = "okay";
 			compatible = "ev3dev,omapl-pru-suart";
 			reg = <0x30000 0x10000>, <0x100000 0x3000>;
 			interrupts = <3>, <4>, <5>, <6>, <7>, <8>, <9>, <10>;
 			memory-region = <&pru_suart_reserved>;
-			status = "okay";
+		};
+	};
+
+	ev3-pru1 {
+		compatible = "ev3dev,ev3-pru1";
+		ev3dev,pru = <&pru1>;
+		ev3dev,mcasp = <&mcasp0>;
+
+		suart0: uart@0 {
+
+		};
+
+		suart1: uart@1 {
+
 		};
 	};
 
