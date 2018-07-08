@@ -32,6 +32,6 @@
 		dc-gpios = <&gpio 43 GPIO_ACTIVE_HIGH>;
 		reset-gpios = <&gpio 80 GPIO_ACTIVE_HIGH>;
 		backlight = <&backlight>;
-		rotation = <90>;
+		rotation = <270>;
 	};
 };
