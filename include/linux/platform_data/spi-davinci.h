@@ -71,6 +71,7 @@ struct davinci_spi_platform_data {
  *		in number of SPI clocks.
  * @c2edelay:	chip-select active to SPI ENAn signal active time. Measured in
  *		number of SPI clocks.
+ * @no_cs_hold:	Don't use CSHOLD to keep CS high during transfer.
  */
 struct davinci_spi_config {
 	u8	wdelay;
@@ -85,6 +86,7 @@ struct davinci_spi_config {
 	u8	t2cdelay;
 	u8	t2edelay;
 	u8	c2edelay;
+	u8	no_cs_hold;
 };
 
 #endif	/* __ARCH_ARM_DAVINCI_SPI_H */
