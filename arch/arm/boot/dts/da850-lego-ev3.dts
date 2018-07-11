@@ -856,6 +856,7 @@
 		#io-channel-cells = <1>;
 		spi-max-frequency = <10000000>;
 		vref-supply = <&adc_ref>;
+		ev3dev,no-cs-hold;
 	};
 };
 
