@@ -232,7 +232,8 @@ static void davinci_spi_chipselect(struct spi_device *spi, int value)
 				!(spi->mode & SPI_CS_HIGH));
 	} else {
 		if (value == BITBANG_CS_ACTIVE) {
-			spidat1 |= SPIDAT1_CSHOLD_MASK;
+			if (!spicfg->no_cs_hold)
+				spidat1 |= SPIDAT1_CSHOLD_MASK;
 			spidat1 &= ~(0x1 << chip_sel);
 		}
 	}
@@ -402,6 +403,8 @@ static int davinci_spi_of_setup(struct spi_device *spi)
 		/* override with dt configured values */
 		if (!of_property_read_u32(np, "ti,spi-wdelay", &prop))
 			spicfg->wdelay = (u8)prop;
+		if (of_property_read_bool(np, "ev3dev,no-cs-hold"))
+			spicfg->no_cs_hold = true;
 		spi->controller_data = spicfg;
 
 		if (dspi->dma_rx && dspi->dma_tx)
@@ -880,6 +883,16 @@ static int spi_davinci_get_pdata(struct platform_device *pdev,
 }
 #endif
 
+#include <linux/regmap.h>
+
+static const struct regmap_config dspi_regmap_config = {
+	.name = "spi",
+	.reg_bits = 32,
+	.val_bits = 32,
+	.reg_stride = 4,
+	.max_register = 0x64,
+};
+
 /**
  * davinci_spi_probe - probe function for SPI Master Controller
  * @pdev: platform_device structure which contains plateform specific data
@@ -944,6 +957,8 @@ static int davinci_spi_probe(struct platform_device *pdev)
 		ret = PTR_ERR(dspi->base);
 		goto free_master;
 	}
+
+	devm_regmap_init_mmio(&pdev->dev, dspi->base, &dspi_regmap_config);
 
 	ret = platform_get_irq(pdev, 0);
 	if (ret == 0)
