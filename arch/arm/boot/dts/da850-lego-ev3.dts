@@ -82,6 +82,7 @@
 				interrupts = <61 0xffffffff 1>,
 					     <60 0xffffffff 4>;
 				interrupt-names = "vq-to-pru", "vq-from-pru";
+				firmware = "ev3-pru1-fw";
 
 				vdevs {
 					#address-cells = <1>;
@@ -93,7 +94,7 @@
 						#address-cells = <1>;
 						#size-cells = <0>;
 
-						ev3-tacho-rpmsg@0 {
+						tacho: ev3-tacho-rpmsg@0 {
 							compatible = "ev3dev,ev3-pru-tacho";
 							reg = <0>;
 							#io-channel-cells = <1>;
@@ -441,6 +442,11 @@
 			pin6-gpios = <&gpio 4 GPIO_ACTIVE_LOW>;
 			pwms = <&ehrpwm1 1 75758 PWM_POLARITY_INVERTED>;
 			pwm-names = "motor";
+
+			motor {
+				io-channels = <&tacho 0>, <&tacho 1>;
+				io-channel-names = "count", "rate";
+			};
 		};
 
 		outB {
@@ -457,6 +463,11 @@
 			pin6-gpios = <&gpio 41 GPIO_ACTIVE_LOW>;
 			pwms = <&ehrpwm1 0 75758 PWM_POLARITY_INVERTED>;
 			pwm-names = "motor";
+
+			motor {
+				io-channels = <&tacho 2>, <&tacho 3>;
+				io-channel-names = "count", "rate";
+			};
 		};
 
 		outC {
@@ -473,6 +484,11 @@
 			pin6-gpios = <&gpio 62 GPIO_ACTIVE_LOW>;
 			pwms = <&ecap0 0 75758 PWM_POLARITY_INVERTED>;
 			pwm-names = "motor";
+
+			motor {
+				io-channels = <&tacho 4>, <&tacho 5>;
+				io-channel-names = "count", "rate";
+			};
 		};
 
 		outD {
@@ -489,6 +505,11 @@
 			pin6-gpios = <&gpio 40 GPIO_ACTIVE_LOW>;
 			pwms = <&ecap1 0 75758 PWM_POLARITY_INVERTED>;
 			pwm-names = "motor";
+
+			motor {
+				io-channels = <&tacho 6>, <&tacho 7>;
+				io-channel-names = "count", "rate";
+			};
 		};
 	};
 };
