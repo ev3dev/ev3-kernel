@@ -550,6 +550,7 @@ struct rproc_vring {
  * @refcount: reference counter for the vdev and vring allocations
  * @subdev: handle for registering the vdev as a rproc subdevice
  * @id: virtio device id (as in virtio_ids.h)
+ * @notifyid: rproc-wide unique identifier for this vdev
  * @node: list node
  * @rproc: the rproc handle
  * @vdev: the virio device
@@ -562,6 +563,7 @@ struct rproc_vdev {
 	struct rproc_subdev subdev;
 
 	unsigned int id;
+	unsigned int notifyid;
 	struct list_head node;
 	struct rproc *rproc;
 	struct virtio_device vdev;
