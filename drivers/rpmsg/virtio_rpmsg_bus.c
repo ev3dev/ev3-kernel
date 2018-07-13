@@ -395,6 +395,19 @@ static void virtio_rpmsg_release_device(struct device *dev)
 	kfree(vch);
 }
 
+static struct device_node *rpmsg_get_of_node(struct device *dev, u32 ch)
+{
+	struct device_node *child;
+	u32 reg;
+
+	/* find the child node that matches the rpmsg channel */
+	for_each_child_of_node(dev->of_node, child)
+		if (of_property_read_u32(child, "reg", &reg) == 0 && reg == ch)
+			return child;
+
+	return NULL;
+}
+
 /*
  * create an rpmsg channel using its name and address info.
  * this function will be used to create both static and dynamic
@@ -440,6 +453,7 @@ static struct rpmsg_device *rpmsg_create_channel(struct virtproc_info *vrp,
 	strncpy(rpdev->id.name, chinfo->name, RPMSG_NAME_SIZE);
 
 	rpdev->dev.parent = &vrp->vdev->dev;
+	rpdev->dev.of_node = rpmsg_get_of_node(dev, rpdev->dst);
 	rpdev->dev.release = virtio_rpmsg_release_device;
 	ret = rpmsg_register_device(rpdev);
 	if (ret)
