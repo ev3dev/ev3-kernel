@@ -379,6 +379,7 @@ static int rproc_handle_vdev(struct rproc *rproc, struct fw_rsc_vdev *rsc,
 	kref_init(&rvdev->refcount);
 
 	rvdev->id = rsc->id;
+	rvdev->notifyid = rsc->notifyid;
 	rvdev->rproc = rproc;
 
 	/* parse the vrings */
