@@ -80,8 +80,46 @@
 				reg-names = "dram", "ctrl", "iram";
 				interrupt-parent = <&pru_intc>;
 				interrupts = <61 0xffffffff 1>,
-					     <60 0xffffffff 3>;
+					     <60 0xffffffff 4>;
 				interrupt-names = "vq-to-pru", "vq-from-pru";
+
+				vdevs {
+					#address-cells = <1>;
+					#size-cells = <0>;
+
+					rpmsg@0 {
+						compatible = "virtio,rpmsg";
+						reg = <0>;
+						#address-cells = <1>;
+						#size-cells = <0>;
+
+						ev3-tacho-rpmsg@0 {
+							compatible = "ev3dev,ev3-pru-tacho";
+							reg = <0>;
+							#io-channel-cells = <1>;
+						};
+
+						i2c@3 {
+							compatible = "ev3dev,ev3-pru-i2c";
+							reg = <3>;
+						};
+
+						i2c@4 {
+							compatible = "ev3dev,ev3-pru-i2c";
+							reg = <4>;
+						};
+
+						i2c@5 {
+							compatible = "ev3dev,ev3-pru-i2c";
+							reg = <5>;
+						};
+
+						i2c@6 {
+							compatible = "ev3dev,ev3-pru-i2c";
+							reg = <6>;
+						};
+					};
+				};
 			};
 		};
 
