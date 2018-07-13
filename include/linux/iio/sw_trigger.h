@@ -67,4 +67,7 @@ void iio_swt_group_init_type_name(struct iio_sw_trigger *t,
 #endif
 }
 
+int iio_hrtimer_set_sampling_frequency(struct iio_sw_trigger *sw_trigger,
+				       unsigned long freq);
+
 #endif /* __IIO_SW_TRIGGER */
