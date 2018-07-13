@@ -26,6 +26,7 @@
 #include <linux/err.h>
 #include <linux/kref.h>
 #include <linux/slab.h>
+#include <linux/of.h>
 
 #include "remoteproc_internal.h"
 
@@ -272,6 +273,22 @@ static const struct virtio_config_ops rproc_virtio_config_ops = {
 	.set		= rproc_virtio_set,
 };
 
+static struct device_node *rproc_get_of_node(struct device *dev, u32 id)
+{
+	struct device_node *vdevs, *child;
+	u32 reg;
+
+	/* the vdevs node is a child of the remoteproc node */
+	vdevs = of_get_child_by_name(dev->parent->of_node, "vdevs");
+
+	/* find the child of the vdevs node that matches notifyid */
+	for_each_child_of_node(vdevs, child)
+		if (of_property_read_u32(child, "reg", &reg) == 0 && reg == id)
+			return child;
+
+	return NULL;
+}
+
 /*
  * This function is called whenever vdev is released, and is responsible
  * to decrement the remote processor's refcount which was taken when vdev was
@@ -310,6 +327,7 @@ int rproc_add_virtio_dev(struct rproc_vdev *rvdev, int id)
 	vdev->id.device	= id,
 	vdev->config = &rproc_virtio_config_ops,
 	vdev->dev.parent = dev;
+	vdev->dev.of_node = rproc_get_of_node(dev, rvdev->notifyid);
 	vdev->dev.release = rproc_virtio_dev_release;
 
 	/*
