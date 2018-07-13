@@ -34,6 +34,43 @@ static const struct config_item_type iio_hrtimer_type = {
 	.ct_owner = THIS_MODULE,
 };
 
+static struct iio_sw_trigger_type iio_trig_hrtimer;
+
+static int __iio_hrtimer_set_sampling_frequency(struct iio_hrtimer_info *info,
+						unsigned long freq)
+{
+	if (!freq || freq > NSEC_PER_SEC)
+		return -EINVAL;
+
+	info->sampling_frequency = freq;
+	info->period = NSEC_PER_SEC / freq;
+
+	return 0;
+}
+
+/**
+ * iio_hrtimer_set_sampling_frequency - set the sampling frequency
+ * @sw_trigger: a hrtimer trigger
+ * @freq: the sampling rate in Hz
+ *
+ * Returns 0 on success or -EINVAL if the trigger is not an hrtimer trigger
+ * or the frequency is out of range.
+ */
+int iio_hrtimer_set_sampling_frequency(struct iio_sw_trigger *sw_trigger,
+				       unsigned long freq)
+{
+	struct iio_hrtimer_info *info;
+
+
+	if (sw_trigger->trigger_type != &iio_trig_hrtimer)
+		return -EINVAL;
+
+	info = iio_trigger_get_drvdata(sw_trigger->trigger);
+
+	return __iio_hrtimer_set_sampling_frequency(info, freq);
+}
+EXPORT_SYMBOL_GPL(iio_hrtimer_set_sampling_frequency);
+
 static
 ssize_t iio_hrtimer_show_sampling_frequency(struct device *dev,
 					    struct device_attribute *attr,
@@ -59,11 +96,9 @@ ssize_t iio_hrtimer_store_sampling_frequency(struct device *dev,
 	if (ret)
 		return ret;
 
-	if (!val || val > NSEC_PER_SEC)
-		return -EINVAL;
-
-	info->sampling_frequency = val;
-	info->period = NSEC_PER_SEC / val;
+	ret = __iio_hrtimer_set_sampling_frequency(info, val);
+	if (ret)
+		return ret;
 
 	return len;
 }
