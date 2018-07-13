@@ -33,6 +33,50 @@ static const struct config_item_type iio_hrtimer_type = {
 	.ct_owner = THIS_MODULE,
 };
 
+static struct iio_sw_trigger_type iio_trig_hrtimer;
+
+static int __iio_hrtimer_set_sampling_frequency(struct iio_hrtimer_info *info,
+						int integer, int fract)
+{
+	u64 val, period;
+
+	val = fract + 1000ULL * integer;  /* mHz */
+
+	if (!val || val > UINT_MAX)
+		return -EINVAL;
+
+	info->sampling_frequency[0] = integer;  /* Hz */
+	info->sampling_frequency[1] = fract * 1000;  /* uHz */
+	period = PSEC_PER_SEC;
+	do_div(period, val);
+	info->period = period;  /* nS */
+
+	return 0;
+}
+
+/**
+ * iio_hrtimer_set_sampling_frequency - set the sampling frequency
+ * @sw_trigger: a hrtimer trigger
+ * @freq: the sampling rate in Hz
+ *
+ * Returns 0 on success or -EINVAL if the trigger is not an hrtimer trigger
+ * or the frequency is out of range.
+ */
+int iio_hrtimer_set_sampling_frequency(struct iio_sw_trigger *sw_trigger,
+				       unsigned long freq)
+{
+	struct iio_hrtimer_info *info;
+
+
+	if (sw_trigger->trigger_type != &iio_trig_hrtimer)
+		return -EINVAL;
+
+	info = iio_trigger_get_drvdata(sw_trigger->trigger);
+
+	return __iio_hrtimer_set_sampling_frequency(info, freq, 0);
+}
+EXPORT_SYMBOL_GPL(iio_hrtimer_set_sampling_frequency);
+
 static
 ssize_t iio_hrtimer_show_sampling_frequency(struct device *dev,
 					    struct device_attribute *attr,
@@ -53,8 +97,6 @@ ssize_t iio_hrtimer_store_sampling_frequency(struct device *dev,
 {
 	struct iio_trigger *trig = to_iio_trigger(dev);
 	struct iio_hrtimer_info *info = iio_trigger_get_drvdata(trig);
-	unsigned long long val;
-	u64 period;
 	int integer, fract, ret;
 
 	ret = iio_str_to_fixpoint(buf, 100, &integer, &fract);
@@ -63,16 +105,9 @@ ssize_t iio_hrtimer_store_sampling_frequency(struct device *dev,
 	if (integer < 0 || fract < 0)
 		return -ERANGE;
 
-	val = fract + 1000ULL * integer;  /* mHz */
-
-	if (!val || val > UINT_MAX)
-		return -EINVAL;
-
-	info->sampling_frequency[0] = integer;  /* Hz */
-	info->sampling_frequency[1] = fract * 1000;  /* uHz */
-	period = PSEC_PER_SEC;
-	do_div(period, val);
-	info->period = period;  /* nS */
+	ret = __iio_hrtimer_set_sampling_frequency(info, integer, fract);
+	if (ret)
+		return ret;
 
 	return len;
 }
