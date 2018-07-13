@@ -26,6 +26,7 @@
 #include <linux/rpmsg.h>
 #include <linux/mutex.h>
 #include <linux/of_device.h>
+#include <linux/workqueue.h>
 
 #include "rpmsg_internal.h"
 
@@ -121,6 +122,13 @@ enum rpmsg_ns_flags {
 	RPMSG_NS_DESTROY	= 1,
 };
 
+struct rpmsg_ns_item {
+	struct virtproc_info *vrp;
+	struct rpmsg_channel_info chinfo;
+	enum rpmsg_ns_flags flags;
+	struct list_head list;
+};
+
 /**
  * @vrp: the remote processor this channel belongs to
  */
@@ -185,6 +193,9 @@ static const struct rpmsg_endpoint_ops virtio_endpoint_ops = {
 	.trysendto = virtio_rpmsg_trysendto,
 	.trysend_offchannel = virtio_rpmsg_trysend_offchannel,
 };
+
+static DEFINE_MUTEX(rpmsg_ns_list_lock);
+static LIST_HEAD(rpmsg_ns_list);
 
 /**
  * rpmsg_sg_init - initialize scatterlist according to cpu address location
@@ -436,6 +447,38 @@ static struct rpmsg_device *rpmsg_create_channel(struct virtproc_info *vrp,
 
 	return rpdev;
 }
+
+static void rpmsg_ns_work_func(struct work_struct *work)
+{
+	struct rpmsg_ns_item *item, *tmp;
+
+	mutex_lock(&rpmsg_ns_list_lock);
+
+	list_for_each_entry_safe(item, tmp, &rpmsg_ns_list, list) {
+		struct device *dev = &item->vrp->vdev->dev;
+		int ret;
+
+		if (item->flags & RPMSG_NS_DESTROY) {
+			ret = rpmsg_unregister_device(dev, &item->chinfo);
+			if (ret)
+				dev_err(dev, "rpmsg_destroy_channel failed: %d\n", ret);
+		} else {
+			struct rpmsg_device *newch;
+
+			newch = rpmsg_create_channel(item->vrp, &item->chinfo);
+			if (!newch)
+				dev_err(dev, "rpmsg_create_channel failed\n");
+		}
+
+		list_del(&item->list);
+		put_device(dev);
+		kfree(item);
+	}
+
+	mutex_unlock(&rpmsg_ns_list_lock);
+}
+
+static DECLARE_WORK(rpmsg_ns_work, rpmsg_ns_work_func);
 
 /* super simple buffer "allocator" that is just enough for now */
 static void *get_a_tx_buf(struct virtproc_info *vrp)
@@ -816,11 +859,9 @@ static int rpmsg_ns_cb(struct rpmsg_device *rpdev, void *data, int len,
 		       void *priv, u32 src)
 {
 	struct rpmsg_ns_msg *msg = data;
-	struct rpmsg_device *newch;
-	struct rpmsg_channel_info chinfo;
+	struct rpmsg_ns_item *item;
 	struct virtproc_info *vrp = priv;
 	struct device *dev = &vrp->vdev->dev;
-	int ret;
 
 #if defined(CONFIG_DYNAMIC_DEBUG)
 	dynamic_hex_dump("NS announcement: ", DUMP_PREFIX_NONE, 16, 1,
@@ -850,19 +891,25 @@ static int rpmsg_ns_cb(struct rpmsg_device *rpdev, void *data, int len,
 		 msg->flags & RPMSG_NS_DESTROY ? "destroy" : "creat",
 		 msg->name, msg->addr);
 
-	strncpy(chinfo.name, msg->name, sizeof(chinfo.name));
-	chinfo.src = RPMSG_ADDR_ANY;
-	chinfo.dst = msg->addr;
+	item = kzalloc(sizeof(*item), GFP_KERNEL);
+	if (!item)
+		return -ENOMEM;
 
-	if (msg->flags & RPMSG_NS_DESTROY) {
-		ret = rpmsg_unregister_device(&vrp->vdev->dev, &chinfo);
-		if (ret)
-			dev_err(dev, "rpmsg_destroy_channel failed: %d\n", ret);
-	} else {
-		newch = rpmsg_create_channel(vrp, &chinfo);
-		if (!newch)
-			dev_err(dev, "rpmsg_create_channel failed\n");
-	}
+	item->vrp = vrp;
+	strncpy(item->chinfo.name, msg->name, sizeof(item->chinfo.name));
+	item->chinfo.src = RPMSG_ADDR_ANY;
+	item->chinfo.dst = msg->addr;
+	item->flags = msg->flags;
+
+	/* this reference to vrp's device is owned by item */
+	get_device(dev);
+
+	mutex_lock(&rpmsg_ns_list_lock);
+	list_add_tail(&item->list, &rpmsg_ns_list);
+	mutex_unlock(&rpmsg_ns_list_lock);
+
+	/* don't register/unregister devices while receive queue is blocked */
+	schedule_work(&rpmsg_ns_work);
 
 	return 0;
 }
