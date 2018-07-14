@@ -80,7 +80,7 @@
 				interrupts = <61 0xffffffff 1>,
 					     <60 0xffffffff 4>;
 				interrupt-names = "vq-to-pru", "vq-from-pru";
-				firmware = "ev3-pru1-fw";
+				firmware = "ev3-pru1.fw";
 
 				vdevs {
 					#address-cells = <1>;
