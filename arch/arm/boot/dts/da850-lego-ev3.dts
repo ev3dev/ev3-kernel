@@ -895,7 +895,16 @@
 		compatible = "ti-ads7957";
 		reg = <3>;
 		#io-channel-cells = <1>;
-		spi-max-frequency = <10000000>;
+		/*
+		 * Really, this should be more like 200kHz, but the SPI
+		 * controller can't go that slow. The reason that we need to
+		 * slow down so much is that the capacitors on the A/DC channel
+		 * inputs are too small, so we don't get an accurate reading if
+		 * we are reading continuously faster than this (i.e. using DMA
+		 * transfers). Setting WDELAY helps slow things down even more.
+		 */
+		spi-max-frequency = <1000000>;
+		ti,spi-wdelay = <63>;
 		vref-supply = <&adc_ref>;
 		ev3dev,no-cs-hold;
 	};
