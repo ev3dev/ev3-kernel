@@ -287,7 +287,7 @@ static const struct serial8250_config uart_config[] = {
 		.fifo_size	= 16,
 		.tx_loadsz	= 16,
 		.fcr		= UART_FCR_DMA_SELECT | UART_FCR_ENABLE_FIFO |
-				  UART_FCR_R_TRIG_10,
+				  UART_FCR_R_TRIG_00,
 		.rxtrig_bytes	= {1, 4, 8, 14},
 		.flags		= UART_CAP_FIFO | UART_CAP_AFE,
 	},
