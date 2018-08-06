@@ -501,7 +501,7 @@ struct motion_output_report_02 {
 #define DS4_TOUCHPAD_SUFFIX " Touchpad"
 
 /* Default to 4ms poll interval, which is same as USB (not adjustable). */
-#define DS4_BT_DEFAULT_POLL_INTERVAL_MS 4
+#define DS4_BT_DEFAULT_POLL_INTERVAL_MS 10 /* changed for ev3dev */
 #define DS4_BT_MAX_POLL_INTERVAL_MS 62
 #define DS4_GYRO_RES_PER_DEG_S 1024
 #define DS4_ACC_RES_PER_G      8192
