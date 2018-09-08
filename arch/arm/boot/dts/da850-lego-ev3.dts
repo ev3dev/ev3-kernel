@@ -49,6 +49,8 @@
 			ranges = <0x0 0x30000 0x10000>;
 			#address-cells = <1>;
 			#size-cells = <1>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&led_pins>;
 
 			pru_intc: intc {
 				compatible = "ev3dev,da850-pru-intc";
@@ -96,6 +98,12 @@
 							compatible = "ev3dev,ev3-pru-tacho";
 							reg = <0>;
 							#io-channel-cells = <1>;
+
+							/* hacking in LED pwm with tacho for now */
+							pwm-gpios = <&gpio 103 GPIO_ACTIVE_HIGH>,
+								    <&gpio 108 GPIO_ACTIVE_HIGH>,
+								    <&gpio 109 GPIO_ACTIVE_HIGH>,
+								    <&gpio 110 GPIO_ACTIVE_HIGH>;
 						};
 
 						i2c@3 {
@@ -240,6 +248,7 @@
 	 * The EV3 has two built-in bi-color LEDs behind the buttons.
 	 */
 	leds {
+		status = "disabled";
 		compatible = "gpio-leds";
 		pinctrl-names = "default";
 		pinctrl-0 = <&led_pins>;
