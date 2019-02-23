@@ -26,7 +26,9 @@
 
 #include <linux/iio/buffer.h>
 #include <linux/iio/iio.h>
+#include <linux/iio/sw_trigger.h>
 #include <linux/iio/sysfs.h>
+#include <linux/iio/trigger.h>
 #include <linux/iio/trigger_consumer.h>
 #include <linux/iio/triggered_buffer.h>
 
@@ -59,6 +61,7 @@ struct ti_ads7950_state {
 	/* Lock to protect the spi xfer buffers */
 	struct mutex		slock;
 
+	struct iio_sw_trigger	*hrtimer_trigger;
 	struct regulator	*reg;
 	unsigned int		vref_mv;
 
@@ -465,8 +468,19 @@ static int ti_ads7950_probe(struct spi_device *spi)
 		goto error_cleanup_ring;
 	}
 
+	/* Hack to create continuous polling mode */
+	st->hrtimer_trigger = iio_sw_trigger_create("hrtimer", dev_name(&spi->dev));
+	if (IS_ERR(st->hrtimer_trigger)) {
+		ret = PTR_ERR(st->hrtimer_trigger);
+		goto error_unregister_iio_device;
+	}
+
+	iio_trigger_set_immutable(indio_dev, st->hrtimer_trigger->trigger);
+
 	return 0;
 
+error_unregister_iio_device:
+	iio_device_unregister(indio_dev);
 error_cleanup_ring:
 	iio_triggered_buffer_cleanup(indio_dev);
 error_disable_reg:
