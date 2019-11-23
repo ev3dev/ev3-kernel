@@ -868,9 +868,11 @@ static int legoev3_fiq_probe(struct platform_device *pdev)
 
 	ret = gpio_request_one(pdata->status_gpio, GPIOF_INIT_LOW, "fiq status");
 	if (ret < 0) {
-		dev_err(&pdev->dev,
-			"Unable to request GPIO %d, error %d\n",
-			pdata->status_gpio, ret);
+		if (ret != -EPROBE_DEFER) {
+			dev_err(&pdev->dev,
+				"Unable to request GPIO %d, error %d\n",
+				pdata->status_gpio, ret);
+		}
 		return ret;
 	}
 	legoev3_fiq_set_gpio(pdata->status_gpio, &fiq_data->status_gpio);
