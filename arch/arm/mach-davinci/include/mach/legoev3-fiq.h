@@ -14,8 +14,10 @@
 #define __MACH_LEGOEV3_FIQ_H
 
 #include <linux/i2c.h>
-#include <mach/legoev3.h>
 #include <sound/pcm.h>
+
+#define LEGOEV3_DT 1
+#include <../../../drivers/lego/ev3/legoev3_i2c.h>
 
 /**
  * struct legoev3_fiq_platform_data - platform specific data
