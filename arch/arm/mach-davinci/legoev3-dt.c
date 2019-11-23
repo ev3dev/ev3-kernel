@@ -11,7 +11,6 @@
 #include <linux/of_irq.h>
 #include <linux/of_platform.h>
 #include <linux/irqdomain.h>
-#include <linux/platform_data/legoev3_i2c.h>
 
 #include <asm/mach/arch.h>
 
@@ -21,6 +20,10 @@
 
 #include "board-legoev3.h"
 #include "cp_intc.h"
+
+#define LEGOEV3_DT 1
+#include <../../../drivers/lego/ev3/legoev3_i2c.h>
+
 
 #define DA8XX_EHRPWM0_BASE	0x01F00000
 
