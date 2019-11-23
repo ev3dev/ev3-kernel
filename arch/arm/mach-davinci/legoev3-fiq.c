@@ -260,15 +260,14 @@ legoev3_fiq_timer_callback(struct legoev3_fiq_port_i2c_data *data)
 
 	fiq_gpio_set_value(&data->gpio[FIQ_I2C_PIN_SCL], data->clock_state);
 
-	switch (data->transfer_state)
-	{
+	switch (data->transfer_state) {
 	case TRANSFER_START:
 		/*
 		 * Make sure to SYNC into Timer settings
 		 * to ensure first bit time having full length
 		 */
 		data->cur_msg = 0;
-		data->xfer_result = 0;
+		data->xfer_result = data->num_msg;
 		data->transfer_state = TRANSFER_START2;
 		break;
 
@@ -328,9 +327,9 @@ legoev3_fiq_timer_callback(struct legoev3_fiq_port_i2c_data *data)
 		break;
 
 	case TRANSFER_RACK:
-		if (!data->clock_state)
+		if (!data->clock_state) {
 			fiq_gpio_dir_in(&data->gpio[FIQ_I2C_PIN_SDA]);
-		else {
+		} else {
 			if (!fiq_gpio_get_value(&data->gpio[FIQ_I2C_PIN_SDA])) {
 				if (data->buf_offset < msg->len) {
 					data->wait_cycles = 4;
@@ -348,11 +347,11 @@ legoev3_fiq_timer_callback(struct legoev3_fiq_port_i2c_data *data)
 		break;
 
 	case TRANSFER_WACK:
-		if (!data->clock_state)
+		if (!data->clock_state) {
 			/* ACK (or NACK the last byte read) */
 			fiq_gpio_dir_out(&data->gpio[FIQ_I2C_PIN_SDA],
 					 data->buf_offset == msg->len);
-		else {
+		} else {
 			if (data->buf_offset < msg->len) {
 				data->wait_cycles = 2;
 				data->transfer_state = TRANSFER_WAIT;
@@ -386,8 +385,7 @@ legoev3_fiq_timer_callback(struct legoev3_fiq_port_i2c_data *data)
 		break;
 
 	case TRANSFER_STOP2:
-		if ((data->cur_msg + 1) < data->num_msg && !data->nacked)
-		{
+		if ((data->cur_msg + 1) < data->num_msg && !data->nacked) {
 			/*
 			 * This is some non-standard i2c weirdness for
 			 * compatibility with the NXT ultrasonic sensor.
@@ -405,8 +403,9 @@ legoev3_fiq_timer_callback(struct legoev3_fiq_port_i2c_data *data)
 				data->cur_msg++;
 				data->transfer_state = TRANSFER_RESTART;
 			}
-		} else
+		} else {
 			data->transfer_state = TRANSFER_STOP3;
+		}
 		break;
 
 	case TRANSFER_RESTART:
