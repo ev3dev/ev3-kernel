@@ -493,7 +493,7 @@ void legoev3_fiq_handler(void)
 			if (!(legoev3_fiq_data->port_req_flags & BIT(i)))
 				continue;
 			port_data = &legoev3_fiq_data->port_data[i];
-			if (port_data != TRANSFER_IDLE)
+			if (port_data->transfer_state != TRANSFER_IDLE)
 				restart_timer |= legoev3_fiq_timer_callback(port_data);
 		}
 
