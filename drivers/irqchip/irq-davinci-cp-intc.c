@@ -257,3 +257,19 @@ static int __init davinci_cp_intc_of_init(struct device_node *node,
 	return davinci_cp_intc_do_init(&config, node);
 }
 IRQCHIP_DECLARE(cp_intc, "ti,cp-intc", davinci_cp_intc_of_init);
+
+/* ev3dev hacks */
+
+void cp_intc_fiq_enable(void);
+void cp_intc_fiq_enable(void)
+{
+	davinci_cp_intc_write(0, DAVINCI_CP_INTC_HOST_ENABLE_IDX_SET);
+}
+EXPORT_SYMBOL_GPL(cp_intc_fiq_enable);
+
+void cp_intc_fiq_disable(void);
+void cp_intc_fiq_disable(void)
+{
+	davinci_cp_intc_write(0, DAVINCI_CP_INTC_HOST_ENABLE_IDX_CLR);
+}
+EXPORT_SYMBOL_GPL(cp_intc_fiq_disable);
