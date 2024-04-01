@@ -66,4 +66,7 @@ extern int legoev3_fiq_ehrpwm_int_enable(void);
 extern int legoev3_fiq_ehrpwm_int_disable(void);
 extern bool legoev3_fiq_ehrpwm_int_is_enabled(void);
 
+void cp_intc_fiq_enable(void);
+void cp_intc_fiq_disble(void);
+
 #endif /* __MACH_LEGOEV3_FIQ_H */

@@ -15,14 +15,31 @@
 #include "da8xx.h"
 
 #include "legoev3-fiq.h"
-#include "board-legoev3.h"
-#include "cp_intc.h"
+#include "irqs.h"
 
 #define LEGOEV3_DT 1
 #include <../../../drivers/lego/ev3/legoev3_i2c.h>
 
 
 #define DA8XX_EHRPWM0_BASE	0x01F00000
+
+/* Convert GPIO signal to GPIO pin number */
+#define GPIO_TO_PIN(bank, gpio)	(16 * (bank) + (gpio))
+
+/*
+ * Used by FIQ handler routine to notify the OS when status has changed. See
+ * arch/arm/mach-davinci/legoev3-fiq.c. This pin is TP4 in the lms2012 source
+ * code, so it should be safe to use.
+ */
+#define EV3_FIQ_STAT_PIN	GPIO_TO_PIN(2, 7)
+#define EV3_IN1_PIN6_PIN	GPIO_TO_PIN(0, 15)
+#define EV3_IN1_I2C_CLK_PIN	GPIO_TO_PIN(1, 0)
+#define EV3_IN2_PIN6_PIN	GPIO_TO_PIN(0, 13)
+#define EV3_IN2_I2C_CLK_PIN	GPIO_TO_PIN(8, 3)
+#define EV3_IN3_PIN6_PIN	GPIO_TO_PIN(1, 14)
+#define EV3_IN3_I2C_CLK_PIN	GPIO_TO_PIN(1, 12)
+#define EV3_IN4_PIN6_PIN	GPIO_TO_PIN(1, 15)
+#define EV3_IN4_I2C_CLK_PIN	GPIO_TO_PIN(1, 11)
 
 static struct legoev3_fiq_platform_data legoev3_in_port_i2c_platform_data = {
 	.intc_mem_base		= DA8XX_CP_INTC_BASE,

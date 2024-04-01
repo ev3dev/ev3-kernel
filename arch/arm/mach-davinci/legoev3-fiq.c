@@ -27,9 +27,8 @@
 
 #include <asm/io.h>
 #include <asm/fiq.h>
-#include <mach/legoev3-fiq.h>
 
-#include "cp_intc.h"
+#include "legoev3-fiq.h"
 
 enum transfer_states {
 	TRANSFER_IDLE,
@@ -284,14 +283,14 @@ legoev3_fiq_timer_callback(struct legoev3_fiq_port_i2c_data *data)
 		if (msg->flags & I2C_M_RD)
 			data->data_byte |= 1;
 		data->buf_offset = 0;
-		/* no break */
+		fallthrough;
 
 	case TRANSFER_WRITE:
 		if (data->transfer_state == TRANSFER_WRITE)
 			data->data_byte = msg->buf[data->buf_offset++];
 		data->transfer_state = TRANSFER_WBIT;
 		data->bit_mask  = 0x80;
-		/* no break */
+		fallthrough;
 
 	case TRANSFER_WBIT:
 		if (!data->clock_state) {
@@ -310,7 +309,7 @@ legoev3_fiq_timer_callback(struct legoev3_fiq_port_i2c_data *data)
 		data->transfer_state = TRANSFER_RBIT;
 		data->bit_mask  = 0x80;
 		data->data_byte = 0;
-		/* no break */
+		fallthrough;
 
 	case TRANSFER_RBIT:
 		if (data->clock_state) {
@@ -421,7 +420,7 @@ legoev3_fiq_timer_callback(struct legoev3_fiq_port_i2c_data *data)
 		 */
 		fiq_gpio_dir_in(&data->gpio[FIQ_I2C_PIN_SDA]);
 		data->transfer_state = TRANSFER_COMPLETE;
-		/* no break */
+		fallthrough;
 
 	case TRANSFER_COMPLETE:
 		/*
@@ -480,7 +479,7 @@ static void legoev3_fiq_ehrpwm_callback(struct legoev3_fiq_ehrpwm_data *data)
 			!fiq_gpio_get_value(&legoev3_fiq_data->status_gpio));
 }
 
-void legoev3_fiq_handler(void)
+static void legoev3_fiq_handler(void)
 {
 	int irq = legoev3_fiq_get_irq();
 

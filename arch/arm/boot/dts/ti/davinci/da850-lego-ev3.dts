@@ -780,7 +780,7 @@
 		#size-cells = <1>;
 
 		/* Hardware ID + Bluetooth MAC address */
-		hw_id: hw-id@0x3F00 {
+		hw_id: hw-id@3F00 {
 			reg = <0x3F00 12>;
 		};
 
