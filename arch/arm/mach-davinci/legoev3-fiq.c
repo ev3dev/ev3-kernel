@@ -24,6 +24,7 @@
 #include <linux/interrupt.h>
 #include <linux/platform_device.h>
 #include <linux/gpio.h>
+#include <linux/gpio/consumer.h>
 
 #include <asm/io.h>
 #include <asm/fiq.h>
@@ -864,7 +865,7 @@ static int legoev3_fiq_probe(struct platform_device *pdev)
 	fiq_data->timer_irq = pdata->timer_irq;
 	fiq_data->ehrpwm_irq = pdata->ehrpwm_irq;
 
-	ret = gpio_request_one(pdata->status_gpio, GPIOF_INIT_LOW, "fiq status");
+	ret = gpio_request_one(pdata->status_gpio, GPIOD_OUT_LOW, "fiq status");
 	if (ret < 0) {
 		if (ret != -EPROBE_DEFER) {
 			dev_err(&pdev->dev,
