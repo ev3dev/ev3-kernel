@@ -123,7 +123,7 @@ bindeb-pkg: private build-type := binary
 deb-pkg srcdeb-pkg: debian-orig
 bindeb-pkg: debian
 deb-pkg srcdeb-pkg bindeb-pkg:
-	+$(strip dpkg-buildpackage \
+	+$(strip dpkg-buildpackage -d \
 	--build=$(build-type) --no-pre-clean --unsigned-changes \
 	$(if $(findstring source, $(build-type)), \
 		--unsigned-source --compression=$(KDEB_SOURCE_COMPRESS)) \

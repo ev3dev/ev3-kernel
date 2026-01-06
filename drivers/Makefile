@@ -197,3 +197,6 @@ obj-$(CONFIG_DPLL)		+= dpll/
 
 obj-$(CONFIG_DIBS)		+= dibs/
 obj-$(CONFIG_S390)		+= s390/
+
+# this must come last to avoid depedency issues
+obj-$(CONFIG_LEGO_DRIVERS)	+= lego/

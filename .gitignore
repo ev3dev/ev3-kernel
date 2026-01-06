@@ -112,6 +112,7 @@ modules.order
 !.get_maintainer.ignore
 !.gitattributes
 !.gitignore
+!.gitmodules
 !.kunitconfig
 !.mailmap
 !.pylintrc

@@ -1516,6 +1516,23 @@ int i2c_handle_smbus_host_notify(struct i2c_adapter *adap, unsigned short addr)
 }
 EXPORT_SYMBOL_GPL(i2c_handle_smbus_host_notify);
 
+/**
+ * i2c_adapter_probe - probe adapter for clients
+ * @adap: The i2c adapter.
+ *
+ * This calls the detect function of each driver that matches the class of the
+ * adapter. This function is called when an adapter is added, so there is no
+ * need to call this manually, unless you have hot-plugable i2c devices that
+ * are connected after the adapter is created.
+ */
+void i2c_adapter_probe(struct i2c_adapter *adap)
+{
+	mutex_lock(&core_lock);
+	bus_for_each_drv(&i2c_bus_type, NULL, adap, __process_new_adapter);
+	mutex_unlock(&core_lock);
+}
+EXPORT_SYMBOL(i2c_adapter_probe);
+
 static int i2c_register_adapter(struct i2c_adapter *adap)
 {
 	int res = -EINVAL;
@@ -1598,9 +1615,7 @@ static int i2c_register_adapter(struct i2c_adapter *adap)
 		i2c_scan_static_board_info(adap);
 
 	/* Notify drivers */
-	mutex_lock(&core_lock);
-	bus_for_each_drv(&i2c_bus_type, NULL, adap, __process_new_adapter);
-	mutex_unlock(&core_lock);
+	i2c_adapter_probe(adap);
 
 	return 0;
 
@@ -1745,6 +1760,25 @@ static int __process_removed_adapter(struct device_driver *d, void *data)
 }
 
 /**
+ * i2c_adapter_remove_probed - Remove clients that were automatically detected.
+ * @adap: The i2c adapter.
+ *
+ * This removes all i2c clients from this adapter that were added via driver
+ * detect() functions. This function is called when an adapter is removed, so
+ * there is no need to call this manually, unless you have hot-plugable i2c
+ * devices that are disconnected before the adapter is destroyed.
+ *
+ * Any clients that were added manually (e.g. via sysfs) are not removed.
+ */
+void i2c_adapter_remove_probed(struct i2c_adapter *adap)
+{
+	mutex_lock(&core_lock);
+	bus_for_each_drv(&i2c_bus_type, NULL, adap, __process_removed_adapter);
+	mutex_unlock(&core_lock);
+}
+EXPORT_SYMBOL(i2c_adapter_remove_probed);
+
+/**
  * i2c_del_adapter - unregister I2C adapter
  * @adap: the adapter being unregistered
  * Context: can sleep
@@ -1768,10 +1802,7 @@ void i2c_del_adapter(struct i2c_adapter *adap)
 
 	i2c_acpi_remove_space_handler(adap);
 	/* Tell drivers about this removal */
-	mutex_lock(&core_lock);
-	bus_for_each_drv(&i2c_bus_type, NULL, adap,
-			       __process_removed_adapter);
-	mutex_unlock(&core_lock);
+	i2c_adapter_remove_probed(adap);
 
 	/* Remove devices instantiated from sysfs */
 	mutex_lock_nested(&adap->userspace_clients_lock,
@@ -2451,20 +2482,23 @@ static int i2c_detect_address(struct i2c_client *temp_client,
 	int addr = temp_client->addr;
 	int err;
 
-	/* Make sure the address is valid */
-	err = i2c_check_7bit_addr_validity_strict(addr);
-	if (err) {
-		dev_warn(&adapter->dev, "Invalid probe address 0x%02x\n",
-			 addr);
-		return err;
+	/* Make sure the address is valid - LEGO devices can break the rules */
+	if (!(driver->class & I2C_CLASS_LEGOEV3)) {
+		err = i2c_check_7bit_addr_validity_strict(addr);
+		if (err) {
+			dev_warn(&adapter->dev, "Invalid probe address 0x%02x\n",
+				 addr);
+			return err;
+		}
 	}
 
 	/* Skip if already in use (7 bit, no need to encode flags) */
 	if (i2c_check_addr_busy(adapter, addr))
 		return 0;
 
-	/* Make sure there is something at this address */
-	if (!i2c_default_probe(adapter, addr))
+	/* Make sure there is something at this address - skip for LEGO drivers */
+	if (!(driver->class & I2C_CLASS_LEGOEV3)
+	 && !i2c_default_probe(adapter, addr))
 		return 0;
 
 	/* Finally call the custom detection function */
